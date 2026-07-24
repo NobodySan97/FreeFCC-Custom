@@ -91,7 +91,7 @@ compatibility table RC Plus/RM700 обе операции — действие `
 | № | Команда | Payload | Что известно | Уровень |
 |---:|---|---|---|---|
 | 1, 21 | `10:58` | `030100` | Получатель `dst=0x12` — `bvision:0` / `perception_service`. Одинаковый кадр стоит в начале и конце, поэтому старые противоположные подписи «вход/выход service mode» не подтверждаются. В WA530 `dji_perception` handler для `10:58` не зарегистрирован (см. [`PERCEPTION_DUML_HANDLER_MAP.md`](PERCEPTION_DUML_HANDLER_MAP.md)) | route `CONFIRMED`; handler `NOT REGISTERED` на WA530; semantics `UNKNOWN` |
-| 2 | `06:72` | `00000000000100` | Получатель `dst=0x06` — `rc:0`; RM510 пересылает кадр по UART `/dev/ttyHS2` во внешний RC MCU. Точный handler и значение не декодированы | route `CONFIRMED`; semantics `UNKNOWN` |
+| 2 | `06:72` | `00000000000100` | Получатель `dst=0x06` — `rc:0`; RM510 пересылает кадр по UART `/dev/ttyHS2` во внешний RC MCU. В прошивке RC MCU команда называется `set stick value lock`; payload — шесть однобайтовых каналов `ch0..ch5` плюс необязательный `ch5f`. Здесь `ch5=1`, `ch5f=0x00`. См. [`RC331_MCU_FIRMWARE.md`](RC331_MCU_FIRMWARE.md) | name/payload `CONFIRMED`; эффект `UNKNOWN` |
 | 3 | `03:F9` | `8a237103f401` | Hash `0x0371238a`, значение LE `0x01f4` = 500: запись `max_height`; это побочный flight-limit write, а не FCC primitive | `CONFIRMED` |
 | 4 | `00:00` | `000001` | Стандартный device ping к `dst=0x1f` (`all:0`, broadcast). В восстановленных DJI handlers ping отвечает копией request payload; `00 00 01` — трёхбайтный echo token, а не activation/FCC-write | family/route `CONFIRMED`; WM260 live ACK не снимался |
 | 5 | `00:32` | `3131000000` | В WM260 `dst=0x6F` — `dji_sec/sec_service` (`s_to_p_air:3`). Aircraft handler принимает `0x31` и возвращает 59-байтное состояние активации; четыре последующих request bytes в этой ветке не используются. Это query, не FCC-write | `CONFIRMED` для WM260 |
@@ -106,7 +106,7 @@ compatibility table RC Plus/RM700 обе операции — действие `
 | 16 | `03:F9` | `236b820101` | Hash `0x01826b23` = `sdr_lost_prevent_never_takeoff_en`; boolean write `1` в `flight:0`. В таблицах Air 3S/Mavic 4 default уже равен `1` | `CONFIRMED` |
 | 17 | `03:F9` | `8773e68a01` | Hash `0x8ae67387` = `sdr_lost_prevent_has_takeoff_en`; boolean write `1` в `flight:0`. В таблицах Air 3S/Mavic 4 default уже равен `1` | `CONFIRMED` |
 | 18, 19 | `06:8C` | `000300`, `000100` | Получатель `dst=0x09` — `vt_air:0`, то есть air-side transmission MCU. Linux/userspace handler в доступном WM260 образе отсутствует; точный параметр не декодирован | route `CONFIRMED`; semantics `UNKNOWN` |
-| 20 | `06:72` | `000000000001ff` | Тот же маршрут к `rc:0` через `/dev/ttyHS2`; старая подпись «commit» не подтверждена | route `CONFIRMED`; semantics `UNKNOWN` |
+| 20 | `06:72` | `000000000001ff` | Тот же `set stick value lock`, отличается только последним байтом: `ch5f=0xff`. Старая подпись «commit region change» опровергнута кодом RC MCU | name/payload `CONFIRMED`; эффект `UNKNOWN` |
 
 Главный непосредственно распознанный FCC-write здесь — первый `09:27`
 `setForceFcc`. В текущей реализации country state меняет отдельная одиночная
@@ -115,7 +115,7 @@ compatibility table RC Plus/RM700 обе операции — действие `
 `00:E5 / 32 32 01` на WM260 отвергается без действия. Два
 `sdr_lost_prevent_*` оказались штатными flight-safety flags, а
 `c1_regulatory_restriction` относится к perception/FocusTrack. Семантика
-`10:58`, `03:AF`, `06:72` и `06:8C` всё ещё не доказана. Полный RF-эффект
+`10:58`, `03:AF` и `06:8C` всё ещё не доказана; `06:72` закрыта отдельно (см. ниже). Полный RF-эффект
 составного профиля необходимо проверять графиком Transmission или независимым
 RF/readback evidence.
 
@@ -137,9 +137,10 @@ DUML destination byte кодируется как
 
 В `dji_link_event_start` локальные RM510 handler tables создаются для cmdsets
 `00`, `07` и `18`; cmdset `06` туда не входит. Поэтому issue-гипотеза
-«`06:72` — RC stick lock» остаётся правдоподобной, но не подтверждённой
-имеющимся userspace: для доказательства нужен firmware RC MCU либо live
-request/ACK capture с контролируемым состоянием стиков.
+«`06:72` — RC stick lock» **подтверждена**: незашифрованный образ RC MCU
+(`rc331_0600`) содержит handler с логом `set stick value lock: ch0%d … ch5f:%d`
+и парную `06:74 get stick value lock`. Разбор — в
+[`RC331_MCU_FIRMWARE.md`](RC331_MCU_FIRMWARE.md).
 
 Хэши `03:F9` проверены тем же алгоритмом, который восстановлен из
 `compute_hash_value_by_name` в DJI firmware:
@@ -176,7 +177,7 @@ hash(name) = fold(name + "_0", h = ((h << 8) | byte) mod 0xfffffffb)
 | `00:00 / 000001` | `CLOSED`: broadcast device ping; payload используется как echo token | Ничего для классификации; live ACK нужен только для проверки конкретной модели |
 | `03:AF / 0324…` | Route до `flight:0` доказан; `GetAreaCode` остаётся client-side family name | Firmware flight-controller MCU с handler table либо контролируемый request/ACK |
 | `09:27 / ffff0063=3` | Register/value и route до `vt_air:0` доказаны | Firmware air transmission MCU |
-| `06:72` | Route до RC MCU доказан | Firmware RC MCU |
+| `06:72` | `CLOSED` по имени и формату payload: `set stick value lock` из образа `rc331_0600` | Live-проверка фактического эффекта `ch5`/`ch5f` |
 | `06:8C` | Route до air transmission MCU доказан | Firmware air transmission MCU |
 | `10:58 / 030100` | Registration в WA530 локализована: helper `vp_message_set_req_callback` (`0x282689c`), 133 восстановленные пары, `10:58` среди них отсутствует. Command set `0x10` там принадлежит autotest/fstest с ID `01–09`, `10–15`, `1B`, `22`, `23`, `81`, `90`. См. [`PERCEPTION_DUML_HANDLER_MAP.md`](PERCEPTION_DUML_HANDLER_MAP.md) | Скан 12 динамических регистраций WA530, ARM32-скан WM260 `dji_perception`, либо live request/ACK |
 
@@ -201,8 +202,8 @@ request data и request length. Это cross-generation handler evidence, а н�
 | Команда | Payload | Статус |
 |---|---|---|
 | `10:58` | `030100` | Route к `bvision:0/perception_service` подтверждён; handler semantics `UNKNOWN` |
-| `06:72` | `00000000000100` | Route к RC MCU подтверждён; handler semantics `UNKNOWN` |
-| `06:72` | `000000000001ff` | Route к RC MCU подтверждён; handler semantics `UNKNOWN` |
+| `06:72` | `00000000000100` | `set stick value lock`, `ch5=1`, `ch5f=0x00` |
+| `06:72` | `000000000001ff` | Тот же вызов, `ch5f=0xff` |
 | `10:58` | `030100` | Тот же opaque request |
 
 При периоде 5 секунд это 48 DUML requests в минуту и 2880 в час. CPU и трафик
