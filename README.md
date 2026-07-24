@@ -96,7 +96,7 @@ DJI Fly through Android Accessibility. It does not open a DUML socket while
 waiting. After an exact phrase match it connects to the controller if needed and
 reads the country with `07:19`; if it is not `AU`, the app writes `07:30=AU`
 and verifies the result, retrying the write/read pair up to three times. It then
-sends the 17-frame × 2-round FCC core profile and re-arms instead of stopping,
+sends the 14-frame × 2-round FCC core profile and re-arms instead of stopping,
 so a later Home Point after an aircraft battery replacement triggers
 another full apply while the controller remains on. Duplicate UI events are
 debounced for 30 seconds. Enable **SkylabFCCfree Home Point Test** once in
@@ -168,7 +168,7 @@ full FCC apply.
 
 1. Power on the drone and link it to the controller
 2. Turn on **Auto FCC — Home Point**, turn on **Auto FCC — every 5 sec**, or use the one-shot **Send FCC Request**. Turning one switch on turns the other off; turning the active switch off leaves both off.
-3. Open DJI Fly only with **Open DJI Fly**. Home Point mode remains armed and sends the full profile after every new flight-session Home Point, including after replacing the aircraft battery without restarting the controller. Five-second mode sends the full profile once and then the original four-frame keepalive until its switch is turned off.
+3. Open DJI Fly only with **Open DJI Fly**. Home Point mode remains armed and sends the full profile after every new flight-session Home Point, including after replacing the aircraft battery without restarting the controller. Five-second mode sends the full profile once and then runs one read-only `07:19` country check per tick; it re-applies the profile only when the country no longer matches.
 4. For 4G diagnostics, tap **Probe 4G Endpoint** first. This is read-only and only checks whether `/duss/mb/0x205` is reachable. **Send 4G Activation Frames** remains experimental and confirms writes only, not activation.
    > **Note:** The integrated eSIM path on DJI Avata 360 is not yet proven compatible with the captured external-module profile. Please attach the LAN logs to an [issue](https://github.com/danusha2345/SkylabFCCfree/issues) when testing.
 5. The aircraft-control card is split evenly: GPS on the left and LED on the right. Each side has its own manual refresh and explicit ON/OFF buttons, available without starting Auto FCC first. GPS ON/OFF sends five bounded idempotent writes 100 ms apart, releases port `40007`, and after 250 ms automatically runs a three-attempt status Refresh. Every status attempt opens a new port lease instead of reusing a failed one. LED ON/OFF makes at most two complete reference-pattern command cycles. GPS/LED stay on the wrapped `40007` path because live RC Pro 2 tests found no matching readback on `40009` or `8901`. The last validated replies persist across app reopen with a `Last verified` timestamp, and a failed manual refresh does not erase them. A GPS write invalidates the older cached value until the fresh Refresh completes, so the UI never presents the pre-command OFF/ON as current. Neither side polls port `40007` in the background.
@@ -229,7 +229,7 @@ Every contribution helps keep development and hardware testing going. Thank you.
 
 ## How It Works
 
-For FCC, CE, and request/response diagnostics, the app sends DUML commands to localhost TCP proxies. RC2 normally uses `127.0.0.1:40009`; discovery also checks `40007` and `8901..8904` for other controller paths. DUML is DJI's internal command protocol, publicly documented in the [dji-firmware-tools](https://github.com/o-gs/dji-firmware-tools) project.
+For FCC and request/response diagnostics, the app sends DUML commands to localhost TCP proxies. RC2 normally uses `127.0.0.1:40009`; discovery also checks `40007` and `8901..8904` for other controller paths. DUML is DJI's internal command protocol, publicly documented in the [dji-firmware-tools](https://github.com/o-gs/dji-firmware-tools) project.
 
 Each command is a small binary packet with a magic byte (`0x55`), routing fields, a payload, and two CRC checksums. Ordinary TCP commands use one packet per connection. GPS and LED commands use an outer wrapper on port `40007`; 4G uses one abstract Unix datagram socket for the complete frame burst.
 
@@ -244,13 +244,16 @@ handling is now read-first, bounded, and verifiable: every FCC apply first reads
 the current country with `07:19`. If it is already `AU`, no country write is
 sent. Otherwise the app sends `07:30=AU` and verifies it with another `07:19`,
 retrying the write/read pair up to three times. It then sends the remaining
-17-frame core in 2 rounds with 30ms between frames and 100ms between rounds.
+14-frame core in 2 rounds with 30ms between frames and 100ms between rounds.
 The original composite produced an FCC result on tested Mini 5 Pro, Mini 4 Pro,
 Mavic 4 Pro, Air 3S, Neo, and Avata 360 hardware, but the necessity and
 universality of every individual core frame are not proven. The directly
 identified FCC primitive is the first `09:27` SDR register write
-(`setForceFcc`); opaque requests and an unrelated `max_height=500` side-effect
-remain in the core pending separate reduction tests. Country readback confirms
+(`setForceFcc`). Firmware analysis identified both `06:72` frames as
+stick-value-lock operations on RC2 (and a different unknown operation on
+RC Pro 2), so they were removed together with the unrelated
+`max_height=500` write. Other opaque requests remain pending separate
+hardware A/B tests. Country readback confirms
 the controller country state, not physical RF power, so verify the Transmission
 graph in DJI Fly. Pressing Back moves SkylabFCCfree to the background instead
 of destroying its Activity; Android process death still requires a new
@@ -258,8 +261,6 @@ of destroying its Activity; Android process death still requires a new
 for the evidence level of every frame and the
 [RM510 command reference](docs/RM510_DUML_COMMAND_REFERENCE.md) for commands
 recovered from controller binaries.
-
-The CE/default-region action is experimental. It sends one opaque `06:72` request to destination `0x20`, stops keepalive first, and reports only write completion. Its interpretation as CE or factory-region restore is unverified and must be checked in DJI Fly.
 
 ### 4G Profile
 
@@ -345,9 +346,7 @@ Profiles combine historical/upstream captures with commands verified during curr
 ```
 app/src/main/
   assets/profiles/
-    fcc.json          legacy 17-frame FCC core (country write/readback is code-driven)
-    fcc_keepalive.json reference-only original opaque 4-frame keepalive sequence
-    ce_restore.json    1 opaque experimental 06:72 request
+    fcc.json          14-frame FCC core (country write/readback is code-driven)
     4g.json           experimental 128-frame 0x51 serial sweep
     device_info.json   1 frame, version inquiry
     led_on.json        1 frame, LED on (port 40007)

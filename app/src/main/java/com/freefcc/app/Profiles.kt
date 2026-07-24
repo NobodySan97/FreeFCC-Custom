@@ -37,7 +37,7 @@ object Profiles {
         val frames: List<ByteArray>
     )
 
-    /** Loads a static profile (FCC, CE restore, LED, device info) from a JSON asset. */
+    /** Loads a static profile (FCC, LED, device info) from a JSON asset. */
     fun load(context: Context, fileName: String): Profile {
         val json = readAsset(context, "profiles/$fileName")
         val obj = JSONObject(json)

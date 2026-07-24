@@ -142,7 +142,6 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             "ping",
             "connect",
             "fcc_enable",
-            "ce_restore",
             "keepalive_start",
             "keepalive_stop",
             "home_point_wait_start",
@@ -603,7 +602,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
 
     /**
      * Reads the country, writes and verifies AU only when needed, then sends
-     * the 17-frame FCC core profile.
+     * the reduced 14-frame FCC core profile.
      * The core profile runs 2 rounds internally for reliability.
      */
     fun enableFcc(): Boolean {
@@ -715,87 +714,10 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    /** Sends the experimental CE/default-region request from ce_restore.json. */
-    fun disableFcc(): Boolean {
-        val hardwareLease = beginHardwareOp()
-        if (hardwareLease == null) {
-            log("Hardware busy — please wait for the current operation to finish.")
-            return false
-        }
-        // Stop an in-progress Home Point wait before the explicit CE restore.
-        try {
-            if (_state.value.isKeepaliveRunning || FccKeepaliveService.isRunningFlagSet(app)) {
-                stopKeepalive()
-            }
-        } catch (e: Exception) {
-            hardwareLease.close()
-            update { copy(message = "Could not stop Auto FCC: ${e.message}") }
-            log("CE restore aborted — Auto FCC stop failed: ${e.message}")
-            return false
-        }
-        val runtimePort = FccRuntime.tracker.state.value.controllerPort
-            ?: transport.getDetectedPort().takeIf { it > 0 }
-            ?: DumlTransport.PORT
-        update { copy(status = "restoring", isBusy = true, busyProgress = 0f, message = "Sending CE restore request...") }
-        log("Sending CE restore request...")
-
-        runOnIO {
-            var sessionLease: DumlPortSessionLock.Lease? = null
-            try {
-                val deadline = System.nanoTime() + 3_000_000_000L
-                while (sessionLease == null && System.nanoTime() < deadline) {
-                    sessionLease = DumlPortSessionLock.tryBegin(runtimePort)
-                    if (sessionLease == null) delay(50)
-                }
-                if (sessionLease == null) {
-                    update {
-                        copy(
-                            status = "connected",
-                            message = "CE restore could not acquire DUML port $runtimePort",
-                            isBusy = false
-                        )
-                    }
-                    log("CE restore failed — DUML port $runtimePort remained busy")
-                    return@runOnIO
-                }
-                val profile = Profiles.load(app, "ce_restore.json")
-                val success = transport.sendFrames(
-                    frames = profile.frames,
-                    rounds = profile.rounds,
-                    readWindowMs = profile.readWindowMs,
-                    port = runtimePort
-                )
-
-                if (success) {
-                    FccRuntime.tracker.clearWriteEvidence()
-                    update {
-                        copy(
-                            status = "connected",
-                            message = "CE restore command sent — verify the region in DJI Fly",
-                            isFccEnabled = false,
-                            isBusy = false
-                        )
-                    }
-                    log("CE restore command written — result is not readable; verify in DJI Fly")
-                } else {
-                    update { copy(status = "connected", message = "CE restore failed — RC link unreachable", isBusy = false) }
-                    log("CE restore failed")
-                }
-            } catch (e: Exception) {
-                log("CE restore error: ${e.message}")
-                update { copy(status = "connected", message = "CE restore error: ${e.message}", isBusy = false) }
-            } finally {
-                sessionLease?.close()
-                hardwareLease.close()
-            }
-        }
-        return true
-    }
-
     // --- Auto FCC foreground modes ---
 
     /**
-     * Starts either the continuous DJI Fly text mode or the legacy periodic mode.
+     * Starts either the continuous DJI Fly text mode or the periodic country-check mode.
      */
     fun startKeepalive(mode: AutoFccMode = AutoFccMode.HOME_POINT_TEXT): Boolean {
         return try {
@@ -804,7 +726,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 if (mode == AutoFccMode.HOME_POINT_TEXT) {
                     "Started Auto FCC — waiting for DJI Fly Home Point text"
                 } else {
-                    "Started Auto FCC — full profile then legacy keepalive every 5s"
+                    "Started Auto FCC — full profile, then country check every 5s"
                 }
             )
             true
@@ -1887,7 +1809,6 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 )
                 "connect" -> acceptedHardware(command) { connect() }
                 "fcc_enable" -> acceptedHardware(command, requireConnected = true) { enableFcc() }
-                "ce_restore" -> acceptedHardware(command, requireConnected = true) { disableFcc() }
                 "keepalive_start" -> if (!_state.value.isConnected) {
                     lanError(412, "controller_not_connected")
                 } else {

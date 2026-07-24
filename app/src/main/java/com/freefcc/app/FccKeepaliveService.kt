@@ -173,9 +173,8 @@ class FccKeepaliveService : Service() {
 
         @Synchronized
         fun stop(context: Context, clearSelection: Boolean = true) {
-            // Set this before posting ACTION_STOP. The service intent is
-            // asynchronous, while disableFcc() must prevent another keepalive
-            // write immediately after its hardware lease is released.
+            // Cancel before posting asynchronous ACTION_STOP so no queued
+            // Home Point/periodic request can start after the user selects Off.
             requestGate.cancel()
             lastSignaledGeneration = null
             lastHomePointSignalAtMs = 0L
