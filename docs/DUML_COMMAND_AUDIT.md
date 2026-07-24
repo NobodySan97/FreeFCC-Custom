@@ -90,7 +90,7 @@ compatibility table RC Plus/RM700 обе операции — действие `
 
 | № | Команда | Payload | Что известно | Уровень |
 |---:|---|---|---|---|
-| 1, 21 | `10:58` | `030100` | Получатель `dst=0x12` — `bvision:0` / `perception_service`. Одинаковый кадр стоит в начале и конце, поэтому старые противоположные подписи «вход/выход service mode» не подтверждаются. В WA530 `dji_perception` handler для `10:58` не зарегистрирован (см. [`PERCEPTION_DUML_HANDLER_MAP.md`](PERCEPTION_DUML_HANDLER_MAP.md)) | route `CONFIRMED`; handler `NOT REGISTERED` на WA530; semantics `UNKNOWN` |
+| 1, 21 | `10:58` | `030100` | Получатель `dst=0x12` — `bvision:0` / `perception_service`. Одинаковый кадр стоит в начале и конце, поэтому старые противоположные подписи «вход/выход service mode» не подтверждаются. В WA530/WA234 `10:58` не найдена среди статически разрешённых регистраций, но runtime-пути остаются (см. [`PERCEPTION_DUML_HANDLER_MAP.md`](PERCEPTION_DUML_HANDLER_MAP.md)) | route `CONFIRMED`; handler `NOT FOUND` в статическом срезе; semantics `UNKNOWN` |
 | 2 | `06:72` | `00000000000100` | Получатель `dst=0x06` — `rc:0`; RM510 пересылает кадр по UART `/dev/ttyHS2` во внешний RC MCU. В прошивке RC MCU команда называется `set stick value lock`; payload — шесть однобайтовых каналов `ch0..ch5` плюс необязательный `ch5f`. Здесь `ch5=1`, `ch5f=0x00`. См. [`RC331_MCU_FIRMWARE.md`](RC331_MCU_FIRMWARE.md) | name/payload `CONFIRMED`; эффект `UNKNOWN` |
 | 3 | `03:F9` | `8a237103f401` | Hash `0x0371238a`, значение LE `0x01f4` = 500: запись `max_height`; это побочный flight-limit write, а не FCC primitive | `CONFIRMED` |
 | 4 | `00:00` | `000001` | Стандартный device ping к `dst=0x1f` (`all:0`, broadcast). В восстановленных DJI handlers ping отвечает копией request payload; `00 00 01` — трёхбайтный echo token, а не activation/FCC-write | family/route `CONFIRMED`; WM260 live ACK не снимался |
@@ -179,7 +179,7 @@ hash(name) = fold(name + "_0", h = ((h << 8) | byte) mod 0xfffffffb)
 | `09:27 / ffff0063=3` | Register/value и route до `vt_air:0` доказаны; ни `0xffff0048`, ни `0xffff0063` не собираются кодом в Android-слое RM510, WM260 и WA234 (см. [`WA234_READBACK_ANALYSIS.md`](WA234_READBACK_ANALYSIS.md)) | Прошивка `sparrow2` transmission-чипа; закрыта ключом `TBIE`, публичные варианты не подходят |
 | `06:72` | `CLOSED` по имени и формату payload: `set stick value lock` из образа `rc331_0600` | Live-проверка фактического эффекта `ch5`/`ch5f` |
 | `06:8C` | Route до air transmission MCU доказан | Прошивка `sparrow2` из `/modem_firmware`; зашифрована `TBIE` |
-| `10:58 / 030100` | Registration в WA530 локализована: helper `vp_message_set_req_callback` (`0x282689c`), 133 восстановленные пары, `10:58` среди них отсутствует. Command set `0x10` там принадлежит autotest/fstest с ID `01–09`, `10–15`, `1B`, `22`, `23`, `81`, `90`. См. [`PERCEPTION_DUML_HANDLER_MAP.md`](PERCEPTION_DUML_HANDLER_MAP.md) | Скан 12 динамических регистраций WA530, ARM32-скан WM260 `dji_perception`, либо live request/ACK |
+| `10:58 / 030100` | Helper регистрации локализован на WA530 (`0x282689c`) и WA234 (`0x1f30bc0`); `10:58` не найдена среди корректно разрешённых статических registrations. Первичные числа 139/133 для WA530 недостоверны, WA234 оставляет два runtime-fed пути, а широкий ARM32-скан WM260 непригоден для отрицательного вывода | Разобрать runtime-fed sites и точный registrar/CFG WM260 либо снять live request/ACK |
 
 Для `00:00` использован WA341 `dji_sys` (Build ID
 `ed5cc566fae4ef008a19727014ca2c00`, SHA-256
@@ -195,7 +195,7 @@ request data и request length. Это cross-generation handler evidence, а н�
 `ap0-mcu0-1.0` / `mcu0-ap0-1.0`. DUML raw destination `0x03` декодируется в
 тот же `flight:0`; имеющийся Linux `dji_sys` только пересылает пакет.
 
-## Пятисекундный periodic-профиль
+## Исторический `fcc_keepalive.json` (runtime его не использует)
 
 `fcc_keepalive.json` повторяет четыре кадра:
 
@@ -206,12 +206,11 @@ request data и request length. Это cross-generation handler evidence, а н�
 | `06:72` | `000000000001ff` | Тот же вызов, `ch5f=0xff` |
 | `10:58` | `030100` | Тот же opaque request |
 
-При периоде 5 секунд это 48 DUML requests в минуту и 2880 в час. CPU и трафик
-невелики, но цикл постоянно будит процесс и transport; половина кадров при этом
-дублирует один и тот же `10:58`, а два `06:72` обращаются к RC MCU с пока
-недоказанной необходимостью. Поэтому periodic mode оставлен отдельным явно
-выбираемым режимом; Home Point mode вместо этого пассивно слушает telemetry и
-по событию выполняет одну country write/readback и полный core.
+Если бы этот исторический профиль отправлялся каждые 5 секунд, это давало бы
+48 DUML requests в минуту и 2880 в час. Текущий runtime его не загружает:
+periodic mode после bootstrap посылает один лёгкий `07:19` readback на тик.
+Два `06:72` к RC MCU не относятся к FCC и будут удалены также из core/asset,
+чтобы исключить воздействие на stick/wheel lock.
 
 ## Остальные команды приложения
 
@@ -265,8 +264,8 @@ aircraft serial. Совпадение serial и command ID со sweep поэто
 
 Иными словами, у этого кадра нет ни доказанного получателя, ни связи с
 восстановлением CE. Название профиля осталось от upstream и содержанием не
-подтверждается. Профиль по-прежнему доступен только диагностическому LAN API
-и в основном UI не используется.
+подтверждается. Профиль и LAN-команда подлежат удалению: безопасного или
+доказанного действия «восстановить CE» этот кадр не реализует.
 
 ## Команды, которые FreeFCC не отправляет
 

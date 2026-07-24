@@ -84,10 +84,14 @@ callback registrar (`0x1b36e0c`) имеет явные direct registrations `03:
 `06:50`, `0A:F0`, `00:01`; пары `10:58` среди них нет.
 
 Полный проход по этому же образу завершён 2026-07-24: основной регистратор —
-`vp_message_set_req_callback` (`0x282689c`), из 151 call site статически
-восстановлены 139 и 133 уникальные пары `cmd_set:cmd_id`. `10:58` в них
-отсутствует; command set `0x10` занят autotest/fstest (`req_autotest_handle_cb`
-→ `fstest_adapter_handle_cmd`) с ID `01–09`, `10–15`, `1B`, `22`, `23`, `81`,
+`vp_message_set_req_callback` (`0x282689c`), локализован 151 call site.
+Первичный resolver сообщил 139 вызовов и 133 пары, но перепроверка выявила
+пропущенный `mov w0,wzr` и перенос устаревших значений регистров; эти числа не
+являются валидной метрикой покрытия. `10:58` не найдена среди корректно
+разрешённых статических регистраций, но runtime и неразрешённые пути не
+позволяют утверждать полное отсутствие. Command set `0x10` в доказанном
+срезе занят autotest/fstest (`req_autotest_handle_cb` →
+`fstest_adapter_handle_cmd`) с ID `01–09`, `10–15`, `1B`, `22`, `23`, `81`,
 `90`. Дополнительно восстановлены имена `0a:56 = vp_general_ctrl_switch` и
 `0a:58 = vp_general_get_switch`. Подробности и границы вывода:
 [`PERCEPTION_DUML_HANDLER_MAP.md`](PERCEPTION_DUML_HANDLER_MAP.md). Значение
@@ -196,11 +200,11 @@ Manifest содержит обычные Android/Qualcomm partitions: `abl`, `ao
 
 | Вопрос | Статус | Почему не закрыт |
 |---|---|---|
-| Точная функция `06:72` | `NEGATIVE` | Route до RC MCU через `/dev/ttyHS2` найден, но firmware самого получателя отсутствует |
+| Точная функция `06:72` | `CONFIRMED` | В найденном `rc331_0600` handler называется `set stick value lock`; `06:74` — соответствующий getter |
 | Точная функция `06:8C` | `NEGATIVE` | Route до `vt_air:0` найден; WA234/WA341 содержат возможный кандидат `0105/LCPU`, но он зашифрован неизвестным `STUE` |
 | Эффект `09:27 / 0xffff0063=3` | `NEGATIVE` | Register/value и route до `vt_air:0` известны, но firmware принимающего transmission MCU отсутствует |
 | Точная функция `03:AF` | `NEGATIVE` | Route до `flight:0` через ICC найден, но firmware flight-controller MCU отсутствует; Linux `dji_sys` только router |
-| Точная функция `10:58` | `UNKNOWN` | Получатель `bvision:0/perception_service` доказан на WM260 и WA530; registration/handler не локализован, а WA530 gesture parameters не являются DUML registration |
+| Точная функция `10:58` | `UNKNOWN` | Получатель `bvision:0/perception_service` доказан на WM260 и WA530; helper регистрации локализован на WA530/WA234, но `10:58` лишь отсутствует среди статически разрешённых вызовов, а runtime-пути остаются |
 | Avata 360 aircraft-side eSIM handler | `ABSENT` | Отдельного Avata 360 eMMC/firmware dump в локальном корпусе нет |
 
 `NEGATIVE` здесь означает не «команды нет», а «после проверки точного
