@@ -81,8 +81,17 @@ gimbal, `camera:5`, `gps:3` и `cboard:0` находятся за этим ма�
 `gesture_control_support` и `gesture_control_state` входят в таблицу параметров
 `CapGestureCtrl`. Они не являются регистрацией DUML `10:58`. Найденный generic
 callback registrar (`0x1b36e0c`) имеет явные direct registrations `03:AA`,
-`06:50`, `0A:F0`, `00:01`; пары `10:58` среди них нет. Поэтому точный handler
-и значение payload `03 01 00` остаются `UNKNOWN`.
+`06:50`, `0A:F0`, `00:01`; пары `10:58` среди них нет.
+
+Полный проход по этому же образу завершён 2026-07-24: основной регистратор —
+`vp_message_set_req_callback` (`0x282689c`), из 151 call site статически
+восстановлены 139 и 133 уникальные пары `cmd_set:cmd_id`. `10:58` в них
+отсутствует; command set `0x10` занят autotest/fstest (`req_autotest_handle_cb`
+→ `fstest_adapter_handle_cmd`) с ID `01–09`, `10–15`, `1B`, `22`, `23`, `81`,
+`90`. Дополнительно восстановлены имена `0a:56 = vp_general_ctrl_switch` и
+`0a:58 = vp_general_get_switch`. Подробности и границы вывода:
+[`PERCEPTION_DUML_HANDLER_MAP.md`](PERCEPTION_DUML_HANDLER_MAP.md). Значение
+payload `03 01 00` по-прежнему `UNKNOWN`.
 
 ### DJI Fly 1.19.4: граница client-side metadata
 

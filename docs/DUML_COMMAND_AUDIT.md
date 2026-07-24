@@ -90,7 +90,7 @@ compatibility table RC Plus/RM700 обе операции — действие `
 
 | № | Команда | Payload | Что известно | Уровень |
 |---:|---|---|---|---|
-| 1, 21 | `10:58` | `030100` | Получатель `dst=0x12` — `bvision:0` / `perception_service`. Одинаковый кадр стоит в начале и конце, поэтому старые противоположные подписи «вход/выход service mode» не подтверждаются. Точный handler не восстановлен | route `CONFIRMED`; semantics `UNKNOWN` |
+| 1, 21 | `10:58` | `030100` | Получатель `dst=0x12` — `bvision:0` / `perception_service`. Одинаковый кадр стоит в начале и конце, поэтому старые противоположные подписи «вход/выход service mode» не подтверждаются. В WA530 `dji_perception` handler для `10:58` не зарегистрирован (см. [`PERCEPTION_DUML_HANDLER_MAP.md`](PERCEPTION_DUML_HANDLER_MAP.md)) | route `CONFIRMED`; handler `NOT REGISTERED` на WA530; semantics `UNKNOWN` |
 | 2 | `06:72` | `00000000000100` | Получатель `dst=0x06` — `rc:0`; RM510 пересылает кадр по UART `/dev/ttyHS2` во внешний RC MCU. Точный handler и значение не декодированы | route `CONFIRMED`; semantics `UNKNOWN` |
 | 3 | `03:F9` | `8a237103f401` | Hash `0x0371238a`, значение LE `0x01f4` = 500: запись `max_height`; это побочный flight-limit write, а не FCC primitive | `CONFIRMED` |
 | 4 | `00:00` | `000001` | Стандартный device ping к `dst=0x1f` (`all:0`, broadcast). В восстановленных DJI handlers ping отвечает копией request payload; `00 00 01` — трёхбайтный echo token, а не activation/FCC-write | family/route `CONFIRMED`; WM260 live ACK не снимался |
@@ -178,7 +178,7 @@ hash(name) = fold(name + "_0", h = ((h << 8) | byte) mod 0xfffffffb)
 | `09:27 / ffff0063=3` | Register/value и route до `vt_air:0` доказаны | Firmware air transmission MCU |
 | `06:72` | Route до RC MCU доказан | Firmware RC MCU |
 | `06:8C` | Route до air transmission MCU доказан | Firmware air transmission MCU |
-| `10:58 / 030100` | Receiver `bvision:0/perception_service` присутствует в WM260 и WA530, но registration не локализована; WA530 `gesture_control_*` — параметры, не DUML handler | Дальнейший разбор callback path либо соответствующий request/ACK |
+| `10:58 / 030100` | Registration в WA530 локализована: helper `vp_message_set_req_callback` (`0x282689c`), 133 восстановленные пары, `10:58` среди них отсутствует. Command set `0x10` там принадлежит autotest/fstest с ID `01–09`, `10–15`, `1B`, `22`, `23`, `81`, `90`. См. [`PERCEPTION_DUML_HANDLER_MAP.md`](PERCEPTION_DUML_HANDLER_MAP.md) | Скан 12 динамических регистраций WA530, ARM32-скан WM260 `dji_perception`, либо live request/ACK |
 
 Для `00:00` использован WA341 `dji_sys` (Build ID
 `ed5cc566fae4ef008a19727014ca2c00`, SHA-256
