@@ -78,106 +78,77 @@ FreeFCC destination `0xEE` соответствует `vt_gnd:7` и маршру
 восстановлен, имя handler подтверждает семейство операции, но не даёт
 безопасного готового payload.
 
-## Полный слот-лист таблицы `dji_wlm` v576 (2026-07-24)
+## Как устроена таблица `0x51` в образе (2026-07-24)
 
-Таблица найдена в самом образе `v576/roots/system/system/bin/dji_wlm`: массив
-из `0x52` записей по 24 байта, первое поле каждой — указатель на handler,
-второе — указатель в `.bss` (не строка, содержимое заполняется в рантайме),
-третье — константа `0x403`. Символы взяты из `dji_wlm_v576.gnu_debugdata`
-(1 757 символов), поэтому имена handler'ов резолвятся напрямую: **79 из 82
-слотов** получили имя вместо прежних 36.
+Таблица `dji_wlm` не лежит в файле готовой: это PIE-бинарник, поэтому её
+указатели проставляются динамическим линкером. В самом образе слоты нулевые, а
+адреса handler'ов хранятся в `.rela.dyn` как релокации `R_AARCH64_RELATIVE`
+(`r_info = 0x403`), где `r_offset` — адрес слота, а `r_addend` — адрес функции.
 
-> **Оговорка о нумерации.** Индексация таблицы (какой слот соответствует
-> `cmd_id = 0x00`) статически **не доказана**: код, который её адресует, не
-> локализован. Совпадение с ранее задокументированными контрактами точное для
-> `19` → `wlm_modem_onoff_control`, `1A` → `wlm_service_mode_switch_req`,
-> `22` → `wlm_bind_status_changed` — три из трёх, — но для младших ID
-> раскладка расходится с таблицей выше. Поэтому колонка ниже — это **порядок
-> слотов**, а не подтверждённые `cmd_id`. До локализации индексирующего кода
-> при отправке кадров следует опираться на таблицу выше, а этот список
-> использовать как перечень существующих обработчиков.
+Восстановление:
 
-| Слот | Handler |
-|---:|---|
-| `03` | `wlm_et_cb_common_entry_power_mgr_cmd` |
-| `04` | `wlm_et_cb_power_ack_process` |
-| `05` | `wlm_et_cb_common_entry_sysmode_scene` |
-| `06` | `wlm_exclu_center_capbility_push_handler` |
-| `07` | `wlm_query_device_info` |
-| `08` | `wlm_process_forward_pkt` |
-| `09` | `wlm_link_mode_sw_trigger` |
-| `0A` | `wlm_link_status_report` |
-| `0B` | `wlm_route_switch_ack` |
-| `0C` | `wlm_link_sw_res_sync` |
-| `0D` | `wlm_link_sw_res_ack` |
-| `0E` | `wlm_link_ctrl_ack` |
-| `0F` | `wlm_link_sw_nego_res_proc` |
-| `10` | `wlm_link_sw_nego_ack` |
-| `11` | `wlm_debug_tools_test` |
-| `12` | `wlm_debug_tools_test_ack` |
-| `13` | `wlm_link_mode_query` |
-| `14` | `wlm_receive_debug_control` |
-| `15` | `wlm_route_switch_req` |
-| `16` | `wlm_et_get_video_unsmoothy_level` |
-| `17` | `wlm_select_target_dev` |
-| `18` | `wlm_receive_video_status` |
-| `19` | `wlm_modem_onoff_control` |
-| `1A` | `wlm_service_mode_switch_req` |
-| `1B` | `wlm_power_ctrl_agt_rpt` |
-| `1C` | `wlm_power_ctrl_set_agent_ack` |
-| `1D` | `wlm_rm_recv_local_freq_info` |
-| `1E` | `wlm_rm_recv_local_freq_info_ack` |
-| `1F` | `wlm_receive_product_conn_sta` |
-| `20` | `wlm_auto_tools_test` |
-| `21` | `wlm_auto_tools_test_ack` |
-| `22` | `wlm_bind_status_changed` |
-| `23` | `wlm_query_status` |
-| `24` | `wlm_agent_test_ack` |
-| `25` | `wlm_rtt_stat_anls` |
-| `26` | `wlm_et_cb_tlv_process_agent_report` |
-| `27` | `wlm_et_cb_common_entry_special_link_rpt` |
-| `28` | `wlm_agt_mgr_bw_attach` |
-| `29` | `wlm_netlink_service_req` |
-| `2A` | `wlm_netlink_service_rsp` |
-| `2B` | `wlm_agt_mgr_general_control_req` |
-| `2C` | `wlm_dev_mid_neigh_info_req` |
-| `2D` | `wlm_ability_nego_req` |
-| `2E` | `wlm_ability_nego_ack` |
-| `2F` | `wlm_ability_nego_result_req` |
-| `30` | `wlm_ability_nego_result_ack` |
-| `31` | `wlm_et_cb_process_v3_forward` |
-| `32` | `wlm_recv_liveview_status` |
-| `33` | `wlm_hdvt_set_config_ack` |
-| `34` | `wlm_recv_sdr_role_revert` |
-| `35` | `wlm_rm_recv_hdvt_misc_info_sync` |
-| `36` | `wlm_update_local_sig_bar` |
-| `37` | `wlm_get_hdvt_bindinfo` |
-| `38` | `wlm_get_hdvt_peer_bindinfo_rpt` |
-| `39` | `wlm_mission_type_info` |
-| `3A` | `wlm_gnd_update_ssfn_ack` |
-| `3B` | `wlm_hdvt_set_sdr_mode_ack` |
-| `3C` | `wlm_recv_i_frame_update_shmem` |
-| `3D` | `wlm_et_cb_common_entry_fc_push_osd` |
-| `3E` | `wlm_et_cb_common_entry_fc_push_osd_home` |
-| `3F` | `wlm_get_lte_peer_state_info` |
-| `40` | `wlm_et_get_lte_rpt_track` |
-| `41` | `wlm_recv_i_frame_for_wifi` |
-| `42` | `wlm_rm_ctrl_recv_sub1g_priority` |
-| `43` | `wlm_rm_ctrl_recv_sub1g_priority_ack` |
-| `44` | `wlm_recv_rmc_status` |
-| `45` | `wlm_recv_app_run_background` |
-| `46` | `wlm_rm_recv_app_work_stage` |
-| `47` | `wlm_dev_list_sync_req` |
-| `48` | `wlm_dev_list_sync_ack` |
-| `49` | `wlm_dev_state_sync_req` |
-| `4A` | `wlm_dev_state_sync_ack` |
-| `4B` | `wlm_dev_route_sync_req` |
-| `4C` | `wlm_dev_route_sync_ack` |
-| `4D` | `wlm_dev_mid_sync_req` |
-| `4E` | `wlm_dev_mid_sync_ack` |
-| `4F` | `wlm_dev_mid_change_req` |
-| `50` | `wlm_dev_mid_change_ack` |
-| `51` | `wlm_dev_mid_config_req` |
+1. Разобрать `.rela.dyn` как массив `Elf64_Rela` (24 байта: `r_offset`,
+   `r_info`, `r_addend`), оставить записи с типом `0x403`.
+2. Резолвить `r_addend` по символам из `dji_wlm_v576.gnu_debugdata`
+   (1 757 символов).
+3. Индекс команды = `(r_offset - 0x206E80) / 24`; поле `+0` записи — request
+   handler, поле `+8` — ack handler.
+
+База `0x206E80` не угадана, а закреплена на четырёх независимо
+задокументированных контрактах: `01` → `wlm_process_forward_pkt`,
+`19` → `wlm_modem_onoff_control`, `1A` → `wlm_service_mode_switch_req`,
+`22` → `wlm_bind_status_changed`. Все четыре совпадают одновременно только при
+этой базе, шаг 24 подтверждается разностями их `r_offset` (`0x18` между
+соседними ID, `0xC0` между `1A` и `22`).
+
+Полученный список полностью воспроизводит таблицу выше независимым методом и
+уточняет несколько имён (например, `29` — это `wlm_et_cb_tlv_process_agent_report`,
+а `2A` — `wlm_et_cb_common_entry_special_link_rpt`).
+
+| `01` | `wlm_process_forward_pkt` | — |
+| `02` | `wlm_link_mode_sw_trigger` | — |
+| `03` | `wlm_link_status_report` | — |
+| `05` | — | `wlm_route_switch_ack` |
+| `06` | `wlm_link_sw_res_sync` | `wlm_link_sw_res_ack` |
+| `07` | — | `wlm_link_ctrl_ack` |
+| `08` | `wlm_link_sw_nego_res_proc` | `wlm_link_sw_nego_ack` |
+| `09` | `wlm_debug_tools_test` | `wlm_debug_tools_test_ack` |
+| `0A` | `wlm_link_mode_query` | — |
+| `0D` | `wlm_receive_debug_control` | — |
+| `0F` | `wlm_route_switch_req` | — |
+| `10` | `wlm_et_get_video_unsmoothy_level` | — |
+| `15` | `wlm_select_target_dev` | — |
+| `18` | `wlm_receive_video_status` | — |
+| `19` | `wlm_modem_onoff_control` | — |
+| `1A` | `wlm_service_mode_switch_req` | — |
+| `1B` | `wlm_power_ctrl_agt_rpt` | — |
+| `1D` | — | `wlm_power_ctrl_set_agent_ack` |
+| `1E` | `wlm_rm_recv_local_freq_info` | — |
+| `1F` | — | `wlm_rm_recv_local_freq_info_ack` |
+| `20` | `wlm_receive_product_conn_sta` | — |
+| `21` | `wlm_auto_tools_test` | `wlm_auto_tools_test_ack` |
+| `22` | `wlm_bind_status_changed` | — |
+| `23` | `wlm_query_status` | — |
+| `24` | — | `wlm_agent_test_ack` |
+| `27` | `wlm_rtt_stat_anls` | — |
+| `29` | `wlm_et_cb_tlv_process_agent_report` | — |
+| `2A` | `wlm_et_cb_common_entry_special_link_rpt` | — |
+| `2C` | `wlm_agt_mgr_bw_attach` | — |
+| `2E` | `wlm_netlink_service_req` | `wlm_netlink_service_rsp` |
+| `2F` | `wlm_agt_mgr_general_control_req` | — |
+| `34` | `wlm_dev_mid_neigh_info_req` | — |
+| `41` | `wlm_ability_nego_req` | `wlm_ability_nego_ack` |
+| `42` | `wlm_ability_nego_result_req` | `wlm_ability_nego_result_ack` |
+| `51` | `wlm_et_cb_process_v3_forward` | — |
+
+35 слотов из `0x52` имеют хотя бы один handler; остальные пусты — у них нет ни
+одной релокации, то есть кадр с таким ID обработчика не найдёт.
+
+> **Исправление.** В первой редакции этого раздела (коммит `35b7268`) был
+> опубликован список из 79 «слотов», полученный чтением `.rela.dyn` как массива
+> данных со сдвигом на 8 байт. Та нумерация была артефактом разбора: имена
+> относились к соседним записям, а «третье поле `0x403`» — это на самом деле
+> `r_info` релокации. Список выше её заменяет.
 
 ## Таблица `dji_lte`
 
