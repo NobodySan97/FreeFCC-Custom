@@ -373,6 +373,57 @@ handlers. Поэтому назначать `sa_event_sysreboot`, `sa_event_amt_
 `sa_event_common_query_device_info` или `sa_event_rt_control_by_name` ID по
 соседству нельзя.
 
+## Таблица `0x51` в `dji_wlm` RM510 и сравнение с RC Pro 2 (2026-07-24)
+
+Тем же способом восстановлена таблица command set `0x51` на стороне пульта
+RC2. Раскладка совпадает с RC Pro 2: массив по 24 байта, поле `+0` — request
+handler, `+8` — ack, всё через релокации.
+
+База — `0x73730`, закреплена на `01` → `wlm_process_forward_pkt`. Проверка
+получилась сильнее, чем один якорь: **13 позиций совпали с таблицей RC Pro 2**
+(`01`, `02`, `03`, `05`, `06`, `07`, `08`, `0A`, `0F`, `10`, `15`, `18`, `20`),
+что при неверной базе было бы невозможно.
+
+| ID | Request handler | Ack handler |
+|---:|---|---|
+| `01` | `wlm_process_forward_pkt` | — |
+| `02` | `wlm_link_mode_sw_trigger` | — |
+| `03` | `wlm_link_status_report` | — |
+| `05` | — | `wlm_route_switch_ack` |
+| `06` | `wlm_link_sw_res_sync` | `wlm_link_sw_res_ack` |
+| `07` | — | `wlm_link_ctrl_ack` |
+| `08` | `wlm_link_sw_nego_res_proc` | `wlm_link_sw_nego_ack` |
+| `09` | `wlm_link_sw_test` | `wlm_event_foo` |
+| `0A` | `wlm_link_mode_query` | — |
+| `0F` | `wlm_route_switch_req` | — |
+| `10` | `wlm_et_get_video_unsmoothy_level` | — |
+| `15` | `wlm_select_target_dev` | — |
+| `16` | `wlm_request_download_lm` | `wlm_respone_download_lm` |
+| `18` | `wlm_receive_video_status` | — |
+| `20` | `wlm_receive_product_conn_sta` | — |
+| `21` | `wlm_test_callback` | — |
+
+### Чем RC2 отличается от RC Pro 2
+
+RM510 регистрирует 16 слотов против 35 у RC Pro 2. Отсутствуют, в частности:
+
+- `19` `wlm_modem_onoff_control`, `1A` `wlm_service_mode_switch_req`,
+  `22` `wlm_bind_status_changed` — то есть **весь modem/LTE-блок**;
+- `1B`/`1D` power control, `1E`/`1F` frequency info, `23` query status,
+  `27` RTT, `29`/`2A` TLV и special link, `2C` bandwidth attach,
+  `2E` netlink, `2F` general control, `34` neighbour info,
+  `41`/`42` ability negotiation, `51` v3 forward.
+
+Уникальны для RM510: `09` `wlm_link_sw_test` / `wlm_event_foo`,
+`16` `wlm_request_download_lm` / `wlm_respone_download_lm`,
+`21` `wlm_test_callback`.
+
+Для FreeFCC это конкретный вывод про 4G-sweep: три ID, о которых известно, что
+они делают что-то осмысленное на RC Pro 2 (`51:19` modem on/off, `51:1A`
+service mode switch, `51:22` bind status), на RC2 **не зарегистрированы вовсе**.
+На этом пульте sweep по ним не может ни включить, ни сломать ничего — обработчика
+нет. Это согласуется с отрицательным результатом live-прогона sweep.
+
 ## Таблицы `dji_link`, восстановленные из релокаций (2026-07-24)
 
 `dji_link` держит обработчики в разреженных массивах по 24 байта на слот, где
