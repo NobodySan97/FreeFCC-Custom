@@ -373,6 +373,62 @@ handlers. Поэтому назначать `sa_event_sysreboot`, `sa_event_amt_
 `sa_event_common_query_device_info` или `sa_event_rt_control_by_name` ID по
 соседству нельзя.
 
+## Таблицы `dji_link`, восстановленные из релокаций (2026-07-24)
+
+`dji_link` держит обработчики в разреженных массивах по 24 байта на слот, где
+индекс слота равен `cmd_id`. В образе они нулевые (PIE), поэтому восстановлены
+из `.rela.dyn`: `r_offset` — адрес слота, `r_addend` — адрес handler'а.
+
+Базы закреплены на независимо известных парах:
+
+- `cmd_set 0x00` → база `0x36000`. Проверка: `00:01` Version Inquiry,
+  `00:0B` Reboot Chip, `00:0E` Heartbeat, `00:32` Activate Config,
+  `00:4A` Set Date/Time, `00:FF` Query Device Info — шесть совпадений с
+  публичной таблицей `dji-firmware-tools` одновременно.
+- `cmd_set 0x07` → база `0x37848`. Проверка: `07:0B`/`07:0C` WiFi Ap Mac Addr
+  Set/Get и `07:30` WiFi Ap Set Country Code — три совпадения; расстояние
+  между `07:19` и `07:30` равно ровно 23 слотам, что совпадает с разностью ID.
+
+### cmd_set 0x00: база VA 0x36000, шаг 24
+| Команда | Handler в RM510 | Публичное имя |
+|---|---|---|
+| `00:01` | `dji_event_common_get_device_version` | Version Inquiry |
+| `00:0B` | `sys_event_reboot` | Reboot Chip |
+| `00:0E` | `dji_event_heartbeat` | Heartbeat/Log Message |
+| `00:32` | `dji_event_active_config` | Activate Config |
+| `00:36` | `dji_event_deactive_config` | — |
+| `00:4A` | `dji_event_set_date` | Set Date/Time |
+| `00:5B` | `dji_event_ftpd_control` | — |
+| `00:E5` | `dji_event_handle_djicare` | — |
+| `00:EA` | `dji_event_handle_log_export` | — |
+| `00:FF` | `dji_event_query_device_info` | Query Device Info |
+
+### cmd_set 0x07: база VA 0x37848, шаг 24
+| Команда | Handler в RM510 | Публичное имя |
+|---|---|---|
+| `07:0B` | `dji_event_set_wifi_mac_addr` | WiFi Ap Mac Addr Set |
+| `07:0C` | `dji_event_get_wifi_mac_addr` | WiFi Ap Mac Addr Get |
+| `07:19` | `dji_event_get_country_code` | WiFi Ap 19 (безымянная) |
+| `07:30` | `dji_event_set_coutry_code` | WiFi Ap Set Country Code |
+| `07:3C` | `dji_event_set_bt_mac_addr` | — |
+| `07:3D` | `dji_event_get_bt_mac_addr` | — |
+| `07:5C` | `dji_event_mcu_bat_status_push` | — |
+
+### Что это даёт FreeFCC напрямую
+
+| Кадр приложения | Подтверждение из RM510 |
+|---|---|
+| `07:19` | `dji_event_get_country_code`. **Публичный диссектор знает эту команду только как безымянную «WiFi Ap 19»** — здесь её назначение восстановлено из кода пульта и совпадает с live-поведением (возврат alpha-2) |
+| `07:30` | `dji_event_set_coutry_code` (опечатка — в самой прошивке). Совпадает с публичным «WiFi Ap Set Country Code» |
+| `00:32` | `dji_event_active_config`, публично «Activate Config» — подтверждает трактовку кадра как activation-state query, а не FCC-write |
+| `00:E5` | `dji_event_handle_djicare`. То есть у пульта обработчик **есть**; на WM260 тот же кадр отвергается DJI Care dispatcher'ом с ошибкой `0xE3`. Разница объясняется тем, что это разные получатели, а не тем, что команда несуществующая |
+
+### Чего нет в публичных таблицах
+
+`00:36` `dji_event_deactive_config`, `00:5B` `dji_event_ftpd_control`,
+`00:EA` `dji_event_handle_log_export`, `07:3C`/`07:3D` set/get BT MAC,
+`07:5C` `dji_event_mcu_bat_status_push`.
+
 ## Таблица parameter manager, восстановленная из релокаций (2026-07-24)
 
 `dji_sdrs_agent` — это parameter-manager пульта (в нём же лежит
