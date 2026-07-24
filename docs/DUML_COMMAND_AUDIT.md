@@ -176,9 +176,9 @@ hash(name) = fold(name + "_0", h = ((h << 8) | byte) mod 0xfffffffb)
 |---|---|---|
 | `00:00 / 000001` | `CLOSED`: broadcast device ping; payload используется как echo token | Ничего для классификации; live ACK нужен только для проверки конкретной модели |
 | `03:AF / 0324…` | Route до `flight:0` доказан; `GetAreaCode` остаётся client-side family name | Firmware flight-controller MCU с handler table либо контролируемый request/ACK |
-| `09:27 / ffff0063=3` | Register/value и route до `vt_air:0` доказаны | Firmware air transmission MCU |
+| `09:27 / ffff0063=3` | Register/value и route до `vt_air:0` доказаны; ни `0xffff0048`, ни `0xffff0063` не собираются кодом в Android-слое RM510, WM260 и WA234 (см. [`WA234_READBACK_ANALYSIS.md`](WA234_READBACK_ANALYSIS.md)) | Прошивка `sparrow2` transmission-чипа; закрыта ключом `TBIE`, публичные варианты не подходят |
 | `06:72` | `CLOSED` по имени и формату payload: `set stick value lock` из образа `rc331_0600` | Live-проверка фактического эффекта `ch5`/`ch5f` |
-| `06:8C` | Route до air transmission MCU доказан | Firmware air transmission MCU |
+| `06:8C` | Route до air transmission MCU доказан | Прошивка `sparrow2` из `/modem_firmware`; зашифрована `TBIE` |
 | `10:58 / 030100` | Registration в WA530 локализована: helper `vp_message_set_req_callback` (`0x282689c`), 133 восстановленные пары, `10:58` среди них отсутствует. Command set `0x10` там принадлежит autotest/fstest с ID `01–09`, `10–15`, `1B`, `22`, `23`, `81`, `90`. См. [`PERCEPTION_DUML_HANDLER_MAP.md`](PERCEPTION_DUML_HANDLER_MAP.md) | Скан 12 динамических регистраций WA530, ARM32-скан WM260 `dji_perception`, либо live request/ACK |
 
 Для `00:00` использован WA341 `dji_sys` (Build ID
