@@ -373,6 +373,71 @@ handlers. Поэтому назначать `sa_event_sysreboot`, `sa_event_amt_
 `sa_event_common_query_device_info` или `sa_event_rt_control_by_name` ID по
 соседству нельзя.
 
+## Таблица parameter manager, восстановленная из релокаций (2026-07-24)
+
+`dji_sdrs_agent` — это parameter-manager пульта (в нём же лежит
+`compute_hash_value_by_name`, тот самый алгоритм PM-хэшей). Его таблица команд
+в образе нулевая: бинарник PIE, и указатели проставляются динамическим
+линкером. Поэтому таблица восстановлена из `.rela.dyn`.
+
+Структура записи — 24 байта, код команды идёт **перед** парой указателей:
+
+```c
+struct pm_cmd_entry {      // 24 bytes, stride 24
+    uint64_t code;          // (cmd_id << 16) | cmd_set
+    uint64_t req_handler;   // R_AARCH64_RELATIVE relocation
+    uint64_t ack_handler;   // R_AARCH64_RELATIVE relocation
+};
+```
+
+`code` лежит в образе как обычная константа, поэтому нумерация здесь не
+выводится косвенно, а читается напрямую — в отличие от таблицы `0x51` в
+`dji_wlm`, где пришлось закреплять базу по известным контрактам.
+
+| `03:F3` | `reset_cfg_item_value_func` | `public_ack_handler` |
+| `03:F7` | `get_cfg_item_info_by_hash_func` | `public_ack_handler` |
+| `03:F8` | `read_cfg_item_value_by_hash_func` | `public_ack_handler` |
+| `03:F9` | `write_cfg_item_value_by_hash_func` | `public_ack_handler` |
+| `03:FA` | `reset_cfg_item_value_by_hash_func` | `public_ack_handler` |
+| `03:FB` | `recv_fixed_send_cfg_by_hash_func` | `public_ack_handler` |
+| `03:FC` | `req_fixed_send_cfg_by_hash_func` | `public_ack_handler` |
+| `03:E0` | `api_user_ask_table_func` | `public_ack_handler` |
+| `03:E1` | `api_user_ask_param_by_index_func` | `public_ack_handler` |
+| `03:E2` | `api_usr_get_param_by_index_func` | `public_ack_handler` |
+| `03:E3` | `api_usr_set_param_by_index_func` | `public_ack_handler` |
+| `03:E4` | `api_usr_def_param_by_index_func` | `public_ack_handler` |
+| `01:40` | `get_cfg_item_info_by_hash_func` | `public_ack_handler` |
+| `01:41` | `read_cfg_item_value_by_hash_func` | `public_ack_handler` |
+| `01:42` | `write_cfg_item_value_by_hash_func` | `public_ack_handler` |
+| `01:43` | `reset_cfg_item_value_by_hash_func` | `public_ack_handler` |
+
+### Что это подтверждает
+
+Одиннадцать позиций точно совпадают с публичной таблицей
+`DJI_DUMLv1_CMD_SET_TEXT` / `flyc` из `dji-firmware-tools`:
+`E0` Get Tbl Attribute, `E1` Get Item Attribute, `E2` Get Item Value,
+`E3` Set Item Value, `E4` Reset Def. Item Value, `F7` Get Param Info By Hash,
+`F8` Read Param By Hash, `F9` Write Param By Hash, `FA` Reset Params By Hash,
+`FB` Read Params By Hash, `FC` Write Params By Hash.
+
+Для FreeFCC это прямое подтверждение из кода самого пульта, а не только из
+публичной таблицы: LED- и GPS-путь приложения (`03:F7` metadata probe,
+`03:F8` read, `03:F9` write) адресован именно тем обработчикам, которые
+заявлены в аудите.
+
+### Что нового
+
+- **`03:F3` → `reset_cfg_item_value_func`** — этой пары нет в публичной
+  таблице `dji-firmware-tools`.
+- **`01:40`–`01:43`** — тот же набор операций (`get info` / `read` / `write` /
+  `reset` by hash) продублирован в command set `0x01` (Special) с теми же
+  handler-функциями. То есть у PM-операций RM510 есть альтернативный вход,
+  не совпадающий с привычным `0x03`.
+
+Практических изменений в профилях это не требует: рабочий путь `03:F8`/`03:F9`
+подтверждён. Дубль `01:4x` зафиксирован как факт таблицы, его поведение на
+живом устройстве не проверялось.
+
 ## Cross-check с live-потоком RC2
 
 Ниже перечислены пары, реально наблюдавшиеся приложением. Это transport
