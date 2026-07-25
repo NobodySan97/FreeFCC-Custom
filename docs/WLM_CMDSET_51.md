@@ -6,6 +6,16 @@
 Разбор статический, по ELF-образам; ни один кадр в рамках этой работы на
 устройство не отправлялся.
 
+> **Правка первой редакции.** Первая версия этого файла утверждала, что в
+> наборе `0x51` у `dji_wlm` заполнено всего шесть слотов. Это было неверно: там
+> были найдены только **дополнительные** таблицы, регистрируемые через
+> `duss_event_register_dynamic_command_table`. Основная таблица набора
+> передаётся раньше — в `duss_event_create_client_more_config` — и содержит
+> 82 слота (`0x00…0x51`), из которых заполнено 33 на RC2 и 35 на RC Pro 2.
+> Соответственно прежняя запись аудита («таблица имеет только ID `00..51`»,
+> трактовки `51:19`, `51:1A`, `51:22`) была верной, а её «исправление» —
+> ошибочным. Ниже — полный разбор.
+
 ## 1. Что отправляет приложение
 
 Профиль `app/src/main/assets/profiles/4g.json` + `Profiles.load4g()`.
@@ -14,8 +24,8 @@
 | Поле | Значение |
 |---|---|
 | `cmd_set` | `0x51` |
-| src | `0x02` — type 2 (CAMERA), index 0 |
-| dst | `0xEE` — type `0x0E` (OFDM), index 7 |
+| src | `0x02` — type 2 (**MOBILE_APP**), index 0 |
+| dst | `0xEE` — type `0x0E` (OFDM_GROUND), index 7 |
 | `cmd_type` | `0x00` — Request, **NO_ACK_NEEDED**, без шифрования |
 | payload | `00 00 00` + ASCII-серийник борта |
 | транспорт | abstract Unix socket `/duss/mb/0x205` |
@@ -43,14 +53,19 @@
 Длина кадра = 13 + длина серийника; при 20-символьном S/N это 36 байт,
 весь sweep — 4608 байт за ~1.3 с.
 
-`0xEE` расшифровывается однозначно: host id `0x0e07` = `dji_wlm`
-(`dji_lte` — `0x0e06`, см. [`DJI_CELLULAR_MODEM_LIVE_MAP.md`](DJI_CELLULAR_MODEM_LIVE_MAP.md)).
-То есть все 128 кадров адресованы **процессу `dji_wlm` на пульте**.
+Адресация: `host_id = (type << 8) | index`, DUML-байт = `(index << 5) | type`.
+Отсюда `0xEE` → type `0x0E`, index 7 → host `0x0e07` = **`dji_wlm`**
+(`dji_lte` — `0x0e06`). Сокет `/duss/mb/0x205` — это mbus-эндпоинт хоста
+`0x0205` = type 2 (MOBILE_APP), index 5, то есть точка входа для приложения;
+дальше кадр маршрутизируется DUSS по полю `dst`.
 
-## 2. Как `dji_wlm` регистрирует набор `0x51`
+Побочно: `sender_desc` в `4g.json`, `led_on.json` и `led_off.json` называет
+`sender = 2` «CAMERA», хотя в `fcc.json`/`device_info.json` тот же type 2
+описан как `MOBILE_APP`. Верно второе; байты кадров при этом корректны.
 
-Механизм — `duss_event_register_dynamic_command_table` из `libduml_frwk.so`.
-Разбор самой функции (`0x1a6e00` в RC2-образе) даёт точный контракт:
+## 2. Как `dji_wlm` регистрирует наборы команд
+
+Контракт восстановлен из `libduml_frwk.so` (`0x1a6e00` в RC2-образе):
 
 ```c
 register_table(handle, void **tables, uint32_t *counts, uint16_t n_sets)
@@ -66,92 +81,161 @@ register_table(handle, void **tables, uint32_t *counts, uint16_t n_sets)
 Запись — 24 байта: `{void *req_handler; void *ack_handler; uint32 flags}`.
 Индекс внешнего массива — **cmd_set**, индекс записи — **cmd_id**.
 
-В `dji_wlm` вызов ровно один (внутри `wlm_et_cb_start`), `n_sets = 0xEF`, и во
-всём массиве заполняется **единственный слот — `0x51`**. Указатель на таблицу
-выбирается по `wlm_get_dev_mgr_cfg()`: сначала регистрируется вариант 1, затем
-по флагу конфигурации — вариант 2 либо вариант 3.
+`dji_wlm` использует этот контракт **трижды**, и это главная развилка разбора:
 
-## 3. Полное содержимое таблицы `0x51`
+1. **Основная регистрация** — `duss_event_create_client_more_config`
+   (`wlm_et_cb_start`, RC2 `0xf65e0`): клиент `wl_manager_service` создаётся
+   сразу с парой массивов `x2 = tables`, `x3 = counts`, `w4 = 0xEF`. Здесь
+   регистрируются **все** наборы, которые слушает WLM, включая полный `0x51`.
+2. **Дополнительные регистрации** — два вызова
+   `duss_event_register_dynamic_command_table` (`0xf66b0`, `0xf6750`) со
+   второй парой массивов; в них заполнен только слот `0x51`, и подставляется
+   одна из трёх таблиц device-manager sync (выбор по `wlm_get_dev_mgr_cfg()`).
+3. **Точечная правка** — `duss_event_modify_dynamic_command` (`0xf67f8`) для
+   `51:05`; ставит тот же `wlm_route_switch_ack`, новых ID не добавляет.
+
+Есть и четвёртый путь — `duss_event_register_dynamic_command_with_user_data`
+из `wlm_dmb_fsm_state_set`, но это test-tool
+(`modules/test_tool/wlm_test_detect_msg_bw.c`): `cmd_set`/`cmd_id` берутся из
+runtime-структуры теста и регистрируются только на время прогона.
+
+## 3. Основная таблица `0x51` — 82 слота
 
 Таблицы лежат в `.data` и заполняются `R_AARCH64_RELATIVE`-релокациями.
-В RC2 и WA530 `.rela.dyn` упакована как Android `APS2`, поэтому «в файле»
-там нули — именно на этом легко ошибиться. В RC Pro 2 v576 используется
-обычная таблица `RELA`.
+В RC2 и WA530 `.rela.dyn` упакована как Android `APS2`, поэтому «в файле» там
+нули — именно на этом легко ошибиться. В RC Pro 2 v576 — обычная `RELA`.
 
-Результат идентичен на трёх независимых образах:
+| Устройство | Таблица `0x51` | Слотов | Заполнено |
+|---|---|---:|---:|
+| RC2 (`a3s`) | `0x17ff20` | 82 (`0x00…0x51`) | 33 |
+| RC Pro 2 v576 | `0x206e80` | 82 (`0x00…0x51`) | 35 |
 
-| Устройство | Файл | Вариант 1 | Вариант 2 | Вариант 3 |
-|---|---|---|---|---|
-| RC2 (`a3s`) | `dji_wlm` | `0x184a68`, 52 слота | `0x184f48`, 55 | `0x185470`, 54 |
-| RC Pro 2 (v576) | `dji_wlm` | `0x20b8c0`, 52 | `0x20bda0`, 55 | `0x20c2c8`, 54 |
-| WA530 (дрон) | `dji_wlm` | `0x226570`, 52 | `0x226a50`, 55 | `0x226f78`, 54 |
+| Кадр | req handler | ack handler |
+|---|---|---|
+| `51:01` | `wlm_process_forward_pkt` | — |
+| `51:02` | `wlm_link_mode_sw_trigger` | — |
+| `51:03` | `wlm_link_status_report` | — |
+| `51:05` | — | `wlm_route_switch_ack` |
+| `51:06` | `wlm_link_sw_res_sync` | `wlm_link_sw_res_ack` |
+| `51:07` | — | `wlm_link_ctrl_ack` |
+| `51:08` | `wlm_link_sw_nego_res_proc` | `wlm_link_sw_nego_ack` |
+| `51:09` | `wlm_link_switch_test` | `wlm_service_test_ack` |
+| `51:0A` | `wlm_link_mode_query` | — |
+| `51:0D` | `wlm_receive_debug_control` | — |
+| `51:0F` | `wlm_route_switch_req` | — |
+| `51:10` | `wlm_et_get_video_unsmoothy_level` | — |
+| `51:15` | `wlm_select_target_dev` | — |
+| `51:18` | `wlm_receive_video_status` | — |
+| **`51:19`** | **`wlm_modem_onoff_control`** | — |
+| `51:1A` | `wlm_service_mode_switch_req` | — |
+| `51:1B` | `wlm_power_ctrl_agt_rpt` | — |
+| `51:1D` | — | `wlm_power_ctrl_set_agent_ack` |
+| `51:1E` | `wlm_rm_recv_local_freq_info` | — |
+| `51:1F` | — | `wlm_rm_recv_local_freq_info_ack` |
+| `51:20` | `wlm_receive_product_conn_sta` | — |
+| `51:21` | `wlm_test_callback` | `wlm_test_callback_ack` |
+| `51:22` | `wlm_bind_status_changed` | — |
+| `51:23` | `wlm_query_status` | — |
+| `51:24` | — | `wlm_agent_test_ack` |
+| `51:27` | `wlm_rtt_stat_anls` | — |
+| `51:29` | `wlm_et_cb_tlv_process_agent_report` | — |
+| `51:2A` | `wlm_et_cb_common_entry_special_link_rpt` | — |
+| `51:2C` | `wlm_agt_mgr_bw_attach` | — |
+| `51:2E` | `wlm_netlink_service_req` (только RC Pro 2) | `wlm_netlink_service_rsp` |
+| `51:2F` | `wlm_agt_mgr_general_control_req` (только RC Pro 2) | — |
+| `51:34` | `wlm_dev_mid_neigh_info_req` | — |
+| `51:41` | `wlm_ability_nego_req` | `wlm_ability_nego_ack` |
+| `51:42` | `wlm_ability_nego_result_req` | `wlm_ability_nego_result_ack` |
+| `51:51` | `wlm_et_cb_process_v3_forward` | — |
 
-Заполненных слотов на всех трёх — **шесть**, и это одни и те же ID:
+`51:42` замыкает круг с LTE-справочником: `dji_lte` формирует именно этот
+`msg_id` в `lte_query_wlm_nego_result` (`0x00510042`, целевой host берётся из
+runtime-структуры), а принимает его `wlm_ability_nego_result_req`.
 
-| Кадр | req handler | ack handler | Вариант | Смысл |
-|---|---|---|---|---|
-| `51:30` | `wlm_dev_mid_sync_req` | `wlm_dev_mid_sync_ack` | 2 | синхронизация MID устройств |
-| `51:31` | `wlm_dev_list_sync_req` | `wlm_dev_list_sync_ack` | 1 | синхронизация списка устройств |
-| `51:32` | `wlm_dev_state_sync_req` | `wlm_dev_state_sync_ack` | 1 | синхронизация состояний |
-| `51:33` | `wlm_dev_route_sync_req` | `wlm_dev_route_sync_ack` | 1 | синхронизация маршрутов |
-| `51:35` | `wlm_dev_mid_config_req` | `wlm_dev_mid_config_ack` | 3 | конфигурация MID |
-| `51:36` | `wlm_dev_mid_change_req` | `wlm_dev_mid_change_ack` | 2 | смена MID |
+## 4. Дополнительные таблицы: device-manager sync
 
-Варианты 2 и 3 взаимоисключающие, поэтому одновременно активны либо
-`{30, 31, 32, 33, 36}`, либо `{31, 32, 33, 35}` — то есть **4 или 5** ID из 128.
+Поверх основной регистрируются ещё три таблицы, из которых активна первая
+плюс одна из двух остальных (выбор по `wlm_get_dev_mgr_cfg()`):
 
-Набор `0x51` у `dji_wlm` — это **device manager линка WLM**, а не LTE. Это
-подтверждается и конфигурацией: `wlm_cfg.json` на RC2 содержит
-`common.enable_modules.dev_mgr = 1` и секцию `dev_mgr`, а имена handler'ов
-приходят из того же модуля.
+| Устройство | Вариант 1 | Вариант 2 | Вариант 3 |
+|---|---|---|---|
+| RC2 (`a3s`) | `0x184a68`, 52 слота | `0x184f48`, 55 | `0x185470`, 54 |
+| RC Pro 2 v576 | `0x20b8c0`, 52 | `0x20bda0`, 55 | `0x20c2c8`, 54 |
+| WA530 (дрон) | `0x226570`, 52 | `0x226a50`, 55 | `0x226f78`, 54 |
 
-Ни `libwlm.so`, ни `libwlm_liveview.so`, ни `liblte.so` вообще не
-импортируют `duss_event_register_dynamic_command*`, так что других приёмников
-набора `0x51` на пульте нет. `dji_lte` на RC2 тоже ничего не регистрирует — он
-только отправляет (`lte_query_wlm_nego_result` формирует `51:42`).
+| Кадр | req / ack | Вариант |
+|---|---|---|
+| `51:30` | `wlm_dev_mid_sync_req` / `_ack` | 2 |
+| `51:31` | `wlm_dev_list_sync_req` / `_ack` | 1 |
+| `51:32` | `wlm_dev_state_sync_req` / `_ack` | 1 |
+| `51:33` | `wlm_dev_route_sync_req` / `_ack` | 1 |
+| `51:35` | `wlm_dev_mid_config_req` / `_ack` | 3 |
+| `51:36` | `wlm_dev_mid_change_req` / `_ack` | 2 |
 
-## 4. Что из этого следует для sweep'а
+Итого на RC2 одновременно активны **38** ID набора `0x51` (33 основных +
+`30/31/32/33/36`) либо **37** (33 + `31/32/33/35`).
 
-- **Шесть ID имеют обработчики в объединении трёх вариантов таблицы**, но
-  варианты 2 и 3 взаимоисключающие. В конкретном runtime активны 5 ID
-  (`30/31/32/33/36`) либо 4 ID (`31/32/33/35`), поэтому без активного
-  handler'а остаются соответственно **123 или 124 кадра из 128**. Диспетчер
-  пропускает пустые записи при регистрации, поэтому такие кадры не
-  обрабатываются вовсе. Плюс `cmd_type = NO_ACK_NEEDED` — ответа не будет ни
-  при каком исходе, так что «успешная отправка» в UI означает только успешную
-  запись в сокет.
-- **Оставшиеся 4 или 5 кадров попадают в живые обработчики** device-manager
-  sync с payload `00 00 00 + ASCII S/N`, который не соответствует их
-  контракту. Первое, что делает, например, `wlm_dev_list_sync_req_common`, —
-  две проверки состояния (`0xec6e0`, `0xdf0d0`) с выходом по логу, так что до
-  разбора полей дело, скорее всего, не доходит.
-- **Ни одного слота, связанного с LTE/4G, в таблице нет.** ID из штатного
-  LTE-потока (`51:42` от `dji_lte`) лежат за верхней границей таблицы
-  (максимум — `0x36`), то есть `dji_wlm` их как request не принимает.
-- Это согласуется с наблюдением пользователя: реальная отправка всего sweep
-  не дала видимого эффекта.
+## 5. Другие наборы, которые слушает `dji_wlm` (RC2)
+
+| cmd_set | Слотов | Заполнено | Команды |
+|---|---:|---:|---|
+| `0x00` | 256 | 3 | `44` power mgr, `B0` sysmode scene, `FF` `wlm_query_device_info` |
+| `0x01` | 2 | 1 | `01` `wlm_recv_i_frame_update_shmem` |
+| `0x03` | 69 | 2 | `43`/`44` FC push OSD / OSD home |
+| `0x06` | 141 | 1 | `8C` `wlm_rm_recv_app_work_stage` |
+| `0x08` | 103 | 1 | `66` `wlm_recv_liveview_status` |
+| `0x09` | 237 | 9 | `39`, `44`, `62`, `75`, `84`, `85`, `93`, `A0`, `EC` — SDR/HDVT |
+| `0x18` | 72 | 3 | `37` `wlm_get_lte_peer_state_info`, `3B` `wlm_et_get_lte_rpt_track`, `47` `wlm_recv_i_frame_for_wifi` |
+| `0x19` | 68 | 1 | `43` `wlm_recv_rmc_status` |
+| `0x23` | 21 | 1 | `14` `wlm_flight_push_handheld_osd` |
+| `0xEE` | 8 | 1 | `07` `wlm_recv_app_run_background` |
+
+То есть LTE-набор `0x18` WLM тоже слушает, но лишь в части peer-state и
+телеметрии; активация модема в нём не участвует.
+
+## 6. Что из этого следует для sweep'а
+
+- **~90 из 128 кадров попадают в пустые слоты** (все `0x52…0x7F` — за верхней
+  границей таблицы плюс незаполненные ID ниже). Диспетчер пропускает пустую
+  запись при регистрации, поэтому такой кадр не обрабатывается вовсе.
+- **37–38 кадров реально доходят до живых обработчиков** WLM. Это не
+  безобидный перебор: среди них `51:02` link mode switch trigger, `51:0F`
+  route switch, `51:15` select target dev, `51:19` modem on/off, `51:1A`
+  service mode switch, `51:1B`/`51:1D` power control, `51:22` bind status,
+  `51:2C` bandwidth attach. Все получают payload `00 00 00 + ASCII S/N`,
+  который не соответствует их контракту.
+- **`51:19` — единственный ID во всём наборе, прямо относящийся к модему.**
+  `wlm_modem_onoff_control` живёт в
+  `modules/power_ctrl/wlm_power_ctrl.c`, ветвится по длине сообщения
+  (`cmp w8, #7`): «короткий» формат ≤ 7 байт идёт в основную ветку с логом
+  `recved modem onoff control`, а длинный (наш случай, 23 байта) уходит в
+  ветку побайтового сравнения payload с сохранённым состоянием
+  (`[payload+0]`, `[+1]`, `[+3]` против глобалов `0x1c0330/0331/0333`) и при
+  несовпадении логируется как ошибка уровня 3. То есть кадр sweep'а до
+  фактического включения модема не доходит, но и «ничего не делает» — неточное
+  описание: он попадает в power-control путь.
+- `cmd_type = NO_ACK_NEEDED` — ответа нет ни при каком исходе, так что
+  «успешная отправка» в UI означает только успешную запись в сокет.
+- Это согласуется с наблюдением пользователя: реальная отправка всего sweep не
+  дала видимого эффекта.
 
 Штатный путь активации — другой и описан в
 [`LTE_DUML_COMMAND_REFERENCE.md`](LTE_DUML_COMMAND_REFERENCE.md): `00:32`
 (`common_dongle_activate`), набор `0x18` у `dji_lte`, eSIM через `18:4B/4C`.
 
-## 5. Расхождение с прежней записью аудита
-
-В [`DUML_COMMAND_AUDIT.md`](DUML_COMMAND_AUDIT.md) записано, что «таблица имеет
-только ID `00..51`», а также приведены трактовки `51:1A`, `51:19`, `51:22`.
-Настоящий разбор этого не воспроизводит: слотов `0x19`, `0x1A`, `0x22` нет ни в
-одном из трёх образов, а `0x51` — это индекс *cmd_set* во внешнем массиве, а не
-размер таблицы. Верхняя граница таблицы — `0x36`.
-
-## 6. Воспроизведение
+## 7. Воспроизведение
 
 Скрипты (scratchpad): `elf.py` (минимальный ELF-парсер), `aps2.py` (декодер
-Android packed relocations), `wlm51b.py` (дамп таблиц), `frame.py` (сборка
-кадров с CRC-8/CRC-16 из `DumlTransport.kt`).
+Android packed relocations), `main51.py`/`allsets.py` (дамп таблиц),
+`cmp51.py` (сравнение устройств), `frame.py` (сборка кадров с CRC-8/CRC-16 из
+`DumlTransport.kt`).
 
 1. Достать `.gnu_debugdata` (LZMA) → мини-symtab с именами функций.
-2. Декодировать `.rela.dyn`: у RC2 и WA530 это Android packed relocations
-   `APS2`, у RC Pro 2 v576 — обычный `RELA`.
-3. Найти `bl` на PLT-стаб `duss_event_register_dynamic_command_table`,
-   восстановить `x1`/`x2` (базы массивов в стеке) и собрать `str`-записи в них.
-4. Слот `0x51` → адрес таблицы; дальше stride 24 и релокации по `+0`/`+8`.
+2. Декодировать `.rela.dyn`: у RC2 и WA530 это `APS2`, у RC Pro 2 v576 —
+   обычный `RELA`.
+3. Найти `bl` на PLT-стаб `duss_event_create_client_more_config` — **это
+   основная регистрация**; восстановить `x2` (tables) и `x3` (counts), базы
+   лежат в стеке. Вызовы `duss_event_register_dynamic_command_table` дают лишь
+   дополнения, и если смотреть только их, картина получится неполной.
+4. Слот `cmd_set` → адрес таблицы, `counts[cmd_set]` → длина; дальше stride 24
+   и релокации по `+0` (req) и `+8` (ack).
