@@ -157,6 +157,60 @@ Callback-функции, зарегистрированные рядом, наз
 | `0a:56` | `0x25f1ab0` | `vp_general_ctrl_switch` | `Perception switch command is received from 0x%02x%02x, switch_type: %u, msg_length: %u`; ветки `led#%u light_mode = %d power %d`, `unimplemented_switch_command`, `Sub-command type is invalid` | `CONFIRMED` |
 | `0a:58` | `0x25f209c` | `vp_general_get_switch` | `Perception get switch command is received from 0x%02x%02x, cmd_mode=%u`; читает `flashlight led_ctr_status=%d active_status=%u power=%u`, `temp`, `power` | `CONFIRMED` |
 
+### Что за «switch» в `0a:56`
+
+Handler `0x25f1ab0` разобран до ветвей. Контракт:
+
+1. `w5 = [x0+0x10]` — длина payload; при `< 6` выход с
+   `Invalid control command size %u`.
+2. `payload[0]` — **`switch_type`**; при значении `> 6` —
+   `Sub-command type is invalid`.
+3. Дальше — таблица переходов на 7 ветвей: `adrp x9, #0x9c2000; add x9, x9,
+   #0xf24; ldrb w11, [x9, x8]; br x10` (база `0x25f1ba0`, шаг 4 байта).
+
+Что делает каждый `switch_type` на WA530:
+
+| `switch_type` | Ветвь | Что там |
+|---:|---|---|
+| `0` | `0x25f1ba0` | `unimplemented_switch_command`, `Command is not supported` |
+| `1` | `0x25f1d68` | то же |
+| `2` | `0x25f1c5c` | то же |
+| `3` | `0x25f1ca4` | **`switch_fill_light`** — управление заполняющим светом |
+| `4` | `0x25f1be8` | `unimplemented_switch_command` |
+| `5` | `0x25f1e30` | пустая ветвь (16 байт) |
+| `6` | `0x25f1e40` | **`switch_fill_light`**, упрощённый вход |
+
+То есть «switch» здесь — это переключатели/актуаторы модуля perception, и на
+этой платформе реально реализован **только заполняющий свет**; остальные типы
+отвечают «не поддерживается».
+
+Разбор ветви `switch_type = 3`:
+
+| Байт payload | Назначение |
+|---|---|
+| `[1]` | `light_mode`; при `<= 1` мощность принудительно `0x64` (100), при `> 1` берётся из `[3]` |
+| `[2]` | индекс светодиода — в логе `led#%u` |
+| `[3]` | `power` |
+| `[4]` | дополнительное поле, используется при `light_mode > 2` |
+
+Ошибки ветви: `Fill light mode=%u is invalid`, `Switch fill light failed`.
+Лог успеха: `led#%u light_mode = %d power %d`.
+
+Ветвь `switch_type = 6` проще: берёт `payload[2]` как булево
+(`cmp w8, #0; cset w0, ne`) и вызывает `0x26c48d0`; ниже в той же области идёт
+разбор битовой маски из восьми бит (`tbnz w22, #0..7`), то есть адресация
+нескольких светодиодов сразу.
+
+Контекст в образе подтверждает предмет: `fill_light`, `cis_app_flashlight`,
+`add_flashlight_state_topic`, `add_flashlight_trigger` с полями
+`flashlight_type`, `hardware_type`, `temperature`. Речь о штатной подсветке
+аппарата, а не о навигационных огнях.
+
+**Важно не путать с LED-функцией FreeFCC.** Приложение управляет лампами через
+`03:F9` PM-write по хэшу `a259ceed` (`g_config.misc_cfg.forearm_lamp_ctrl`) —
+это лампы на луче. `0a:56` — другой механизм и другой потребитель
+(заполняющий свет perception-модуля).
+
 Это отдельная пара control/readback внутри Vision command set. Совпадение
 `cmd_id = 0x58` с FreeFCC-кадром `10:58` — только совпадение ID при разных
 command set; никакого доказательства, что исторический кадр «на самом деле»
