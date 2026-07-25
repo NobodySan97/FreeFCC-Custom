@@ -356,14 +356,23 @@ dongle detect/activate
 
 - destination `0xEE` соответствует `dji_wlm` (`0x0e07`), а не `dji_lte`
   (`0x0e06`);
-- command set `0x51` содержит device-manager handlers
-  `30/31/32/33/35/36`;
-- это объединение трёх вариантов таблицы; одновременно активны только 4 либо
-  5 handler ID;
-- 124 либо 123 кадра текущего sweep не имеют активного handler'а;
-- оставшиеся 4 или 5 получают `00 00 00 + ASCII S/N`, не соответствующий
-  контракту device-sync handlers;
-- в таблице нет LTE activation handler;
+- основная таблица набора `0x51` регистрируется в
+  `duss_event_create_client_more_config` и имеет 82 слота (`0x00..0x51`):
+  заполнено 33 на RC2 и 35 на RC Pro 2 v576 (`2E` netlink service и `2F` agent
+  general control — только у RC Pro 2);
+- дополнительно тремя таблицами регистрируется device-manager sync
+  `30/31/32/33/35/36`, из которых варианты взаимоисключающие; итого
+  одновременно активны 37–38 handler ID;
+- около 90 кадров текущего sweep не имеют активного handler'а, а 37–38
+  доходят до живых обработчиков и получают `00 00 00 + ASCII S/N`, не
+  соответствующий их контракту; задеты в том числе link mode switch (`02`),
+  route switch (`0F`), select target dev (`15`), power control (`1B`/`1D`),
+  bind status (`22`);
+- в наборе нет LTE **activation** handler, но есть `51:19`
+  `wlm_modem_onoff_control` (power-control путь) и `51:42`
+  `wlm_ability_nego_result_req` — приёмник для `lte_query_wlm_nego_result` из
+  `dji_lte`; отдельно `dji_wlm` слушает три ID набора `0x18`
+  (`37` peer state, `3B` rpt track, `47` i-frame for wifi);
 - `NO_ACK_NEEDED` не позволяет отличить обработку от простой успешной записи
   в сокет.
 
@@ -402,7 +411,7 @@ transport write. Она не подтверждает:
 | Drone-Hacks FCC мешает 4G | `VENDOR CLAIM` | Drone-Hacks Wiki | полевое предупреждение без RF evidence | Низкая/средняя |
 | `09:27` — публичный минимальный FCC-примитив | `OBSERVED` | три open-source реализации | одинаковый payload `0xffff0048=2` | Высокая |
 | 21-frame FreeFCC-USB профиль универсален | `HYPOTHESIS` | GitHub JSON/README | профиль открыт, но hardware test отсутствует | Низкая |
-| FreeFCC 128-frame sweep включает Enhanced Transmission | `NEGATIVE` в проверенных RC2/RC Pro 2 v576/WA530 tables | `profiles/4g.json`, `WLM_CMDSET_51.md` | адресуется device manager `dji_wlm`; LTE handlers отсутствуют | Высокая для проверенных builds |
+| FreeFCC 128-frame sweep включает Enhanced Transmission | `NEGATIVE` в проверенных RC2/RC Pro 2 v576/WA530 tables | `profiles/4g.json`, `WLM_CMDSET_51.md` | адресуется `dji_wlm`; LTE **activation** handler в наборе отсутствует, хотя sweep задевает `51:19` modem on/off и link/power-control ID | Высокая для проверенных builds |
 | Штатный DJI LTE требует нескольких стадий | `OBSERVED` + `DERIVED` | MSDK, DJI FAQ, firmware docs | auth, capability, pairing, WLM, relay | Высокая |
 
 ## Следующий наиболее информативный эксперимент
