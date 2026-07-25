@@ -519,6 +519,8 @@ service mode switch, `51:22` bind status), отсутствуют в восст�
 | `00:5B` | `dji_event_ftpd_control` | — |
 | `00:E5` | `dji_event_handle_djicare` | — |
 | `00:EA` | `dji_event_handle_log_export` | — |
+| `00:ED` | `bb_event_cb_log_sync` | — |
+| `00:EE` | `bb_event_cb_log_info` | — |
 | `00:FF` | `dji_event_query_device_info` | Query Device Info |
 
 ### cmd_set 0x07: база VA 0x37848, шаг 24
@@ -531,6 +533,26 @@ service mode switch, `51:22` bind status), отсутствуют в восст�
 | `07:3C` | `dji_event_set_bt_mac_addr` | — |
 | `07:3D` | `dji_event_get_bt_mac_addr` | — |
 | `07:5C` | `dji_event_mcu_bat_status_push` | — |
+| `07:B5` | `dji_event_get_status` | — |
+| `07:E0` | `dji_event_hdvt_status_push` | — |
+
+### Уточнение 2026-07-25: границы таблиц и независимая проверка
+
+В первой редакции таблицы `0x00` и `0x07` были обрезаны: я ограничил их
+диапазоном `0x1000` байт вместо `256 × 24 = 0x1800`. Из-за этого четыре
+handler'а не попали в списки и были ошибочно отнесены к «нерасшифрованным
+таблицам». С корректной границей добавились `00:ED`, `00:EE`, `07:B5`, `07:E0`
+(они уже включены в таблицы выше).
+
+Базы независимо подтверждены на **другой прошивке**: в свежем
+`V03.02.0700_rm510` (Android `V03.06.01.66`, 2023-12) те же якоря дают
+`dji_event_get_country_code` по `0x34ce0` и `dji_event_set_coutry_code` по
+`0x34f08` — разница `0x228`, ровно 23 слота, как и разность ID `0x30 − 0x19`.
+Полученный набор `07:xx` совпадает с приведённым выше полностью.
+
+Из ранее «потерянных» handler'ов вне таблиц `0x00`/`0x07` остаются только три:
+`dji_event_write_keys`, `dji_event_rtk_data_enc`, `dji_event_report_status` —
+их `r_offset` выходит за 256 слотов от обеих баз.
 
 ### Карта всех таблиц, регистрируемых `dji_link_event_start`
 
