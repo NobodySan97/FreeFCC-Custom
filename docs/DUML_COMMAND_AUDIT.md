@@ -226,7 +226,7 @@ periodic mode после bootstrap посылает один лёгкий `07:19
 | GPS read | wrapped `03:F8`, hash `829542c5` | Текущее byte value `0/1` | `CONFIRMED` |
 | GPS write | wrapped `03:F9`, `829542c500/01` | Пять bounded writes, затем новый `03:F8` read | `CONFIRMED` для protocol; physical persistence отдельно не доказана |
 | Home Point | passive wrapped push `03:44` | Долгоживущее read-only соединение; `home_state` bit 0 сигнализирует запись Home Point | `CONFIRMED` на проверенном RC2/Avata layout |
-| 4G legacy sweep | abstract Unix `/duss/mb/0x205`, `51:00..7F` | `0x205` — mbus-эндпоинт хоста `0x0205` (MOBILE_APP:5); destination `0xEE` = host `0x0e07` = `dji_wlm`. Основная таблица набора `0x51` имеет **82 слота (`0x00..0x51`)**, заполнено 33 на RC2 и 35 на RC Pro 2, плюс device-manager sync `51:30..36` из дополнительных таблиц: активны 37–38 ID. Значит ~90 кадров sweep'а не имеют handler'а, а 37–38 доходят до живых обработчиков — включая link/route switch, power control и `51:19` `wlm_modem_onoff_control`. В пользовательском live-тесте sweep не дал видимого эффекта. См. [`WLM_CMDSET_51.md`](WLM_CMDSET_51.md) | Структура `CONFIRMED`; activation не подтверждена, наблюдаемый эффект `NEGATIVE` |
+| 4G legacy sweep | abstract Unix `/duss/mb/0x205`, `51:00..7F` | `0x205` — mbus-эндпоинт хоста `0x0205` (MOBILE_APP:5); destination `0xEE` = host `0x0e07` = `dji_wlm`. Основная таблица набора `0x51` имеет **82 слота (`0x00..0x51`)**: на RC2 33 непустые записи, но только 28 request-handler; на RC Pro 2 — 35 и 30. С учётом дополнительных device-manager таблиц request sweep может войти в 32–33 handler RC2 либо 34–35 handler RC Pro 2; остальные 95–96 либо 93–94 кадров не имеют request-handler. Среди достижимых ID есть link/route switch, power control и `51:19` `wlm_modem_onoff_control`. В пользовательском live-тесте sweep не дал видимого эффекта; upstream-отчёты об отдельных успешных моделях не имеют достаточных логов для причинной связи. См. [`WLM_CMDSET_51.md`](WLM_CMDSET_51.md) | Структура `CONFIRMED`; activation текущим sweep не подтверждена, локальный эффект `NEGATIVE`, upstream status `REPORTED` |
 
 В persistent Home Point mode при разрыве потока приложение снова подключается
 с задержкой 5 секунд и продолжает ждать следующую запись Home Point. Пока оно
@@ -237,25 +237,36 @@ periodic mode после bootstrap посылает один лёгкий `07:19
 [`WLM_CMDSET_51.md`](WLM_CMDSET_51.md)) подтвердил прежнюю границу таблицы
 `00..51` и уточнил её состав: основная таблица набора `0x51` регистрируется в
 `duss_event_create_client_more_config` и имеет 82 слота, из которых заполнено
-33 на RC2 и 35 на RC Pro 2; отдельно тремя дополнительными таблицами
-регистрируется device-manager sync `51:30..36`. Одновременно активны 37–38 ID.
+33 непустые записи на RC2 и 35 на RC Pro 2; отдельно тремя дополнительными
+таблицами регистрируется device-manager sync `51:30..36`. Пять записей
+основной таблицы (`05/07/1D/1F/24`) являются ACK-only и не вызываются
+request-пакетами профиля.
 
-Отсюда картина sweep'а: около 90 кадров из 128 попадают в пустые слоты и не
-обрабатываются вовсе, а 37–38 доходят до живых обработчиков WLM с payload
-`00 00 00 + ASCII S/N`, который не соответствует их контракту. Среди задетых —
-`51:02` link mode switch trigger, `51:0F` route switch, `51:15` select target
-dev, `51:19` `wlm_modem_onoff_control`, `51:1A` service mode switch,
-`51:1B`/`51:1D` power control, `51:22` bind status. При этом реальная отправка
-всего sweep, выполненная пользователем, не дала видимого эффекта. Поэтому
-профиль сохраняется только как явно названный legacy research sweep, а не как
-доказанная 4G activation.
+Отсюда картина sweep'а: на RC2 95–96 кадров из 128, а на RC Pro 2 93–94 не
+имеют request-handler. Остальные 32–33 либо 34–35 входят в WLM request-handler
+с payload `00 00 00 + ASCII identity`, который не соответствует их разным
+контрактам. Среди задетых — `51:02` link mode switch trigger, `51:0F` route
+switch, `51:15` select target dev, `51:19` `wlm_modem_onoff_control`, `51:1A`
+service mode switch, `51:1B` power-control report и `51:22` bind status.
+`51:1D` сюда не входит: это ACK-only запись. Реальная отправка всего sweep,
+выполненная пользователем, не дала видимого эффекта. Поэтому профиль
+сохраняется как legacy research sweep, а не как доказанная 4G activation.
 
 Единственный ID во всём наборе, прямо относящийся к модему, — `51:19`
 (`wlm_modem_onoff_control`, `modules/power_ctrl/wlm_power_ctrl.c`). Он ветвится
-по длине сообщения: формат ≤ 7 байт идёт в основную ветку, а длинный payload
-sweep'а — в ветку побайтового сравнения с сохранённым состоянием, где при
-несовпадении пишется ошибка. `51:42` (`wlm_ability_nego_result_req`) — приёмная
-сторона `lte_query_wlm_nego_result` из `dji_lte`.
+по длине сообщения одинаково на RC2, RC Pro 2 v576 и WA530: формат ≤ 7 байт
+отвергается, обработка начинается при длине > 7. В длинной ветке sweep
+подставляет первый ASCII-символ identity в `payload[3]`; проверенный RC2
+handler считает его неподдерживаемым `cmd_type` и не доходит до on/off-действия.
+`51:42` (`wlm_ability_nego_result_req`) — приёмная сторона
+`lte_query_wlm_nego_result` из `dji_lte`.
+
+Внешние claims не повышают этот результат до `CONFIRMED`: upstream issue #18
+сообщает об успешном 4G на M30T/RM700, а таблица README помечает Mavic 4
+Pro/RC Pro 2 как совместимые. Нет firmware/log evidence, позволяющего
+установить, использовался ли именно sweep, optional controller OTA swap либо
+штатный DJI flow. Поэтому они учитываются как `REPORTED`, но не опровергаются
+статикой других моделей.
 
 RM510 firmware отдельно раскрыла один ID, попадающий внутрь sweep:
 исходящий `51:14` от `dji_wlm` — это не activation response, а переменный

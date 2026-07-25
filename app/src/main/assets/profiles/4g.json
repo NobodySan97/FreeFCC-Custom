@@ -2,7 +2,7 @@
   "name": "4G Activation",
   "description": "Experimental/internal 0x51 command-ID sweep: 128 fire-and-forget frames with the aircraft serial embedded in each payload. Write completion does not prove 4G activation.",
   "sender": 2,
-  "sender_desc": "CAMERA, index 0",
+  "sender_desc": "MOBILE_APP, index 0",
   "cmd_type": 0,
   "cmd_type_desc": "Request, NO_ACK_NEEDED, no encryption",
   "rounds": 1,
@@ -16,5 +16,5 @@
   "dst_desc": "OFDM_GROUND, index 7",
   "payload_prefix_hex": "000000",
   "payload_serial_encoding": "ascii",
-  "note": "Each payload is 3 zero bytes + ASCII aircraft serial; frame i uses cmd_id=i (0..127). The serial is read at runtime via probeSerial(). There is no ACK/readback, and per-ID meanings are not decoded."
+  "note": "Each payload is 3 zero bytes + ASCII aircraft serial; frame i uses cmd_id=i (0..127). The serial is read at runtime via probeSerial(). The profile requests no ACK/readback. Many IDs are now statically mapped, but this payload is not a validated activation contract."
 }

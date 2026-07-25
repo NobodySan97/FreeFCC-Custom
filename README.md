@@ -65,13 +65,23 @@ archive. The guide uses `01_PackageInstaller`, `02_FileManager`, and
 
 ## Compatibility
 
-This fork has current live validation on DJI RC2. Upstream reports also cover RC Pro 2 and RC Plus RM700. The separate [freefcc-launcher](https://github.com/doesthings/freefcc-launcher) is an optional Windows USB/ADB installer for controllers without the RC2 SD-card workflow. Its additional RC Pro 2 firmware-swap path for 4G is explicitly unverified and is not required by FreeFCC itself.
+This fork has current live validation on DJI RC2.
+[Upstream issue #18](https://github.com/doesthings/FreeFCC/issues/18) reports
+FCC/4G/LED success on M30T with RC Plus RM700, but supplies no firmware or
+before/after logs. The upstream compatibility table also labels Mavic 4
+Pro/RC Pro 2 4G as working without a primary hardware report. The separate
+[freefcc-launcher](https://github.com/doesthings/freefcc-launcher) installs
+the APK over USB and contains an optional, explicitly untested RC Pro 2
+controller OTA swap for 4G. None of these 4G claims has been independently
+validated in this fork, and available evidence does not identify whether a
+reported result came from the 128-frame sweep, the OTA swap, or the official
+DJI flow.
 
 | Drone | Controller | FCC | 4G | LED | Status |
 |-------|-----------|-----|-----|-----|--------|
 | DJI Mini 5 Pro | RC2 | Yes | No (no cellular module) | Yes | FCC + LED working |
 | DJI Mini 4 Pro | RC2 | Yes | No (no cellular module) | Not tested | FCC working |
-| DJI Mavic 4 Pro | RC Pro 2 | Yes | Yes (Cellular Dongle 2) | Not tested | FCC working |
+| DJI Mavic 4 Pro | RC Pro 2 | Yes | Upstream claims working; unverified here | Not tested | 4G test provenance/logs unavailable |
 | DJI Air 3S | RC2 | Yes | No (no cellular module) | Not tested | FCC working |
 | DJI Neo 1 | RC2 | Yes | No (no cellular module) | Not tested | FCC working |
 | DJI Neo 2 | RC2 | Yes | No (no cellular module) | Not tested | FCC working |
@@ -278,7 +288,7 @@ The captured profile is confirmed only as an external-module protocol artifact. 
 Unlike FCC which goes through the standard DUML TCP proxy on port 40009, 4G frames are sent via a Unix domain socket at `/duss/mb/0x205` (abstract namespace). This is a DJI internal DUSS route, not proof of a particular physical modem type. The app opens one `LocalSocket` for the complete 128-frame burst, writes and flushes each frame, then closes the socket. No ACK is read back — the app can only confirm the frames were written, never that the aircraft activated 4G. A separate read-only button checks endpoint reachability without sending frames.
 
 The frame format is:
-- `sender = 2` (CAMERA)
+- `sender = 2` (MOBILE_APP)
 - `cmd_type = 0` (Request, NO_ACK_NEEDED, no encryption)
 - `cmd_set = 81` (0x51, experimental/internal command set in this profile)
 - `cmd_id = 0..127` (sequential, one per frame)
@@ -297,13 +307,20 @@ identity.
 
 The `/duss/mb/0x205` pre-check proves only local route availability. It does not distinguish an external Cellular Dongle from an integrated eSIM module and does not validate model-specific payload semantics.
 
-New static evidence from the previously downloaded RC Pro 2 build 139 and 576
+Static evidence from the downloaded RC2, RC Pro 2 v576 and WA530 firmware
 shows that `0x205` is the local DUSS router, destination `0xEE` reaches
-ground-side `dji_wlm`, and its registered `0x51` table covers only IDs
-`00..51`. Handler `51:1A` has an SDR-only liveview branch for the leading zeros
-used by this profile, while IDs `52..7F` lie outside the table. The user's live
-send of the complete sweep produced no visible effect. These findings do not
-prove danger or activation; they bound the profile as an unverified experiment.
+ground-side `dji_wlm`, and the RC2/RC Pro 2 main `0x51` table covers only IDs
+`00..51`. Request/ACK handlers must be counted separately: depending on the
+active device-manager variant, 32–33 sweep frames can enter request handlers
+on RC2 and 34–35 on RC Pro 2. Handler `51:1A` has an SDR-only liveview branch
+for the leading zeros used by this profile. In handler
+`51:19 wlm_modem_onoff_control`, all three checked builds (RC2, RC Pro 2 v576 and
+WA530) reject lengths ≤7; the longer sweep payload places the first ASCII
+identity character into a control field, and the checked RC2 handler does not
+reach its on/off action. The user's live send of the complete sweep produced
+no visible effect. These findings do not prove danger, activation or universal
+failure; they bound the profile as an unverified experiment with separate
+upstream compatibility claims.
 See [Avata 360/4G research](docs/AVATA360_4G_RESEARCH.md) and the
 [local firmware corpus](docs/FIRMWARE_CORPUS.md). The active RC Pro 2
 `0x51` handlers are listed separately in the

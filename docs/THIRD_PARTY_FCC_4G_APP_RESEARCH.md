@@ -27,8 +27,9 @@
 - `VENDOR CLAIM` — утверждение разработчика продукта, не подтверждённое
   независимым capture.
 
-Ни один APK из этого исследования не устанавливался на пульт. Команды на
-реальное устройство не отправлялись, OTA не загружалась и не применялась.
+Ни один сторонний APK из этого исследования не устанавливался на пульт.
+Сторонние команды на реальное устройство не отправлялись, OpenFCC OTA
+исследовалась только офлайн и не применялась.
 
 ## Краткий результат
 
@@ -151,8 +152,13 @@ gate и какие только поддерживают уже созданну
 - внутреннее описание связывает swap с открытием controller WLM gate, а
   активационные кадры затем отправляет OpenFCC APK.
 
-`UNKNOWN`: firmware payload не загружался. Его модель, build, подпись, точный
-diff и безопасность применения в этом исследовании не проверены.
+`OBSERVED`: использованный launcher artifact и загруженная им OpenFCC
+`firmware_update.zip` исследованы отдельно. Это полная DJI-signed A/B OTA для
+`rc520`, build `V55.31.01.39/139`, SHA-256
+`182e459ba29fc00aec9c66d547cd3fe4fd14bfa47d7063e486af7b82ba3542f6`, а не
+небольшой патч одной функции. Проверены Android A/B signatures и сравнение
+partition images; OTA на пульт не применялась. Подробности и границы выводов
+см. в [live-карте DJI cellular-модемов](DJI_CELLULAR_MODEM_LIVE_MAP.md).
 
 `DERIVED`: OpenFCC разделяет как минимум два слоя:
 
@@ -349,8 +355,9 @@ dongle detect/activate
 ни в NLD, ни в OpenFCC, ни в Drone-Hacks, ни в официальном MSDK path.
 
 Отдельная кросс-проверка приёмной стороны записана в
-[WLM_CMDSET_51.md](WLM_CMDSET_51.md). Она восстановила dynamic command tables
-`dji_wlm` из трёх независимых образов: RC2, RC Pro 2 v576 и WA530.
+[WLM_CMDSET_51.md](WLM_CMDSET_51.md). Основная dynamic command table
+восстановлена в RC2 и RC Pro 2 v576; дополнительные device-manager таблицы и
+ветвление `51:19` проверены также в WA530.
 
 `OBSERVED`:
 
@@ -358,16 +365,18 @@ dongle detect/activate
   (`0x0e06`);
 - основная таблица набора `0x51` регистрируется в
   `duss_event_create_client_more_config` и имеет 82 слота (`0x00..0x51`):
-  заполнено 33 на RC2 и 35 на RC Pro 2 v576 (`2E` netlink service и `2F` agent
-  general control — только у RC Pro 2);
+  на RC2 есть 33 непустые записи, из них 28 с request-handler; на RC Pro 2
+  v576 — 35 и 30 (`2E` netlink service и `2F` agent general control есть
+  только у RC Pro 2);
 - дополнительно тремя таблицами регистрируется device-manager sync
-  `30/31/32/33/35/36`, из которых варианты взаимоисключающие; итого
-  одновременно активны 37–38 handler ID;
-- около 90 кадров текущего sweep не имеют активного handler'а, а 37–38
-  доходят до живых обработчиков и получают `00 00 00 + ASCII S/N`, не
-  соответствующий их контракту; задеты в том числе link mode switch (`02`),
-  route switch (`0F`), select target dev (`15`), power control (`1B`/`1D`),
-  bind status (`22`);
+  `30/31/32/33/35/36`, из которых варианты взаимоисключающие;
+- request sweep может войти в 32–33 handler RC2 либо 34–35 handler RC Pro 2;
+  соответственно 95–96 либо 93–94 кадра не имеют request-handler. Пять
+  основных записей (`05/07/1D/1F/24`) являются ACK-only;
+- достижимые request-handler получают `00 00 00 + ASCII identity`, не
+  соответствующий их разным контрактам; задеты в том числе link mode switch
+  (`02`), route switch (`0F`), select target dev (`15`), modem on/off (`19`),
+  power-control report (`1B`) и bind status (`22`);
 - в наборе нет LTE **activation** handler, но есть `51:19`
   `wlm_modem_onoff_control` (power-control путь) и `51:42`
   `wlm_ability_nego_result_req` — приёмник для `lte_query_wlm_nego_result` из
@@ -376,29 +385,32 @@ dongle detect/activate
 - `NO_ACK_NEEDED` не позволяет отличить обработку от простой успешной записи
   в сокет.
 
-`DERIVED`: текущий `51:00..7F` sweep не является реализацией штатного либо
-стороннего 4G activation path и должен рассматриваться как неподходящий legacy
-research profile.
+`DERIVED`: текущий `51:00..7F` sweep не воспроизводит известный штатный либо
+сторонний многостадийный 4G activation path. В проверенном RC2 handler
+payload `51:19` не доходит до on/off-действия, а пользовательский live-send не
+дал видимого эффекта. Это делает профиль неподтверждённым legacy research
+sweep, но не позволяет переносить отрицательный результат на другие
+controller/aircraft builds.
 
-### Где на самом деле стоит ограничение модема
+### Где находятся известные ограничения модема
 
 Постановка задачи важна: цель кнопки *Send 4G Activation Frames* — включить
 модем, который заблокирован ограничениями. Поэтому ключевой вопрос не «почему
 sweep не повторяет штатный flow», а **что именно держит модем выключенным и
-снимает ли это хоть одна достижимая DUML-команда**. Разбор `dji_lte`
-(образ RC2 `a3s`, статический) показывает, что ограничение — не одиночный
-on/off-флаг, а несколько gate внутри самого `dji_lte`, и ни один из них не
-управляется набором `0x51`.
+какие известные входы меняют эти условия**. Разбор `dji_lte` показывает, что
+ограничение — не одиночный on/off-флаг, а несколько gate внутри самого
+`dji_lte`. Их точная совокупность зависит от controller build.
 
-`CONFIRMED` — региональный gate по коду страны:
+`CONFIRMED` в RC2 `a3s` — blacklist gate по коду страны:
 
 - `get_country_code_ack` (`lte_event_common.c`) берёт код страны и прогоняет
   через `bool_country_in_lte_black_list` (сравнение 4-байтового кода со
   списком) и `bool_country_in_single_frequency_cn_list`;
-- при попадании в чёрный список включающий флаг `[state+4]` **сбрасывается**,
-  и вызываются `pair_reinit_liblte_all_channel`,
+- при попадании в чёрный список флаг `b_black_list_country` (`[state+4]`)
+  **устанавливается в `1`**; вне списка он сбрасывается в `0`. В обоих случаях
+  вызываются `pair_reinit_liblte_all_channel`,
   `reinit_peer_service_info`, `reinit_peer_ipv6_info` — то есть LTE-каналы
-  переинициализируются в запрещённом состоянии;
+  переинициализируются после изменения country state;
 - этот же `b_black_list_country` — прямой вход авторизации: строки
   `set_liblte_auth_info failured … country_code:%s, b_black_list_country:%d
   simstate:%d` и `set_peer_bindinfo failured … b_black_list_country:%d`
@@ -408,33 +420,42 @@ on/off-флаг, а несколько gate внутри самого `dji_lte`,
   `LTE_HMS_ERR_SINGLE_COUNTRY_NETWORK_UNREACHABLE`,
   `LTE_HMS_ERR_SINGLE_COUNTRY_NOT_REGISTERED`.
 
+`CONFIRMED` в RC Pro 2 build 576 — дополнительный region gate:
+`dongle_display_control != 0 && lte_get_country_region() == non-CN` блокирует
+передачу `AUTH_PARAM`. Этот build поэтому нельзя считать идентичным RC2.
+Полный predicate и адреса записаны в
+[`DJI_CELLULAR_MODEM_LIVE_MAP.md`](DJI_CELLULAR_MODEM_LIVE_MAP.md).
+
 `CONFIRMED` — gate активации dongle (отдельно от региона): периодическая
 `00:32` (`common_dongle_activate`) держит activation state, и при
 `dial_check_device_active=true` неактивный dongle блокирует dial с логом
 `device is not activated, dial not allowed` (см.
 [`LTE_DUML_COMMAND_REFERENCE.md`](LTE_DUML_COMMAND_REFERENCE.md)).
 
-`DERIVED` — почему sweep не может это снять:
+`OBSERVED` — country state DUML-достижим:
 
-- код страны приходит **от модема/сети** (MCC SIM/network) через
-  `peer_info`/`get_country_code`, а не из поля, задаваемого приложением по
-  DUML, — подменить его кадром `0x51` нельзя;
-- решение «разрешить LTE» принимается внутри `dji_lte` в его auth/bind-пути,
-  куда набор `0x51` (адресованный device-manager'у `dji_wlm`) не заходит
-  вовсе; даже `51:19` `wlm_modem_onoff_control` — это power-control путь
-  (`wlm_power_ctrl.c`, `forward_sdr_power_state`), то есть подача питания, а не
-  снятие регионального/активационного запрета;
-- поэтому «по задумке включить модем» этот sweep не может **структурно**:
-  он не касается ни списка стран, ни activation state, ни auth-входа
-  `b_black_list_country`. Это согласуется с тем, что реальная отправка не дала
-  эффекта.
+- `get_country_code_ack` получает двухбайтовый ASCII country из ответа
+  `07:19`, а не читает MCC непосредственно из показанного handler;
+- live на RC Pro 2 `07:30=CN` изменил последующий `07:19` readback с `RU` на
+  `CN`; на RC2 подтверждены обе смены `RU → CN → RU`;
+- пока не доказано, что новый country state дошёл до внутреннего экземпляра
+  `dji_lte`, изменил его auth predicate и привёл к построению LTE link.
 
-Практический вывод: обойти ограничение набором `0x51` нельзя — gate лежит в
-`dji_lte` и опирается на данные (страна SIM/сети, activation state), которые
-sweep не контролирует. Что действительно стоит проверить живым capture —
-короткий формат `51:19` (см. ниже) и то, реагирует ли `dji_lte` на смену
-кода страны из штатного приложения; но и то, и другое — про наблюдение
-контракта, а не про существование команды-«переключателя».
+`DERIVED`: sweep `0x51` напрямую не записывает `b_black_list_country`,
+`dongle_display_control` или dongle activation state. Однако из этого нельзя
+заключать, что sweep универсально не способен запустить косвенный переход
+состояния либо что все builds имеют тот же contract. Практический вывод уже:
+в проверенном RC2 `51:19` получает неподходящий payload, а наиболее доступный
+кандидат для проверки region gate — ранее подтверждённая связка
+`07:30` write + `07:19` readback, а не выдуманный короткий формат `51:19`.
+
+`EXTERNAL REPORT`: [upstream issue #18](https://github.com/doesthings/FreeFCC/issues/18)
+сообщает об успешной 4G-активации на M30T/RM700; upstream README помечает
+Mavic 4 Pro/RC Pro 2 как совместимые.
+Оба источника не содержат firmware/log evidence, позволяющего отделить эффект
+128-frame sweep от optional controller OTA swap и штатного DJI flow. Поэтому
+они учитываются как `REPORTED`, не как наш `CONFIRMED`, и одновременно не
+могут быть опровергнуты статикой RC2/RC Pro 2/WA530.
 
 `OBSERVED`: NLD и OpenFCC учитывают model/device identity; OpenFCC отдельно
 использует aircraft serial и долговременную 4G-сессию.
@@ -462,47 +483,38 @@ transport write. Она не подтверждает:
 | NLD поддерживает FCC примерно раз в 2 s | `OBSERVED` | `p3.o0` coroutine | loop вызывает профиль и делает delay `2000 ms` | Высокая |
 | NLD действительно отправляет отдельную известную 4G-команду | `UNKNOWN` | `libnld-core.so` | plaintext профиля скрыт | Низкая |
 | OpenFCC имеет отдельный Always-on 4G path | `OBSERVED` | OpenFCC APK/native | `FourGHeartbeatService`, 4G native relay, aircraft SN | Высокая |
-| OpenFCC controller OTA открывает WLM gate | `OBSERVED` + `DERIVED` | desktop launcher | OTA flow и внутреннее описание; firmware не скачивалась | Средняя |
+| OpenFCC controller OTA участвует в снятии controller-side ограничений | `OBSERVED` + `DERIVED` | desktop launcher, `firmware_update.zip` | Подтверждены full A/B downgrade OTA build 139 и flow применения; точная причинная связь с 4G не проверена live | Средняя |
 | Drone Tweaks меняет DJI Fly | `OBSERVED` | vendor FAQ | поставщик прямо описывает modified official app | Высокая |
 | Drone-Hacks FCC мешает 4G | `VENDOR CLAIM` | Drone-Hacks Wiki | полевое предупреждение без RF evidence | Низкая/средняя |
 | `09:27` — публичный минимальный FCC-примитив | `OBSERVED` | три open-source реализации | одинаковый payload `0xffff0048=2` | Высокая |
 | 21-frame FreeFCC-USB профиль универсален | `HYPOTHESIS` | GitHub JSON/README | профиль открыт, но hardware test отсутствует | Низкая |
-| FreeFCC 128-frame sweep включает Enhanced Transmission | `NEGATIVE` в проверенных RC2/RC Pro 2 v576/WA530 tables | `profiles/4g.json`, `WLM_CMDSET_51.md` | адресуется `dji_wlm`; LTE **activation** handler в наборе отсутствует, хотя sweep задевает `51:19` modem on/off и link/power-control ID | Высокая для проверенных builds |
+| FreeFCC 128-frame sweep включает Enhanced Transmission | `UNCONFIRMED`; локальный тест `NEGATIVE`, upstream `REPORTED` | `profiles/4g.json`, `WLM_CMDSET_51.md`, upstream issue #18/README | На проверенном RC2 `51:19` отвергает поле из ASCII identity; причинность внешних успешных reports не доказана | Высокая для RC2 handler, низкая для переноса между моделями |
 | Штатный DJI LTE требует нескольких стадий | `OBSERVED` + `DERIVED` | MSDK, DJI FAQ, firmware docs | auth, capability, pairing, WLM, relay | Высокая |
 
 ## Следующий наиболее информативный эксперимент
 
-### Дешёвый первый шаг: пассивный capture `51:19` / `51:1A`
+### Первый шаг: проверить прохождение country state в `dji_lte`
 
-Разбор таблицы (см. [WLM_CMDSET_51.md](WLM_CMDSET_51.md)) дал конкретную цель,
-для которой не нужны ни лицензия, ни стороннее приложение. `51:19`
-`wlm_modem_onoff_control` — единственный ID во всём наборе `0x51`, прямо
-управляющий модемом, и его handler ветвится по длине сообщения: «короткий»
-формат ≤ 7 байт идёт в рабочую ветку с логом `recved modem onoff control`,
-тогда как 23-байтовый payload текущего sweep уходит в ветку побайтового
-сравнения с сохранённым состоянием и заканчивается ошибкой. То есть настоящий
-контракт лежит в коротком формате, и он восстанавливается из одного пассивного
-снимка.
+Наиболее дешёвый полезный эксперимент продолжает уже подтверждённый
+`07:30/07:19` path и закрывает одну конкретную неопределённость: видит ли
+внутренний `dji_lte` изменённую страну и снимается ли соответствующая часть
+auth predicate.
 
 Порядок:
 
-1. на RC Pro 2 (пульт со штатным LTE) открыть DJI Fly и пассивно слушать
-   локальный DUSS/DUML stream, ничего не отправляя;
-2. включить и выключить 4G штатным путём из приложения;
-3. выделить кадры `51:19` и `51:1A` (`wlm_service_mode_switch_req`) и записать
-   их длину, `cmd_type`, направление и payload побайтно;
-4. повторить при другом состоянии модема (dongle вставлен/извлечён, SIM
-   есть/нет), чтобы отделить поле on/off от идентификатора;
-5. сверить наблюдаемые payload с ветвлением handler'а: `payload[0]`,
-   `payload[1]`, `payload[3]` в длинной ветке сравниваются с сохранённым
-   состоянием, поэтому короткая ветка должна показать, что именно является
-   переключателем.
+1. сохранить исходный `07:19` и параллельный `dji_lte` log/state;
+2. отправить уже проверенный `07:30=CN`, затем подтвердить `07:19=CN`;
+3. при наличии штатных аппаратных условий инициировать DJI LTE auth/Enhanced
+   Transmission и записать `get_country_code_ack`, blacklist/region и
+   `set_liblte_auth_info` события;
+4. пассивно сохранить встреченные `51:19`, `51:1A`, `00:32` и набор `0x18`,
+   не предполагая заранее, какой из них является переключателем;
+5. восстановить исходную страну и подтвердить её новым `07:19`.
 
-Результат либо даст готовый контракт `51:19`, либо докажет, что штатный путь
-идёт мимо `0x51` (через `00:32` и набор `0x18`), — обе развилки полезнее, чем
-любое дальнейшее гадание по sweep'у. Отправлять `51:19` вручную до этого
-capture не следует: это power-control путь, а `NO_ACK_NEEDED` не даст обратной
-связи о том, что именно произошло.
+Ручная отправка урезанного `51:19` не нужна: все три проверенных handler
+отвергают длину ≤ 7. Захват внутреннего `51:19` остаётся полезным, но локальный
+proxy может не видеть весь межпроцессный DUSS-трафик, а штатное 4G-включение
+может требовать обоих dongle, SIM/subscription и разрешённого DJI account.
 
 ### Полный эксперимент
 
