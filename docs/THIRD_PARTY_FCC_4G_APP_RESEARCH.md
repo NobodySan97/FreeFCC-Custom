@@ -380,6 +380,62 @@ dongle detect/activate
 стороннего 4G activation path и должен рассматриваться как неподходящий legacy
 research profile.
 
+### Где на самом деле стоит ограничение модема
+
+Постановка задачи важна: цель кнопки *Send 4G Activation Frames* — включить
+модем, который заблокирован ограничениями. Поэтому ключевой вопрос не «почему
+sweep не повторяет штатный flow», а **что именно держит модем выключенным и
+снимает ли это хоть одна достижимая DUML-команда**. Разбор `dji_lte`
+(образ RC2 `a3s`, статический) показывает, что ограничение — не одиночный
+on/off-флаг, а несколько gate внутри самого `dji_lte`, и ни один из них не
+управляется набором `0x51`.
+
+`CONFIRMED` — региональный gate по коду страны:
+
+- `get_country_code_ack` (`lte_event_common.c`) берёт код страны и прогоняет
+  через `bool_country_in_lte_black_list` (сравнение 4-байтового кода со
+  списком) и `bool_country_in_single_frequency_cn_list`;
+- при попадании в чёрный список включающий флаг `[state+4]` **сбрасывается**,
+  и вызываются `pair_reinit_liblte_all_channel`,
+  `reinit_peer_service_info`, `reinit_peer_ipv6_info` — то есть LTE-каналы
+  переинициализируются в запрещённом состоянии;
+- этот же `b_black_list_country` — прямой вход авторизации: строки
+  `set_liblte_auth_info failured … country_code:%s, b_black_list_country:%d
+  simstate:%d` и `set_peer_bindinfo failured … b_black_list_country:%d`
+  доказывают, что при «чёрной» стране auth/bind не проходит;
+- диагностические коды HMS подтверждают семантику:
+  `LTE_HMS_ERR_UAV_BLACKLIST_COUNTRY`,
+  `LTE_HMS_ERR_SINGLE_COUNTRY_NETWORK_UNREACHABLE`,
+  `LTE_HMS_ERR_SINGLE_COUNTRY_NOT_REGISTERED`.
+
+`CONFIRMED` — gate активации dongle (отдельно от региона): периодическая
+`00:32` (`common_dongle_activate`) держит activation state, и при
+`dial_check_device_active=true` неактивный dongle блокирует dial с логом
+`device is not activated, dial not allowed` (см.
+[`LTE_DUML_COMMAND_REFERENCE.md`](LTE_DUML_COMMAND_REFERENCE.md)).
+
+`DERIVED` — почему sweep не может это снять:
+
+- код страны приходит **от модема/сети** (MCC SIM/network) через
+  `peer_info`/`get_country_code`, а не из поля, задаваемого приложением по
+  DUML, — подменить его кадром `0x51` нельзя;
+- решение «разрешить LTE» принимается внутри `dji_lte` в его auth/bind-пути,
+  куда набор `0x51` (адресованный device-manager'у `dji_wlm`) не заходит
+  вовсе; даже `51:19` `wlm_modem_onoff_control` — это power-control путь
+  (`wlm_power_ctrl.c`, `forward_sdr_power_state`), то есть подача питания, а не
+  снятие регионального/активационного запрета;
+- поэтому «по задумке включить модем» этот sweep не может **структурно**:
+  он не касается ни списка стран, ни activation state, ни auth-входа
+  `b_black_list_country`. Это согласуется с тем, что реальная отправка не дала
+  эффекта.
+
+Практический вывод: обойти ограничение набором `0x51` нельзя — gate лежит в
+`dji_lte` и опирается на данные (страна SIM/сети, activation state), которые
+sweep не контролирует. Что действительно стоит проверить живым capture —
+короткий формат `51:19` (см. ниже) и то, реагирует ли `dji_lte` на смену
+кода страны из штатного приложения; но и то, и другое — про наблюдение
+контракта, а не про существование команды-«переключателя».
+
 `OBSERVED`: NLD и OpenFCC учитывают model/device identity; OpenFCC отдельно
 использует aircraft serial и долговременную 4G-сессию.
 
