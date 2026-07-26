@@ -895,9 +895,6 @@ class DumlTransport {
             Regex("(?<![0-9A-Z])W[AM][0-9]{3}[A-Z]?(?![0-9A-Z])")
         private val AIRCRAFT_PRODUCT_CODE_REGEX = Regex("^[A-Z][A-Z0-9]{1,15}$")
         private val CONTROLLER_PRODUCT_CODE_REGEX = Regex("^(RC|RM|GL)[A-Z0-9]*$")
-        private val KNOWN_AIRCRAFT_MODEL_NAMES = mapOf(
-            "WM265T" to "DJI Mavic 3T"
-        )
         internal val AIRCRAFT_IDENTITY_PORTS = listOf(
             PORT,
             PORT_LED,
@@ -979,7 +976,7 @@ class DumlTransport {
             }
 
             if (modelName.isEmpty()) {
-                modelName = KNOWN_AIRCRAFT_MODEL_NAMES[modelCode].orEmpty()
+                modelName = AircraftModelCatalog.nameForCode(modelCode)
             }
 
             return if (modelCode.isEmpty() && modelName.isEmpty()) {

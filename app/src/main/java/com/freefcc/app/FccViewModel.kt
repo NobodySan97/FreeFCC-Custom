@@ -119,6 +119,10 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         internal const val PREF_AIRCRAFT_MODEL_CODE = "aircraft_model_code"
         internal const val PREF_AIRCRAFT_MODEL_NAME = "aircraft_model_name"
         internal const val PREF_AIRCRAFT_MODEL_AT = "aircraft_model_verified_at"
+        internal const val PREF_AIRCRAFT_MODEL_SOURCE = "aircraft_model_source"
+        internal const val AIRCRAFT_MODEL_SOURCE_UI = "dji_app_screen"
+        internal const val AIRCRAFT_MODEL_SOURCE_DUML = "duml_passive"
+        internal const val AIRCRAFT_MODEL_FRESH_MS = 5 * 60_000L
         private val processLogLock = Any()
         private val processLogs = ArrayDeque<String>()
         private val lanDiagnosticBusy = AtomicBoolean(false)
@@ -1532,35 +1536,61 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    /**
+     * Identity the accessibility service read off the DJI app screen. Both
+     * fields must be present: a name without a code still needs the passive
+     * DUML window to resolve the product code.
+     */
+    private fun cachedScreenModel(): AircraftModelIdentity? {
+        if (prefs.getString(PREF_AIRCRAFT_MODEL_SOURCE, "") != AIRCRAFT_MODEL_SOURCE_UI) return null
+        val readAt = prefs.getLong(PREF_AIRCRAFT_MODEL_AT, 0L)
+        if (System.currentTimeMillis() - readAt >= AIRCRAFT_MODEL_FRESH_MS) return null
+        val code = prefs.getString(PREF_AIRCRAFT_MODEL_CODE, "").orEmpty()
+        val name = prefs.getString(PREF_AIRCRAFT_MODEL_NAME, "").orEmpty()
+        if (code.isEmpty() || name.isEmpty()) return null
+        return AircraftModelIdentity(code, name)
+    }
+
     fun refreshAircraftIdentity(): Boolean {
         val hardwareLease = beginHardwareOp()
         if (hardwareLease == null) {
             log("Hardware busy — please wait for the current operation to finish.")
             return false
         }
-        log("Refreshing aircraft identity from passive DUML telemetry...")
+        log("Refreshing aircraft identity...")
         runOnIO {
             try {
-                val model = AircraftModelProbe.capture(
+                // The DJI app screen prints both the code and the name, so a
+                // fresh reading from it means no DUML port is opened at all.
+                val screenModel = cachedScreenModel()
+                val model = screenModel ?: AircraftModelProbe.capture(
                     FccRuntime.tracker.state.value.controllerPort
                 )
-                if (model != null) {
-                    prefs.edit().apply {
-                        if (model.modelCode.isNotEmpty()) {
-                            putString(PREF_AIRCRAFT_MODEL_CODE, model.modelCode)
-                        }
-                        if (model.modelName.isNotEmpty()) {
-                            putString(PREF_AIRCRAFT_MODEL_NAME, model.modelName)
-                        }
-                        putLong(PREF_AIRCRAFT_MODEL_AT, System.currentTimeMillis())
-                    }.apply()
-                    log(
-                        "Aircraft model: " +
-                            "${model.modelName.ifEmpty { "unknown" }} " +
-                            "(${model.modelCode.ifEmpty { "unknown" }})"
+                when {
+                    screenModel != null -> log(
+                        "Aircraft model from the DJI app screen: " +
+                            "${screenModel.modelName} (${screenModel.modelCode})"
                     )
-                } else {
-                    log("Aircraft model not present in the current passive DUML window")
+
+                    model != null -> {
+                        prefs.edit().apply {
+                            if (model.modelCode.isNotEmpty()) {
+                                putString(PREF_AIRCRAFT_MODEL_CODE, model.modelCode)
+                            }
+                            if (model.modelName.isNotEmpty()) {
+                                putString(PREF_AIRCRAFT_MODEL_NAME, model.modelName)
+                            }
+                            putString(PREF_AIRCRAFT_MODEL_SOURCE, AIRCRAFT_MODEL_SOURCE_DUML)
+                            putLong(PREF_AIRCRAFT_MODEL_AT, System.currentTimeMillis())
+                        }.apply()
+                        log(
+                            "Aircraft model: " +
+                                "${model.modelName.ifEmpty { "unknown" }} " +
+                                "(${model.modelCode.ifEmpty { "unknown" }})"
+                        )
+                    }
+
+                    else -> log("Aircraft model not present in the current passive DUML window")
                 }
 
                 var portLease: Port40007Lock.Lease? = null

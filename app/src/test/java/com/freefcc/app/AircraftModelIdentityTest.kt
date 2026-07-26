@@ -59,7 +59,7 @@ class AircraftModelIdentityTest {
 
     @Test
     fun acceptsUnknownAircraftProductCodes() {
-        listOf("PM430", "WM2605", "AG410").forEach { productCode ->
+        listOf("PM430", "AG410").forEach { productCode ->
             val identity = DumlTransport.extractAircraftModelIdentity(
                 listOf(modelCodeFrame(productCode))
             )
@@ -67,6 +67,16 @@ class AircraftModelIdentityTest {
             assertEquals(productCode, identity?.modelCode)
             assertEquals("", identity?.modelName)
         }
+    }
+
+    @Test
+    fun namesCatalogedCodesWithoutTheUserStringFrame() {
+        val identity = DumlTransport.extractAircraftModelIdentity(
+            listOf(modelCodeFrame("WM2605"))
+        )
+
+        assertEquals("WM2605", identity?.modelCode)
+        assertEquals("DJI Mavic 3 Classic", identity?.modelName)
     }
 
     @Test

@@ -89,7 +89,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         private const val DJI_PILOT_2_PACKAGE = "com.dji.industry.pilot"
         private val MODEL_CAPTURE_PACKAGES = setOf(DJI_FLY_PACKAGE, DJI_PILOT_2_PACKAGE)
         private const val MODEL_CAPTURE_RETRY_MS = 5_000L
-        private const val MODEL_CAPTURE_FRESH_MS = 5 * 60_000L
+        private const val MODEL_UI_REWRITE_MS = 60_000L
         private val HOME_POINT_RESOURCE_NAMES = listOf(
             "fpv_tips_smart_rth_homepoint_update",
             "fpv_setting_shortcut_update_return_point_succeed_toast",
@@ -117,7 +117,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         FccViewModel.logServiceEvent(
             "DJI FLY ACCESSIBILITY TEST: connected; " +
                 "phrases=${catalog.phrases.size} locales=${catalog.localeCount}; " +
-                "passive model read only after a DJI app event"
+                "model read from the DJI app screen first, passive DUML only as fallback"
         )
         if (AutoFccSelection.load(this) == AutoFccMode.HOME_POINT_TEXT) {
             FccKeepaliveService.startSelectedMode(this)
@@ -129,14 +129,18 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         val sourcePackage = event?.packageName?.toString() ?: return
         if (sourcePackage !in MODEL_CAPTURE_PACKAGES) return
 
-        maybeCaptureAircraftModel(sourcePackage)
-        if (sourcePackage != DJI_FLY_PACKAGE) return
-        logVisibleUiSnapshot()
-
         val values = buildSet {
             event.text.filterNotNull().forEach { if (it.isNotBlank()) add(it.toString()) }
             event.contentDescription?.takeIf { it.isNotBlank() }?.let { add(it.toString()) }
         }
+
+        // The DJI app prints both the product code and the commercial name, so
+        // its screen is the first source. DUML is only read when it stays silent.
+        captureAircraftModelFromUi("event", values)
+        if (sourcePackage == DJI_FLY_PACKAGE) logVisibleUiSnapshot()
+        maybeCaptureAircraftModel(sourcePackage)
+
+        if (sourcePackage != DJI_FLY_PACKAGE) return
 
         values.forEach { value ->
             val normalized = DjiFlyHomePointMatcher.normalize(value)
@@ -161,10 +165,51 @@ class DjiFlyAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * DJI Fly publishes the linked aircraft identity only while its own
-     * session is active. Capture one short passive window in the background,
-     * trying the controller's observed port first and then the known proxy
-     * ports. No DUML command is written.
+     * Reads the model straight off the DJI app screen, which prints both the
+     * product code and the commercial name. A hit here is what keeps the DUML
+     * fallback below from opening a port at all.
+     */
+    private fun captureAircraftModelFromUi(source: String, texts: Collection<String>): Boolean {
+        if (texts.isEmpty()) return false
+        val match = AircraftModelCatalog.findInText(texts.joinToString(" | ")) ?: return false
+
+        val prefs = getSharedPreferences("freefcc", Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val unchanged =
+            match.code == prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, "").orEmpty() &&
+                match.name == prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, "").orEmpty()
+        val lastWriteAt = prefs.getLong(FccViewModel.PREF_AIRCRAFT_MODEL_AT, 0L)
+        if (unchanged && now - lastWriteAt < MODEL_UI_REWRITE_MS) return true
+
+        prefs.edit().apply {
+            if (match.code.isNotEmpty()) {
+                putString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, match.code)
+            }
+            if (match.name.isNotEmpty()) {
+                putString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, match.name)
+            }
+            putString(
+                FccViewModel.PREF_AIRCRAFT_MODEL_SOURCE,
+                FccViewModel.AIRCRAFT_MODEL_SOURCE_UI
+            )
+            putLong(FccViewModel.PREF_AIRCRAFT_MODEL_AT, now)
+        }.apply()
+        if (!unchanged) {
+            FccViewModel.logServiceEvent(
+                "Aircraft model read from the DJI app screen: source=$source " +
+                    "code=${match.code.ifEmpty { "unknown" }} " +
+                    "name=${match.name.ifEmpty { "unknown" }}"
+            )
+        }
+        return true
+    }
+
+    /**
+     * Fallback for screens that never spell the model out. DJI Fly publishes
+     * the linked aircraft identity only while its own session is active, so
+     * capture one short passive window in the background, trying the
+     * controller's observed port first and then the known proxy ports. No DUML
+     * command is written.
      */
     private fun maybeCaptureAircraftModel(sourcePackage: String) {
         val now = System.currentTimeMillis()
@@ -173,7 +218,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         val hasCachedIdentity =
             prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, "").orEmpty().isNotEmpty() &&
                 prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, "").orEmpty().isNotEmpty()
-        if (hasCachedIdentity && now - lastVerifiedAt < MODEL_CAPTURE_FRESH_MS) return
+        if (hasCachedIdentity && now - lastVerifiedAt < FccViewModel.AIRCRAFT_MODEL_FRESH_MS) return
         if (now - lastModelCaptureAttemptAtMs < MODEL_CAPTURE_RETRY_MS) return
         if (!modelCaptureBusy.compareAndSet(false, true)) return
         lastModelCaptureAttemptAtMs = now
@@ -197,6 +242,10 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                     if (identity.modelName.isNotEmpty()) {
                         putString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, identity.modelName)
                     }
+                    putString(
+                        FccViewModel.PREF_AIRCRAFT_MODEL_SOURCE,
+                        FccViewModel.AIRCRAFT_MODEL_SOURCE_DUML
+                    )
                     putLong(FccViewModel.PREF_AIRCRAFT_MODEL_AT, System.currentTimeMillis())
                 }.apply()
                 FccViewModel.logServiceEvent(
@@ -219,6 +268,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         val root = rootInActiveWindow ?: return
         val labels = collectVisibleLabels(root)
         if (labels.isEmpty()) return
+        captureAircraftModelFromUi("visible_ui", labels)
         val homePointText = labels.firstOrNull { value ->
             DjiFlyHomePointMatcher.matches(value, homePointPhrases)
         }
