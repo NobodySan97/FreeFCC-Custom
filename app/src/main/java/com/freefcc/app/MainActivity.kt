@@ -691,7 +691,12 @@ private fun InfoPage(state: AppState, viewModel: FccViewModel) {
             Spacer(Modifier.height(4.dp))
             DividerLine()
             Spacer(Modifier.height(4.dp))
-            InfoRow("Last aircraft model", state.aircraftModelName.ifEmpty { "Not detected" })
+            InfoRow(
+                "Last aircraft model",
+                state.aircraftModelName.ifEmpty {
+                    state.aircraftModelCode.ifEmpty { "Not detected" }
+                }
+            )
             Spacer(Modifier.height(4.dp))
             DividerLine()
             Spacer(Modifier.height(4.dp))

@@ -190,7 +190,10 @@ full FCC apply.
 6. The **Info** tab shows the controller code, aircraft model name/code and
    factory S/N. **Refresh aircraft identity** uses a short passive DUML capture:
    RC Pro 2 opens DJI Fly only when needed, while RM510 can identify a linked
-   Mavic 3T without opening Pilot 2.
+   aircraft without opening Pilot 2. The `00:82` parser accepts any safe
+   alphanumeric aircraft product code and rejects controller codes beginning
+   with `RC`, `RM`, or `GL`. When DJI Fly does not provide a commercial model
+   name, Info displays the exact product code instead.
 7. The **Log** tab can start the LAN diagnostic API; since 1.5.51 it stays **off until you switch it on**. It uses unencrypted HTTP and a fixed shared password. A UDP beacon broadcasts only the controller IP and port across the current Wi-Fi subnet; it does not include the password, logs, or command payloads. Disable the bridge on untrusted Wi-Fi. See [LAN Control API](docs/LAN_CONTROL_API.md) and the evidence-based [RC2 port and stream map](docs/RC2_PORT_AND_STREAM_MAP.md).
 
 SkylabFCCfree also keeps a low-priority foreground notification visible while

@@ -893,7 +893,8 @@ class DumlTransport {
         private val RC2_SERIAL_SUFFIX_REGEX = Regex("(?<![0-9A-Z])FA[0-9A-Z]{14}(?![0-9A-Z])")
         private val MODEL_CODE_REGEX =
             Regex("(?<![0-9A-Z])W[AM][0-9]{3}[A-Z]?(?![0-9A-Z])")
-        private val AIRCRAFT_MODEL_CODE_REGEX = Regex("^W[AM][0-9]{3}[A-Z]?$")
+        private val AIRCRAFT_PRODUCT_CODE_REGEX = Regex("^[A-Z][A-Z0-9]{1,15}$")
+        private val CONTROLLER_PRODUCT_CODE_REGEX = Regex("^(RC|RM|GL)[A-Z0-9]*$")
         private val KNOWN_AIRCRAFT_MODEL_NAMES = mapOf(
             "WM265T" to "DJI Mavic 3T"
         )
@@ -917,7 +918,7 @@ class DumlTransport {
         /**
          * Extracts the aircraft model from CRC-valid passive DUML frames.
          *
-         * `00:82` carries the stable WA/WM product code. `03:34` is the
+         * `00:82` carries the stable aircraft product code. `03:34` is the
          * aircraft user string shown by DJI Fly, so callers must retain the
          * model code as the primary identity instead of trusting the display
          * name alone.
@@ -945,7 +946,11 @@ class DumlTransport {
                             end - 11,
                             Charsets.US_ASCII
                         ).trim().uppercase()
-                        if (AIRCRAFT_MODEL_CODE_REGEX.matches(payloadText)) {
+                        if (
+                            AIRCRAFT_PRODUCT_CODE_REGEX.matches(payloadText) &&
+                            payloadText.any(Char::isDigit) &&
+                            !CONTROLLER_PRODUCT_CODE_REGEX.matches(payloadText)
+                        ) {
                             modelCode = payloadText
                         }
                     }

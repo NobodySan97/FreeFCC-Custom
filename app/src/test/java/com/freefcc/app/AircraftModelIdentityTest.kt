@@ -57,6 +57,41 @@ class AircraftModelIdentityTest {
         assertEquals("DJI Mavic 3T", identity?.modelName)
     }
 
+    @Test
+    fun acceptsUnknownAircraftProductCodes() {
+        listOf("PM430", "WM2605", "AG410").forEach { productCode ->
+            val identity = DumlTransport.extractAircraftModelIdentity(
+                listOf(modelCodeFrame(productCode))
+            )
+
+            assertEquals(productCode, identity?.modelCode)
+            assertEquals("", identity?.modelName)
+        }
+    }
+
+    @Test
+    fun rejectsControllerAndNonProductCodes() {
+        listOf("RC520", "RM510", "GL300", "DJI", "123").forEach { productCode ->
+            val identity = DumlTransport.extractAircraftModelIdentity(
+                listOf(modelCodeFrame(productCode))
+            )
+
+            assertNull(productCode, identity)
+        }
+    }
+
+    private fun modelCodeFrame(productCode: String): ByteArray =
+        DumlBuilder().buildFrame(
+            DumlFrame(
+                sender = 0xA2,
+                dst = 0x82,
+                cmdType = 0x80,
+                cmdSet = 0x00,
+                cmdId = 0x82,
+                payload = productCode.toByteArray(Charsets.US_ASCII) + byteArrayOf(0)
+            )
+        )
+
     private fun hexToBytes(value: String): ByteArray =
         ByteArray(value.length / 2) { index ->
             value.substring(index * 2, index * 2 + 2).toInt(16).toByte()
