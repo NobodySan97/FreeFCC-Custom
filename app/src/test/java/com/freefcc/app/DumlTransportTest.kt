@@ -28,6 +28,7 @@ class DumlTransportTest {
             DumlTransport.extractAircraftIdentity("\u0001FA8JC264600B31QZ\u0002")
         )
         assertEquals("WA341", DumlTransport.extractAircraftIdentity("\u0000WA341\u0000"))
+        assertEquals("WM265T", DumlTransport.extractAircraftIdentity("\u0000WM265T\u0000"))
     }
 
     @Test

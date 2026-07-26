@@ -45,4 +45,12 @@ class FourGIdentityTest {
         assertEquals("WA530", identity?.payloadSerial)
         assertEquals("wa530", identity?.modelCode)
     }
+
+    @Test
+    fun enterpriseModelSuffixIsNotTruncated() {
+        val identity = FccViewModel.parseFourGIdentity("WM265T")
+
+        assertEquals("WM265T", identity?.payloadSerial)
+        assertEquals("wm265t", identity?.modelCode)
+    }
 }

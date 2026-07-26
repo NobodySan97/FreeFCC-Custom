@@ -257,3 +257,21 @@ Raw JSON хранится только в ignored directories:
 Все reported frames прошли encoded-length, CRC-8 и CRC-16 validation внутри
 `duml_capture`. Raw corpus содержит coordinates и serials и не должен попадать
 в git, release assets или публичные issue attachments.
+
+## Проверка заполнения Info в `1.5.51`
+
+На RC Pro 2 `rc520` с DJI Air 3S ручной
+`Refresh aircraft identity` проверен 2026-07-26:
+
+1. FreeFCC выполнил короткое passive scan известных DUML-портов.
+2. Поскольку модель не публиковалась при закрытом flight app, открылся только
+   установленный DJI Fly (`dji.go.v5`).
+3. Accessibility event запустил ограниченный passive capture.
+4. В preferences заново записались `model_code=WA234`,
+   `model_name=DJI Air 3S`; `aircraft_model_verified_at` изменился.
+5. После возврата в FreeFCC вкладка Info показала controller `rc520`, model
+   `DJI Air 3S`, code `WA234` и отдельно полученный S/N.
+
+Другие включённые Accessibility-сервисы на пульте сохранены. Постоянного
+DUML-listener для модели нет: capture ограничен коротким окном и имеет
+debounce/freshness guard.

@@ -44,6 +44,8 @@ data class AppState(
     val busyProgress: Float = 0f,
     val aircraftSerial: String = "",
     val aircraftModelCode: String = "",
+    val aircraftModelName: String = "",
+    val aircraftModelVerifiedAtMs: Long? = null,
     val controllerModel: String = "",
     val deviceInfo: String = "",
     val isQueryingInfo: Boolean = false,
@@ -114,6 +116,9 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         private const val PREF_LED_STATE = "led_last_verified_state"
         private const val PREF_LED_RAW = "led_last_verified_raw"
         private const val PREF_LED_AT = "led_last_verified_at"
+        internal const val PREF_AIRCRAFT_MODEL_CODE = "aircraft_model_code"
+        internal const val PREF_AIRCRAFT_MODEL_NAME = "aircraft_model_name"
+        internal const val PREF_AIRCRAFT_MODEL_AT = "aircraft_model_verified_at"
         private val processLogLock = Any()
         private val processLogs = ArrayDeque<String>()
         private val lanDiagnosticBusy = AtomicBoolean(false)
@@ -168,7 +173,8 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         )
 
         private val FULL_SERIAL_PATTERN = Regex("^1581[0-9A-Z]{12,18}$")
-        private val MODEL_CODE_PATTERN = Regex("^W[AM][0-9]{3}")
+        private val MODEL_CODE_PATTERN = Regex("^W[AM][0-9]{3}[A-Z]?$")
+        private val FOUR_G_MODEL_PREFIX_PATTERN = Regex("^W[AM][0-9]{3}")
 
         /**
          * Normalizes an identity returned by [DumlTransport.probeSerial]. A
@@ -181,7 +187,10 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             if (FULL_SERIAL_PATTERN.matches(normalized)) {
                 return FourGIdentity(normalized, null)
             }
-            val modelCode = MODEL_CODE_PATTERN.find(normalized)?.value?.lowercase(Locale.US)
+            val modelCode = (
+                MODEL_CODE_PATTERN.matchEntire(normalized)?.value
+                    ?: FOUR_G_MODEL_PREFIX_PATTERN.find(normalized)?.value
+                )?.lowercase(Locale.US)
                 ?: return null
             return FourGIdentity(normalized, modelCode)
         }
@@ -212,7 +221,12 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
     private val transport = DumlTransport()
     private val prefs = app.getSharedPreferences("freefcc", Context.MODE_PRIVATE)
     private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == AutoFccSelection.PREF_MODE) refreshAutoFccSelection()
+        when (key) {
+            AutoFccSelection.PREF_MODE -> refreshAutoFccSelection()
+            PREF_AIRCRAFT_MODEL_CODE,
+            PREF_AIRCRAFT_MODEL_NAME,
+            PREF_AIRCRAFT_MODEL_AT -> refreshAircraftModelIdentity()
+        }
     }
     private var initialized = false
     @Volatile private var aircraftIdentityVerified = false
@@ -259,18 +273,27 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         // Migrate the former single identity field into separate display
         // values. Cached values remain display-only until a fresh probe.
         val cachedIdentity = prefs.getString("aircraft_serial", "").orEmpty()
-        val cachedModelCode = prefs.getString("aircraft_model_code", "").orEmpty()
+        val cachedModelCode = prefs.getString(PREF_AIRCRAFT_MODEL_CODE, "").orEmpty()
+        val cachedModelName = prefs.getString(PREF_AIRCRAFT_MODEL_NAME, "").orEmpty()
+        val cachedModelVerifiedAt = prefs.getLong(PREF_AIRCRAFT_MODEL_AT, 0L)
         val normalizedCached = cachedIdentity.trim().uppercase(Locale.US)
         val legacyModelCode = MODEL_CODE_PATTERN.find(normalizedCached)?.value.orEmpty()
         val cachedSerial = normalizedCached.takeUnless { legacyModelCode.isNotEmpty() }.orEmpty()
         if (cachedModelCode.isEmpty() && legacyModelCode.isNotEmpty()) {
-            prefs.edit().putString("aircraft_model_code", legacyModelCode).apply()
+            prefs.edit().putString(PREF_AIRCRAFT_MODEL_CODE, legacyModelCode).apply()
         }
-        if (cachedSerial.isNotEmpty() || cachedModelCode.isNotEmpty() || legacyModelCode.isNotEmpty()) {
+        if (
+            cachedSerial.isNotEmpty() ||
+            cachedModelCode.isNotEmpty() ||
+            cachedModelName.isNotEmpty() ||
+            legacyModelCode.isNotEmpty()
+        ) {
             update {
                 copy(
                     aircraftSerial = cachedSerial,
-                    aircraftModelCode = cachedModelCode.ifEmpty { legacyModelCode }
+                    aircraftModelCode = cachedModelCode.ifEmpty { legacyModelCode },
+                    aircraftModelName = cachedModelName,
+                    aircraftModelVerifiedAtMs = cachedModelVerifiedAt.takeIf { it > 0L }
                 )
             }
         }
@@ -292,6 +315,19 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 ledRawValue = cachedLed?.first?.rawValue ?: ledRawValue,
                 ledStatus = cachedLed?.let { persistedStatus("Last verified", ledLabel(it.first), it.second) }
                     ?: ledStatus
+            )
+        }
+    }
+
+    private fun refreshAircraftModelIdentity() {
+        val modelCode = prefs.getString(PREF_AIRCRAFT_MODEL_CODE, "").orEmpty()
+        val modelName = prefs.getString(PREF_AIRCRAFT_MODEL_NAME, "").orEmpty()
+        val verifiedAt = prefs.getLong(PREF_AIRCRAFT_MODEL_AT, 0L)
+        update {
+            copy(
+                aircraftModelCode = modelCode,
+                aircraftModelName = modelName,
+                aircraftModelVerifiedAtMs = verifiedAt.takeIf { it > 0L }
             )
         }
     }
@@ -865,7 +901,8 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
      *
      * Guards:
      * 1. Identity must be either a full 1581... factory serial or a short
-     *    W[AM]xxx model identity. Both are valid probeSerial() results.
+     *    WA/WM model identity, including a variant suffix such as WM265T.
+     *    Both are valid probeSerial() results.
      * 2. The controller's 4G endpoint must be present (the abstract socket
      *    must be connectable). This does not identify external vs integrated
      *    cellular hardware; it only proves the DUSS route is exposed.
@@ -1495,6 +1532,74 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    fun refreshAircraftIdentity(): Boolean {
+        val hardwareLease = beginHardwareOp()
+        if (hardwareLease == null) {
+            log("Hardware busy — please wait for the current operation to finish.")
+            return false
+        }
+        log("Refreshing aircraft identity from passive DUML telemetry...")
+        runOnIO {
+            try {
+                val model = AircraftModelProbe.capture(
+                    FccRuntime.tracker.state.value.controllerPort
+                )
+                if (model != null) {
+                    prefs.edit().apply {
+                        if (model.modelCode.isNotEmpty()) {
+                            putString(PREF_AIRCRAFT_MODEL_CODE, model.modelCode)
+                        }
+                        if (model.modelName.isNotEmpty()) {
+                            putString(PREF_AIRCRAFT_MODEL_NAME, model.modelName)
+                        }
+                        putLong(PREF_AIRCRAFT_MODEL_AT, System.currentTimeMillis())
+                    }.apply()
+                    log(
+                        "Aircraft model: " +
+                            "${model.modelName.ifEmpty { "unknown" }} " +
+                            "(${model.modelCode.ifEmpty { "unknown" }})"
+                    )
+                } else {
+                    log("Aircraft model not present in the current passive DUML window")
+                }
+
+                var portLease: Port40007Lock.Lease? = null
+                var sessionLease: DumlPortSessionLock.Lease? = null
+                try {
+                    portLease = Port40007Lock.acquireForLed()
+                    if (portLease != null) {
+                        sessionLease = DumlPortSessionLock.tryBegin(DumlTransport.PORT_LED)
+                        val serial = if (sessionLease != null) {
+                            transport.probeSerial(2_500, DumlTransport.PORT_LED)
+                        } else {
+                            ""
+                        }
+                        if (serial.isNotEmpty()) {
+                            aircraftIdentityVerified = true
+                            verifiedAircraftIdentity = serial
+                            storeAircraftIdentity(serial)
+                            log("Aircraft identity refreshed and cached")
+                        }
+                    }
+                } finally {
+                    sessionLease?.close()
+                    portLease?.let(Port40007Lock::releaseFromLed)
+                }
+
+                if (
+                    (model == null || model.modelName.isEmpty()) &&
+                    app.packageManager.getLaunchIntentForPackage("dji.go.v5") != null
+                ) {
+                    log("Opening DJI Fly so it can publish the aircraft model name")
+                    launchDjiFly()
+                }
+            } finally {
+                hardwareLease.close()
+            }
+        }
+        return true
+    }
+
     // --- Updates ---
 
     fun checkForUpdates(force: Boolean = false) {
@@ -1763,6 +1868,8 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             "gps_status" to current.gpsStatus,
             "aircraft_serial" to current.aircraftSerial,
             "aircraft_model_code" to current.aircraftModelCode,
+            "aircraft_model_name" to current.aircraftModelName,
+            "aircraft_model_verified_at_ms" to current.aircraftModelVerifiedAtMs,
             "device_info" to current.deviceInfo,
             "four_g_message" to current.fourGMessage,
             "update_available" to current.updateAvailable,
@@ -2270,7 +2377,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         val modelCode = MODEL_CODE_PATTERN.find(normalized)?.value
         if (modelCode != null) {
             update { copy(aircraftModelCode = modelCode) }
-            prefs.edit().putString("aircraft_model_code", modelCode).apply()
+            prefs.edit().putString(PREF_AIRCRAFT_MODEL_CODE, modelCode).apply()
         } else {
             update { copy(aircraftSerial = normalized) }
             prefs.edit().putString("aircraft_serial", normalized).apply()

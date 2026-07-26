@@ -34,7 +34,7 @@ A free and open-source Android app that unlocks FCC mode, sends experimental 4G 
 | **4G Activation** | Sends 4G activation frames to the aircraft (serial read at runtime) — no status readback, experimental |
 | **GPS Control** | Reads the master `gps_enable` state and provides experimental explicit ON/OFF commands with one-shot readback |
 | **LED Control** | Reads the current lamp state and verifies it after LED on/off commands (DJI Fly and a linked aircraft are required) |
-| **Device Info** | Shows app version, controller code, aircraft model code, factory S/N, and LAN bridge address |
+| **Device Info** | Shows app version, controller code, aircraft model name/code, factory S/N, and LAN bridge address |
 | **Auto FCC** | Saves one of two optional startup modes: repeated DJI Fly Home Point detection, or a five-second country check that re-applies the profile only when the region no longer matches |
 | **Persistent Status** | Shows a foreground notification and starts the app service automatically after controller boot without sending FCC commands |
 | **Auto-Updater** | Checks `danusha2345/SkylabFCCfree` GitHub Releases and lets you download/install from the app |
@@ -187,7 +187,10 @@ full FCC apply.
    compares NLD FCC, OpenFCC, Drone Tweaks, Drone-Hacks and the official DJI
    LTE path.
 5. The aircraft-control card is split evenly: GPS on the left and LED on the right. Each side has its own manual refresh and explicit ON/OFF buttons, available without starting Auto FCC first. GPS ON/OFF sends five bounded idempotent writes 100 ms apart, releases port `40007`, and after 250 ms automatically runs a three-attempt status Refresh. Every status attempt opens a new port lease instead of reusing a failed one. LED ON/OFF makes at most two complete reference-pattern command cycles. GPS/LED stay on the wrapped `40007` path because live RC Pro 2 tests found no matching readback on `40009` or `8901`. The last validated replies persist across app reopen with a `Last verified` timestamp, and a failed manual refresh does not erase them. A GPS write invalidates the older cached value until the fresh Refresh completes, so the UI never presents the pre-command OFF/ON as current. Neither side polls port `40007` in the background.
-6. The **Info** tab lets you query the controller's hardware and firmware version
+6. The **Info** tab shows the controller code, aircraft model name/code and
+   factory S/N. **Refresh aircraft identity** uses a short passive DUML capture:
+   RC Pro 2 opens DJI Fly only when needed, while RM510 can identify a linked
+   Mavic 3T without opening Pilot 2.
 7. The **Log** tab can start the LAN diagnostic API; since 1.5.51 it stays **off until you switch it on**. It uses unencrypted HTTP and a fixed shared password. A UDP beacon broadcasts only the controller IP and port across the current Wi-Fi subnet; it does not include the password, logs, or command payloads. Disable the bridge on untrusted Wi-Fi. See [LAN Control API](docs/LAN_CONTROL_API.md) and the evidence-based [RC2 port and stream map](docs/RC2_PORT_AND_STREAM_MAP.md).
 
 SkylabFCCfree also keeps a low-priority foreground notification visible while
@@ -300,7 +303,8 @@ RC2 hardware evidence exposes the full factory serial in `51:14`. A live audit
 found only controller identity on `40009`/`8901` and no frames on `8902..8904`.
 The preferred format is a full `1581...` factory serial. The parser also
 recognizes the 16-character RC2 telemetry suffix beginning with `FA` for display
-and falls back to a 5-character `W[AM]xxx` model pattern. A full `1581...`
+and falls back to a `W[AM]xxx` model pattern with an optional variant suffix,
+such as `WM265T`. A full `1581...`
 serial or any structurally valid `WA/WM` code is accepted by the 4G flow. The last value
 is cached for display, but 4G requires a freshly observed current-aircraft
 identity.

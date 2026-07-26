@@ -34,6 +34,11 @@ data class DumlFrame(
     val payload: ByteArray
 )
 
+internal data class AircraftModelIdentity(
+    val modelCode: String = "",
+    val modelName: String = ""
+)
+
 data class DumlRawExchange(
     val matchedFrame: ByteArray?,
     val validatedPayload: ByteArray?,
@@ -549,19 +554,19 @@ class DumlTransport {
      * 1. Passive listen on the DUML proxy for telemetry matching the full
      *    1581XXXXXXXXXXX aircraft serial (16-22 chars). This is the real
      *    factory serial printed on the airframe.
-     * 2. If no full serial appears, also accept the short model-code pattern
-     *    W[AM]xxx (5 chars: WA341, WM630, etc.). The short form is what the
-     *    4G activation frames actually carry (see captured profiles), but the
-     *    full form is preferred for display and any 4G payload that wants it.
+     * 2. If no full serial appears, also accept the model-code pattern
+     *    W[AM]xxx plus an optional variant suffix (WA341, WM265T, etc.).
+     *    This form appears in 4G activation captures, but the full serial is
+     *    preferred for display and any 4G payload that wants it.
      *
      * The probe is passive: no DUML command is sent. The controller's proxy
      * emits unsolicited status broadcasts containing the drone serial in
      * ASCII roughly once per second when the aircraft is linked and powered.
      *
-     * The result is validated for 4G use: a 5-char W[AM]xxx model code is
-     * accepted only as a fallback, since the 4G payload format expects at
-     * least the model code. Callers that need the full 1581... serial should
-     * check the length of the returned string.
+     * The result is validated for 4G use: a WA/WM model code is accepted only
+     * as a fallback, since the 4G payload format expects at least the model
+     * code. Callers that need the full 1581... serial should check the length
+     * of the returned string.
      *
      * @param timeoutMs how long to listen for broadcasts (default 1500ms)
      * @param port exact controller port when already known; null keeps discovery
@@ -886,7 +891,20 @@ class DumlTransport {
         private const val SERIAL_SCAN_OVERLAP = 4_096
         private val FULL_SERIAL_REGEX = Regex("(?<![0-9A-Z])1581[0-9A-Z]{12,18}(?![0-9A-Z])")
         private val RC2_SERIAL_SUFFIX_REGEX = Regex("(?<![0-9A-Z])FA[0-9A-Z]{14}(?![0-9A-Z])")
-        private val MODEL_CODE_REGEX = Regex("(?<![0-9A-Z])W[AM][0-9]{3}(?![0-9A-Z])")
+        private val MODEL_CODE_REGEX =
+            Regex("(?<![0-9A-Z])W[AM][0-9]{3}[A-Z]?(?![0-9A-Z])")
+        private val AIRCRAFT_MODEL_CODE_REGEX = Regex("^W[AM][0-9]{3}[A-Z]?$")
+        private val KNOWN_AIRCRAFT_MODEL_NAMES = mapOf(
+            "WM265T" to "DJI Mavic 3T"
+        )
+        internal val AIRCRAFT_IDENTITY_PORTS = listOf(
+            PORT,
+            PORT_LED,
+            PORT_ALT_1,
+            PORT_ALT_2,
+            PORT_ALT_3,
+            PORT_ALT_4
+        )
 
         /** Extracts the safest known identity forms from a binary telemetry window. */
         internal fun extractAircraftIdentity(buffer: CharSequence): String? {
@@ -894,6 +912,76 @@ class DumlTransport {
             return FULL_SERIAL_REGEX.find(text)?.value
                 ?: RC2_SERIAL_SUFFIX_REGEX.find(text)?.value
                 ?: MODEL_CODE_REGEX.find(text)?.value
+        }
+
+        /**
+         * Extracts the aircraft model from CRC-valid passive DUML frames.
+         *
+         * `00:82` carries the stable WA/WM product code. `03:34` is the
+         * aircraft user string shown by DJI Fly, so callers must retain the
+         * model code as the primary identity instead of trusting the display
+         * name alone.
+         */
+        internal fun extractAircraftModelIdentity(
+            frames: Iterable<ByteArray>
+        ): AircraftModelIdentity? {
+            var modelCode = ""
+            var modelName = ""
+
+            frames.forEach { frame ->
+                if (frame.size < 13) return@forEach
+                val cmdSet = frame[9].toInt() and 0xFF
+                val cmdId = frame[10].toInt() and 0xFF
+                val payloadEnd = frame.size - 2
+
+                when {
+                    cmdSet == 0x00 && cmdId == 0x82 -> {
+                        val end = (11 until payloadEnd)
+                            .firstOrNull { frame[it].toInt() == 0 }
+                            ?: payloadEnd
+                        val payloadText = String(
+                            frame,
+                            11,
+                            end - 11,
+                            Charsets.US_ASCII
+                        ).trim().uppercase()
+                        if (AIRCRAFT_MODEL_CODE_REGEX.matches(payloadText)) {
+                            modelCode = payloadText
+                        }
+                    }
+
+                    cmdSet == 0x03 && cmdId == 0x34 -> {
+                        val payloadStart = if (frame[11].toInt() == 0) 12 else 11
+                        if (payloadStart < payloadEnd) {
+                            val end = (payloadStart until payloadEnd)
+                                .firstOrNull { frame[it].toInt() == 0 }
+                                ?: payloadEnd
+                            val candidate = String(
+                                frame,
+                                payloadStart,
+                                end - payloadStart,
+                                Charsets.US_ASCII
+                            ).trim()
+                            if (
+                                candidate.length in 2..32 &&
+                                candidate.all { it.code in 0x20..0x7E }
+                            ) {
+                                modelName = candidate
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (modelName.isEmpty()) {
+                modelName = KNOWN_AIRCRAFT_MODEL_NAMES[modelCode].orEmpty()
+            }
+
+            return if (modelCode.isEmpty() && modelName.isEmpty()) {
+                null
+            } else {
+                AircraftModelIdentity(modelCode, modelName)
+            }
         }
     }
 

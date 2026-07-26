@@ -691,6 +691,10 @@ private fun InfoPage(state: AppState, viewModel: FccViewModel) {
             Spacer(Modifier.height(4.dp))
             DividerLine()
             Spacer(Modifier.height(4.dp))
+            InfoRow("Last aircraft model", state.aircraftModelName.ifEmpty { "Not detected" })
+            Spacer(Modifier.height(4.dp))
+            DividerLine()
+            Spacer(Modifier.height(4.dp))
             InfoRow("Last aircraft code", state.aircraftModelCode.ifEmpty { "Not detected" })
             Spacer(Modifier.height(4.dp))
             DividerLine()
@@ -704,7 +708,7 @@ private fun InfoPage(state: AppState, viewModel: FccViewModel) {
             }
             Spacer(Modifier.height(8.dp))
             OutlinedButton(
-                onClick = { viewModel.probeSerial() },
+                onClick = { viewModel.refreshAircraftIdentity() },
                 enabled = !state.isHardwareBusy,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)
