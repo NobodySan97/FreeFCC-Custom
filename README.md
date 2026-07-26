@@ -188,12 +188,13 @@ full FCC apply.
    LTE path.
 5. The aircraft-control card is split evenly: GPS on the left and LED on the right. Each side has its own manual refresh and explicit ON/OFF buttons, available without starting Auto FCC first. GPS ON/OFF sends five bounded idempotent writes 100 ms apart, releases port `40007`, and after 250 ms automatically runs a three-attempt status Refresh. Every status attempt opens a new port lease instead of reusing a failed one. LED ON/OFF makes at most two complete reference-pattern command cycles. GPS/LED stay on the wrapped `40007` path because live RC Pro 2 tests found no matching readback on `40009` or `8901`. The last validated replies persist across app reopen with a `Last verified` timestamp, and a failed manual refresh does not erase them. A GPS write invalidates the older cached value until the fresh Refresh completes, so the UI never presents the pre-command OFF/ON as current. Neither side polls port `40007` in the background.
 6. The **Info** tab shows the controller code, aircraft model name/code and
-   factory S/N. Since 1.5.54 the model is read **off the DJI app screen first** —
-   DJI Fly and Pilot 2 print both the product code and the commercial name, so a
-   match there opens no DUML port at all. A short passive DUML capture is the
-   fallback for screens that do not spell the model out: RC Pro 2 opens DJI Fly
-   only when needed, while RM510 can identify a linked aircraft without opening
-   Pilot 2. The `00:82` parser accepts any safe alphanumeric aircraft product
+   factory S/N. Since 1.5.54 the model is read **off the DJI app screen** — DJI
+   Fly and Pilot 2 print both the product code and the commercial name, so a
+   match there opens no DUML port at all. Background port polling is gone: a
+   short passive DUML capture runs only when the screen named an aircraft
+   without its code, once per model, plus whenever you press **Refresh aircraft
+   identity** yourself. With the aircraft powered off nothing is opened, because
+   the ports have nobody to answer. The `00:82` parser accepts any safe alphanumeric aircraft product
    code and rejects controller codes beginning with `RC`, `RM`, or `GL`. Known
    codes are named from a local table (`AircraftModelCatalog`); an unknown code
    is displayed as-is instead of `Not detected`.

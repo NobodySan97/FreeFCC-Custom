@@ -88,7 +88,6 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         private const val DJI_FLY_PACKAGE = "dji.go.v5"
         private const val DJI_PILOT_2_PACKAGE = "com.dji.industry.pilot"
         private val MODEL_CAPTURE_PACKAGES = setOf(DJI_FLY_PACKAGE, DJI_PILOT_2_PACKAGE)
-        private const val MODEL_CAPTURE_RETRY_MS = 5_000L
         private const val MODEL_UI_REWRITE_MS = 60_000L
         private val HOME_POINT_RESOURCE_NAMES = listOf(
             "fpv_tips_smart_rth_homepoint_update",
@@ -108,7 +107,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
     private var lastUiHomePointMatch = ""
     private var lastUiHomePointMatchAtMs = 0L
     private val modelCaptureBusy = AtomicBoolean(false)
-    @Volatile private var lastModelCaptureAttemptAtMs = 0L
+    @Volatile private var codeProbeDoneForName = ""
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -117,7 +116,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         FccViewModel.logServiceEvent(
             "DJI FLY ACCESSIBILITY TEST: connected; " +
                 "phrases=${catalog.phrases.size} locales=${catalog.localeCount}; " +
-                "model read from the DJI app screen first, passive DUML only as fallback"
+                "model read from the DJI app screen; ports stay closed until it names an aircraft"
         )
         if (AutoFccSelection.load(this) == AutoFccMode.HOME_POINT_TEXT) {
             FccKeepaliveService.startSelectedMode(this)
@@ -135,12 +134,11 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         }
 
         // The DJI app prints both the product code and the commercial name, so
-        // its screen is the first source. DUML is only read when it stays silent.
+        // its screen is the only trigger. Nothing is read from a port until the
+        // screen proves an aircraft is linked.
         captureAircraftModelFromUi("event", values)
-        if (sourcePackage == DJI_FLY_PACKAGE) logVisibleUiSnapshot()
-        maybeCaptureAircraftModel(sourcePackage)
-
         if (sourcePackage != DJI_FLY_PACKAGE) return
+        logVisibleUiSnapshot()
 
         values.forEach { value ->
             val normalized = DjiFlyHomePointMatcher.normalize(value)
@@ -166,12 +164,16 @@ class DjiFlyAccessibilityService : AccessibilityService() {
 
     /**
      * Reads the model straight off the DJI app screen, which prints both the
-     * product code and the commercial name. A hit here is what keeps the DUML
-     * fallback below from opening a port at all.
+     * product code and the commercial name. This is also the only thing that
+     * lets the DUML read below run: a name on screen is the proof that an
+     * aircraft is powered on and linked.
      */
     private fun captureAircraftModelFromUi(source: String, texts: Collection<String>): Boolean {
         if (texts.isEmpty()) return false
         val match = AircraftModelCatalog.findInText(texts.joinToString(" | ")) ?: return false
+        if (match.code.isEmpty() && match.name.isNotEmpty()) {
+            captureAircraftCodeFromDuml(match.name)
+        }
 
         val prefs = getSharedPreferences("freefcc", Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
@@ -205,23 +207,16 @@ class DjiFlyAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Fallback for screens that never spell the model out. DJI Fly publishes
-     * the linked aircraft identity only while its own session is active, so
-     * capture one short passive window in the background, trying the
-     * controller's observed port first and then the known proxy ports. No DUML
-     * command is written.
+     * Resolves the product code for a model the screen named but did not code,
+     * with one short passive window. Runs at most once per model name: with the
+     * aircraft off the ports stay silent anyway, so there is nothing to retry.
+     * No DUML command is written.
      */
-    private fun maybeCaptureAircraftModel(sourcePackage: String) {
-        val now = System.currentTimeMillis()
-        val prefs = getSharedPreferences("freefcc", Context.MODE_PRIVATE)
-        val lastVerifiedAt = prefs.getLong(FccViewModel.PREF_AIRCRAFT_MODEL_AT, 0L)
-        val hasCachedIdentity =
-            prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, "").orEmpty().isNotEmpty() &&
-                prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, "").orEmpty().isNotEmpty()
-        if (hasCachedIdentity && now - lastVerifiedAt < FccViewModel.AIRCRAFT_MODEL_FRESH_MS) return
-        if (now - lastModelCaptureAttemptAtMs < MODEL_CAPTURE_RETRY_MS) return
+    private fun captureAircraftCodeFromDuml(modelName: String) {
+        if (modelName == codeProbeDoneForName) return
         if (!modelCaptureBusy.compareAndSet(false, true)) return
-        lastModelCaptureAttemptAtMs = now
+        codeProbeDoneForName = modelName
+        val prefs = getSharedPreferences("freefcc", Context.MODE_PRIVATE)
 
         thread(name = "FreeFCC-aircraft-model", isDaemon = true) {
             try {
@@ -230,7 +225,8 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                 )
                 if (identity == null) {
                     FccViewModel.logServiceEvent(
-                        "Aircraft model capture: no 00:82/03:34 identity on known ports"
+                        "Aircraft code lookup for $modelName: " +
+                            "no 00:82/03:34 identity on known ports"
                     )
                     return@thread
                 }
@@ -249,8 +245,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                     putLong(FccViewModel.PREF_AIRCRAFT_MODEL_AT, System.currentTimeMillis())
                 }.apply()
                 FccViewModel.logServiceEvent(
-                    "Aircraft model captured: " +
-                        "source=$sourcePackage " +
+                    "Aircraft code lookup for $modelName: " +
                         "code=${identity.modelCode.ifEmpty { "unknown" }} " +
                         "name=${identity.modelName.ifEmpty { "unknown" }}"
                 )
