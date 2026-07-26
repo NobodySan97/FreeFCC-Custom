@@ -68,6 +68,84 @@ Air 3S `03:44`:
 к controller. `51:14` также содержит aircraft identity; exact serial в tracked
 docs намеренно редактирован.
 
+## Точное имя модели через DUML, 2026-07-26
+
+Повторная live-проверка выполнена на DJI Air 3S + RC Pro 2 `rc520`, FreeFCC
+`1.5.45`, DJI Fly `1.21.2`. Все активные пробы были read-only.
+
+Пока FreeFCC находился на переднем плане, короткие captures `8901` и `40009`
+публиковали только controller identity `rc520`. После штатного запуска DJI Fly
+первый же заполненный capture `40009` дал два независимых aircraft
+идентификатора:
+
+| Frame | Route/type | Payload | Интерпретация |
+|---|---|---|---|
+| `00:82` | `0xA2 → 0x82`, `type=0x00` | ASCII `WA234` + NUL/padding | внутренний aircraft model code |
+| `03:34` | `0xA2 → 0x82`, `type=0x00` | `00` + ASCII `DJI Air 3S` + NUL/padding | человекочитаемое имя, которое DJI Fly показывает как `Название` |
+
+Полные CRC-valid frames:
+
+```text
+00:82
+554d04a8a282df9800008257413233340000000000000000000000000000000000000000000000000000000208000000000000020800000200000000000000000000000000000000000000fe8c
+
+03:34
+552e04a7a2829f9800033400444a492041697220335300000000000000000000000000000000000000000000d085
+```
+
+Legacy-справочник `dji-firmware-tools` называет `03:34`
+`UAV User String Get` / `Get Plane Name`. Поэтому строку `DJI Air 3S` нельзя
+считать неизменяемым product identifier: пользовательское имя теоретически
+может быть изменено. Надёжная идентификация должна хранить пару:
+
+```text
+model_code=WA234
+model_name=DJI Air 3S
+source=duml_push
+verified_in_current_session=true
+```
+
+`WA234` следует считать основным стабильным идентификатором, а
+`DJI Air 3S` — отображаемым именем, которое дополнительно сверяется с таблицей
+model-code → product-name. Тот же текст независимо наблюдался Accessibility
+service во вкладке DJI Fly «Информация».
+
+### Активные read-only пробы
+
+Контроллер отвечает на `00:01 VersionInquiry`, если использовать фактический
+маршрут RC Pro 2:
+
+```text
+port=8901 sender=0x2A dst=0x06 cmd_type=0x20 cmd_set=0x00 cmd_id=0x01
+TX 550d04332a06911a200001206e
+RX 552c0436062a911a8000010000524335323000000000000000000000000e0000001501020a09000000006546
+```
+
+Разбор payload: hardware `RC520`, bootloader `0.0.0.14`, firmware
+`10.2.1.21`. Текущий `device_info.json` использует `sender=0x82`, `dst=ANY` и
+default port `40009`; на проверенном RC Pro 2 этот маршрут matching response не
+дал.
+
+Попытки явно запросить aircraft identity/model через `40009` не дали matching
+response:
+
+- `00:01 VersionInquiry` к `dst=0x03` и `dst=0xA2`;
+- `00:FF Query Device Info` к `dst=0xEE`;
+- `03:34 UAV User String Get` к `dst=0x03` и `dst=0xA2`;
+- `03:37 Device Info Get` к `dst=0x03`;
+- `03:74 Get Product Id` к `dst=0x03`.
+
+Один bounded wrapped `03:34` exchange на `40007` также вернул только
+постороннюю telemetry, без matching `03:34` response. Это NEGATIVE только для
+проверенных маршрутов; оно не доказывает отсутствие другого внутреннего
+request path DJI Fly.
+
+Практический low-cost вариант для приложения: после запуска DJI Fly открыть
+один короткий пассивный `40009` session, завершить чтение сразу после пары
+`00:82`/`03:34`, сохранить только распознанные поля и сами два identity frame.
+Не следует сохранять весь окружающий поток: в нём встречаются coordinates и
+factory serial.
+
 ## FCC-кандидаты и исключённые false positives
 
 | Frame | CE | Подтверждённый FCC | Вердикт |
