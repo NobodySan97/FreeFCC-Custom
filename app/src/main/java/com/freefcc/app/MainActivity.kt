@@ -4,8 +4,10 @@ import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -87,6 +89,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         AppForegroundService.start(this)
         requestNotificationPermissionIfNeeded()
+        requestBatteryExemptionOnce()
         viewModel.init()
         handleNotificationAction(intent)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -144,6 +147,35 @@ class MainActivity : ComponentActivity() {
             PackageManager.PERMISSION_GRANTED
         ) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    /**
+     * Asks once to leave the battery optimization list. Auto FCC and the LAN
+     * bridge run inside this process, so a doze kill stops them silently.
+     * The prompt is never repeated: the user can still grant it later from
+     * Android settings.
+     */
+    private fun requestBatteryExemptionOnce() {
+        val prefs = getSharedPreferences("freefcc", MODE_PRIVATE)
+        if (prefs.getBoolean("battery_exemption_asked", false)) return
+        val power = getSystemService(PowerManager::class.java) ?: return
+        if (power.isIgnoringBatteryOptimizations(packageName)) return
+
+        prefs.edit().putBoolean("battery_exemption_asked", true).apply()
+        try {
+            startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:$packageName")
+                )
+            )
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(
+                this,
+                "Battery optimization settings are unavailable on this controller",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 

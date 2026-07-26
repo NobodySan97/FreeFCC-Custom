@@ -411,7 +411,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         }
         log("SkylabFCCfree v$APP_VERSION started on $model")
 
-        if (prefs.getBoolean("lan_log_enabled", true)) {
+        if (prefs.getBoolean("lan_log_enabled", false)) {
             setLanLoggingEnabled(true)
         }
 
@@ -471,7 +471,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
     /** Rebinds the process-wide bridge when the controller's Wi-Fi address changed. */
     fun refreshLanBridgeBinding() {
         activeLanController = this
-        if (!prefs.getBoolean("lan_log_enabled", true) || _state.value.isLanLogStarting) return
+        if (!prefs.getBoolean("lan_log_enabled", false) || _state.value.isLanLogStarting) return
         val current = networkLogServer.currentEndpoint()
         if (current != null) {
             update {

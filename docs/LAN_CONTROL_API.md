@@ -8,9 +8,10 @@ the APK for every frame.
 The server binds only to the controller's private `wlan*`/`wifi*` IPv4 address.
 It does not listen on cellular or wildcard interfaces. Every endpoint requires
 the fixed project password. Control endpoints accept it only through the
-`X-FreeFCC-Password` header. Disable **LAN Control Bridge** in the Log tab when
-using an untrusted Wi-Fi network: the password is shared and published, and HTTP
-does not encrypt traffic.
+`X-FreeFCC-Password` header. Since 1.5.51 the bridge is **off by default** —
+enable **LAN Control Bridge** in the Log tab before a bench session, and keep it
+off when using an untrusted Wi-Fi network: the password is shared and published,
+and HTTP does not encrypt traffic.
 
 ## Connection
 

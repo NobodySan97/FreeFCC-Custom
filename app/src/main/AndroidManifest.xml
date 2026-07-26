@@ -9,6 +9,11 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Auto FCC and the LAN bridge live in the app process; without this the
+         controller may sleep them mid-flight. -->
+    <uses-permission
+        android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        tools:ignore="BatteryLife" />
     <!-- RC2 firmware may expose cross-process logcat despite this protected permission. -->
     <uses-permission
         android:name="android.permission.READ_LOGS"
