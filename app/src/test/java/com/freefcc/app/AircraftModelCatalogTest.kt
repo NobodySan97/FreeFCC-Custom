@@ -16,36 +16,54 @@ class AircraftModelCatalogTest {
     }
 
     @Test
-    fun readsCodeAndNameOffTheSameScreen() {
-        val match = AircraftModelCatalog.findInText(
-            "DJI Air 3S | WA234 | Battery 87% | Home Point updated"
+    fun keepsTheNameTheScreenPrintsEvenWhenItIsUnknown() {
+        val match = AircraftModelCatalog.findOnScreen(
+            listOf("DJI Avata 360", "Battery 87%", "Home Point updated")
         )
 
-        assertEquals("WA234", match?.code)
-        assertEquals("DJI Air 3S", match?.name)
+        assertEquals("DJI Avata 360", match?.name)
+        assertEquals("", match?.code)
     }
 
     @Test
-    fun prefersTheLongerNameOverItsPrefix() {
-        assertEquals("DJI Air 3S", AircraftModelCatalog.findInText("DJI Air 3S")?.name)
-        assertEquals("WA234", AircraftModelCatalog.findInText("DJI Air 3S")?.code)
-        assertEquals("DJI Air 3", AircraftModelCatalog.findInText("DJI Air 3")?.name)
-        assertEquals("WA233", AircraftModelCatalog.findInText("DJI Air 3")?.code)
-        assertEquals("DJI Mavic 3T", AircraftModelCatalog.findInText("Mavic 3T")?.name)
-        assertEquals("DJI Mavic 3", AircraftModelCatalog.findInText("DJI Mavic 3")?.name)
+    fun readsCodeAndNameOffTheSameScreen() {
+        val match = AircraftModelCatalog.findOnScreen(
+            listOf("DJI Avata 360", "WA530", "Battery 87%")
+        )
+
+        assertEquals("DJI Avata 360", match?.name)
+        assertEquals("WA530", match?.code)
+    }
+
+    @Test
+    fun readsANameThatSharedItsLabelWithTheCode() {
+        val match = AircraftModelCatalog.findOnScreen(listOf("Aircraft: DJI Avata 360 (WA530)"))
+
+        assertEquals("DJI Avata 360", match?.name)
+        assertEquals("WA530", match?.code)
     }
 
     @Test
     fun infersTheCodeFromAnUnambiguousName() {
-        val match = AircraftModelCatalog.findInText("Connected to DJI Mini 4 Pro")
+        val match = AircraftModelCatalog.findOnScreen(listOf("DJI Mini 4 Pro"))
 
         assertEquals("WA140", match?.code)
         assertEquals("DJI Mini 4 Pro", match?.name)
     }
 
     @Test
+    fun prefersTheLongerNameOverItsPrefix() {
+        assertEquals("WA234", AircraftModelCatalog.findOnScreen(listOf("DJI Air 3S"))?.code)
+        assertEquals("WA233", AircraftModelCatalog.findOnScreen(listOf("DJI Air 3"))?.code)
+        assertEquals(
+            "DJI Mavic 3T",
+            AircraftModelCatalog.findOnScreen(listOf("Connected to Mavic 3T"))?.name
+        )
+    }
+
+    @Test
     fun refusesToGuessACodeForTheSharedMavic2Name() {
-        val match = AircraftModelCatalog.findInText("DJI Mavic 2")
+        val match = AircraftModelCatalog.findOnScreen(listOf("DJI Mavic 2"))
 
         assertEquals("", match?.code)
         assertEquals("DJI Mavic 2", match?.name)
@@ -53,21 +71,34 @@ class AircraftModelCatalogTest {
 
     @Test
     fun namesACodeThatAppearsWithoutItsCommercialName() {
-        val match = AircraftModelCatalog.findInText("Aircraft WA341 linked")
+        val match = AircraftModelCatalog.findOnScreen(listOf("Aircraft", "WA341", "linked"))
 
         assertEquals("WA341", match?.code)
         assertEquals("DJI Mavic 4 Pro", match?.name)
     }
 
     @Test
+    fun ignoresDjiProductsThatAreNotTheAircraft() {
+        listOf(
+            "DJI Fly",
+            "DJI Care Refresh",
+            "DJI Store",
+            "DJI RC Pro 2",
+            "DJI Goggles 3"
+        ).forEach { label ->
+            assertNull(label, AircraftModelCatalog.findOnScreen(listOf(label, "Battery 87%")))
+        }
+    }
+
+    @Test
     fun ignoresScreensWithoutAnAircraftIdentity() {
         listOf(
-            "Home Point updated | 12.5 m/s | 120 m",
-            "NEON | FLIPPED | AIRPLANE MODE",
-            "RC520 | rm510 | Battery 64%",
-            ""
+            listOf("Home Point updated", "12.5 m/s", "120 m"),
+            listOf("NEON", "FLIPPED", "AIRPLANE MODE"),
+            listOf("RC520", "rm510", "Battery 64%"),
+            listOf("")
         ).forEach { screen ->
-            assertNull(screen, AircraftModelCatalog.findInText(screen))
+            assertNull(screen.toString(), AircraftModelCatalog.findOnScreen(screen))
         }
     }
 }

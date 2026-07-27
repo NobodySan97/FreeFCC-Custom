@@ -78,35 +78,84 @@ internal object AircraftModelCatalog {
         }
         .sortedByDescending { it.first.length }
 
+    /**
+     * A `DJI …` product name of up to three words. The name is taken verbatim,
+     * so an aircraft the catalog has never heard of still gets its real name.
+     */
+    private val PRODUCT_NAME_REGEX =
+        Regex("DJI(?: [A-Za-z0-9][A-Za-z0-9+]{0,11}){1,3}", RegexOption.IGNORE_CASE)
+
+    /**
+     * First word after `DJI` for products that are not aircraft. Without this
+     * the app's own name, the store banner or a paired accessory would be read
+     * as the connected drone.
+     */
+    private val NON_AIRCRAFT_WORDS = setOf(
+        "FLY", "GO", "GO4", "PILOT", "ASSISTANT", "MIMO", "STORE", "ACCOUNT",
+        "CARE", "FORUM", "ACADEMY", "SUPPORT", "SERVICE", "VIRTUAL", "GOGGLES",
+        "MOTION", "RC", "RM", "GL", "MIC", "OSMO", "POCKET", "ACTION", "POWER",
+        "TERRA", "CELLULAR", "TRANSMISSION", "SDK"
+    )
+
     fun nameForCode(code: String): String =
         NAME_BY_CODE[code.trim().uppercase(Locale.US)].orEmpty()
 
     /**
-     * Finds the aircraft identity in text taken off a DJI app screen. The code
-     * is preferred from the text itself; the catalog only fills in what the
-     * screen did not spell out.
+     * Finds the aircraft identity in the labels of a DJI app screen.
+     *
+     * The name printed on screen wins and is kept verbatim — the catalog is
+     * only consulted when the screen shows a code without a name, or to turn a
+     * known name back into its code.
      */
-    fun findInText(text: CharSequence): AircraftModelMatch? {
-        val haystack = normalize(text)
-        if (haystack.isEmpty()) return null
+    fun findOnScreen(texts: Collection<CharSequence>): AircraftModelMatch? {
+        val labels = texts.map(::flatten).filter(String::isNotEmpty)
+        if (labels.isEmpty()) return null
 
-        val name = ALIASES.firstOrNull { containsWord(haystack, it.first) }?.second.orEmpty()
-        val code = CODE_REGEX.find(haystack)?.value
-            ?: CODE_BY_NAME[normalize(name)].orEmpty()
+        val haystack = labels.joinToString(" | ").uppercase(Locale.US)
+        val code = CODE_REGEX.find(haystack)?.value.orEmpty()
+        val name = screenName(labels)
+            ?: ALIASES.firstOrNull { containsWord(haystack, it.first) }?.second
+            ?: nameForCode(code)
 
-        return if (code.isEmpty() && name.isEmpty()) {
+        val resolvedCode = code.ifEmpty { CODE_BY_NAME[normalize(name)].orEmpty() }
+        return if (resolvedCode.isEmpty() && name.isEmpty()) {
             null
         } else {
-            AircraftModelMatch(code, name.ifEmpty { nameForCode(code) })
+            AircraftModelMatch(resolvedCode, name)
         }
     }
 
-    private fun normalize(value: CharSequence): String =
+    /**
+     * The name as the screen spells it. A label that is nothing but a product
+     * name is the device caption; otherwise the name is only trusted when it
+     * sits in the same label as a product code.
+     */
+    private fun screenName(labels: List<String>): String? {
+        labels.forEach { label ->
+            if (isAircraftName(label)) return label
+        }
+        labels.forEach { label ->
+            if (!CODE_REGEX.containsMatchIn(label.uppercase(Locale.US))) return@forEach
+            PRODUCT_NAME_REGEX.find(label)?.value?.let { if (isAircraftName(it)) return it }
+        }
+        return null
+    }
+
+    private fun isAircraftName(value: String): Boolean {
+        if (value.length > 28 || !PRODUCT_NAME_REGEX.matches(value)) return false
+        val words = value.split(' ')
+        return words.size >= 2 && words[1].uppercase(Locale.US) !in NON_AIRCRAFT_WORDS
+    }
+
+    /** Collapses screen whitespace but keeps the text exactly as printed. */
+    private fun flatten(value: CharSequence): String =
         value.toString()
             .replace('\u00A0', ' ')
-            .uppercase(Locale.US)
             .replace(WHITESPACE, " ")
             .trim()
+
+    private fun normalize(value: CharSequence): String =
+        flatten(value).uppercase(Locale.US)
 
     /** Substring match that refuses to fire inside a longer alphanumeric run. */
     private fun containsWord(haystack: String, needle: String): Boolean {

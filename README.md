@@ -194,10 +194,14 @@ full FCC apply.
    short passive DUML capture runs only when the screen named an aircraft
    without its code, once per model, plus whenever you press **Refresh aircraft
    identity** yourself. With the aircraft powered off nothing is opened, because
-   the ports have nobody to answer. The `00:82` parser accepts any safe alphanumeric aircraft product
-   code and rejects controller codes beginning with `RC`, `RM`, or `GL`. Known
-   codes are named from a local table (`AircraftModelCatalog`); an unknown code
-   is displayed as-is instead of `Not detected`.
+   the ports have nobody to answer. Since 1.5.55 the name is taken **verbatim**
+   from the screen, so a model the app has never heard of is still named
+   correctly; DJI products that are not the aircraft (`DJI Fly`, `DJI Care`,
+   `DJI Goggles`, `DJI RC …`) are filtered out. The `00:82` parser accepts any
+   safe alphanumeric aircraft product code and rejects controller codes
+   beginning with `RC`, `RM`, or `GL`. The local table (`AircraftModelCatalog`)
+   is the fallback: it names a code seen without a name, and an unknown code is
+   displayed as-is instead of `Not detected`.
 7. The **Log** tab can start the LAN diagnostic API; since 1.5.51 it stays **off until you switch it on**. It uses unencrypted HTTP and a fixed shared password. A UDP beacon broadcasts only the controller IP and port across the current Wi-Fi subnet; it does not include the password, logs, or command payloads. Disable the bridge on untrusted Wi-Fi. See [LAN Control API](docs/LAN_CONTROL_API.md) and the evidence-based [RC2 port and stream map](docs/RC2_PORT_AND_STREAM_MAP.md).
 
 SkylabFCCfree also keeps a low-priority foreground notification visible while

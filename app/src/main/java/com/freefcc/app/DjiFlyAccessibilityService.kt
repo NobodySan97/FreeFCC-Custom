@@ -170,7 +170,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
      */
     private fun captureAircraftModelFromUi(source: String, texts: Collection<String>): Boolean {
         if (texts.isEmpty()) return false
-        val match = AircraftModelCatalog.findInText(texts.joinToString(" | ")) ?: return false
+        val match = AircraftModelCatalog.findOnScreen(texts) ?: return false
         if (match.code.isEmpty() && match.name.isNotEmpty()) {
             captureAircraftCodeFromDuml(match.name)
         }
