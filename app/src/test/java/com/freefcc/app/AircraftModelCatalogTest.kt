@@ -91,6 +91,50 @@ class AircraftModelCatalogTest {
     }
 
     @Test
+    fun readsAnUnknownNameOutOfASentence() {
+        val match = AircraftModelCatalog.findOnScreen(
+            listOf("Подключено: DJI Avata 360", "Battery 87%")
+        )
+
+        assertEquals("DJI Avata 360", match?.name)
+        assertEquals("", match?.code)
+    }
+
+    @Test
+    fun neverShortensAKnownNameThatContinuesWithANumber() {
+        val match = AircraftModelCatalog.findOnScreen(listOf("Connected to DJI Avata 360"))
+
+        assertEquals("DJI Avata 360", match?.name)
+        assertEquals("", match?.code)
+    }
+
+    @Test
+    fun dropsAStoredCodeThatBelongsToAnotherAircraft() {
+        // Avata 360 named on screen, WM169 (DJI Avata) left over from before.
+        assertEquals(
+            "",
+            AircraftModelCatalog.codeFor("DJI Avata 360", "", "DJI Avata 360", "WM169")
+        )
+        assertEquals("", AircraftModelCatalog.codeFor("DJI Air 3S", "", "DJI Avata", "WM169"))
+    }
+
+    @Test
+    fun keepsAStoredCodeThatMatchesTheName() {
+        assertEquals(
+            "WM169",
+            AircraftModelCatalog.codeFor("DJI Avata", "", "DJI Avata", "WM169")
+        )
+        assertEquals(
+            "WA530",
+            AircraftModelCatalog.codeFor("DJI Avata 360", "", "DJI Avata 360", "WA530")
+        )
+        assertEquals(
+            "WA234",
+            AircraftModelCatalog.codeFor("DJI Air 3S", "WA234", "DJI Avata", "WM169")
+        )
+    }
+
+    @Test
     fun ignoresScreensWithoutAnAircraftIdentity() {
         listOf(
             listOf("Home Point updated", "12.5 m/s", "120 m"),

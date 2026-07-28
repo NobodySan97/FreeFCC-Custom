@@ -1537,18 +1537,17 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Identity the accessibility service read off the DJI app screen. Both
-     * fields must be present: a name without a code still needs the passive
-     * DUML window to resolve the product code.
+     * Identity the accessibility service read off the DJI app screen. The code
+     * may be missing: not every controller publishes one, and the name alone
+     * is still the answer for the Info tab.
      */
     private fun cachedScreenModel(): AircraftModelIdentity? {
         if (prefs.getString(PREF_AIRCRAFT_MODEL_SOURCE, "") != AIRCRAFT_MODEL_SOURCE_UI) return null
         val readAt = prefs.getLong(PREF_AIRCRAFT_MODEL_AT, 0L)
         if (System.currentTimeMillis() - readAt >= AIRCRAFT_MODEL_FRESH_MS) return null
-        val code = prefs.getString(PREF_AIRCRAFT_MODEL_CODE, "").orEmpty()
         val name = prefs.getString(PREF_AIRCRAFT_MODEL_NAME, "").orEmpty()
-        if (code.isEmpty() || name.isEmpty()) return null
-        return AircraftModelIdentity(code, name)
+        if (name.isEmpty()) return null
+        return AircraftModelIdentity(prefs.getString(PREF_AIRCRAFT_MODEL_CODE, "").orEmpty(), name)
     }
 
     fun refreshAircraftIdentity(): Boolean {
@@ -1560,32 +1559,37 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         log("Refreshing aircraft identity...")
         runOnIO {
             try {
-                // The DJI app screen prints both the code and the name, so a
-                // fresh reading from it means no DUML port is opened at all.
+                // The DJI app screen is the primary source. A port is opened
+                // only when it did not yield the product code.
                 val screenModel = cachedScreenModel()
-                val model = screenModel ?: AircraftModelProbe.capture(
-                    FccRuntime.tracker.state.value.controllerPort
-                )
+                val model = if (screenModel != null && screenModel.modelCode.isNotEmpty()) {
+                    null
+                } else {
+                    AircraftModelProbe.capture(FccRuntime.tracker.state.value.controllerPort)
+                }
                 when {
-                    screenModel != null -> log(
-                        "Aircraft model from the DJI app screen: " +
-                            "${screenModel.modelName} (${screenModel.modelCode})"
+                    model == null && screenModel != null -> log(
+                        "Aircraft model from the DJI app screen: ${screenModel.modelName} " +
+                            "(${screenModel.modelCode.ifEmpty { "code not published" }})"
                     )
 
                     model != null -> {
+                        // A name printed on screen outranks the one the bus
+                        // reports: it is what DJI Fly itself shows the pilot.
+                        val name = screenModel?.modelName.orEmpty().ifEmpty { model.modelName }
                         prefs.edit().apply {
                             if (model.modelCode.isNotEmpty()) {
                                 putString(PREF_AIRCRAFT_MODEL_CODE, model.modelCode)
                             }
-                            if (model.modelName.isNotEmpty()) {
-                                putString(PREF_AIRCRAFT_MODEL_NAME, model.modelName)
+                            if (name.isNotEmpty()) {
+                                putString(PREF_AIRCRAFT_MODEL_NAME, name)
                             }
                             putString(PREF_AIRCRAFT_MODEL_SOURCE, AIRCRAFT_MODEL_SOURCE_DUML)
                             putLong(PREF_AIRCRAFT_MODEL_AT, System.currentTimeMillis())
                         }.apply()
                         log(
                             "Aircraft model: " +
-                                "${model.modelName.ifEmpty { "unknown" }} " +
+                                "${name.ifEmpty { "unknown" }} " +
                                 "(${model.modelCode.ifEmpty { "unknown" }})"
                         )
                     }

@@ -101,6 +101,25 @@ internal object AircraftModelCatalog {
         NAME_BY_CODE[code.trim().uppercase(Locale.US)].orEmpty()
 
     /**
+     * The code that may stay stored next to [name]. Name and code are one
+     * identity, so a code read for another aircraft must not outlive it: an
+     * Avata 360 named on screen keeps no WM169 from the previous session.
+     * Returns an empty string when the stored code has to go.
+     */
+    fun codeFor(
+        name: String,
+        observedCode: String,
+        storedName: String,
+        storedCode: String
+    ): String {
+        if (observedCode.isNotEmpty()) return observedCode
+        if (name.isEmpty() || storedCode.isEmpty()) return storedCode
+        val catalogName = nameForCode(storedCode)
+        val contradicted = catalogName.isNotEmpty() && !catalogName.equals(name, ignoreCase = true)
+        return if (contradicted || !name.equals(storedName, ignoreCase = true)) "" else storedCode
+    }
+
+    /**
      * Finds the aircraft identity in the labels of a DJI app screen.
      *
      * The name printed on screen wins and is kept verbatim — the catalog is
@@ -138,6 +157,11 @@ internal object AircraftModelCatalog {
             if (!CODE_REGEX.containsMatchIn(label.uppercase(Locale.US))) return@forEach
             PRODUCT_NAME_REGEX.find(label)?.value?.let { if (isAircraftName(it)) return it }
         }
+        // Last: a product name embedded in a sentence, e.g. "Connected to
+        // DJI Avata 360". Still filtered by the non-aircraft word list.
+        labels.forEach { label ->
+            PRODUCT_NAME_REGEX.find(label)?.value?.let { if (isAircraftName(it)) return it }
+        }
         return null
     }
 
@@ -157,15 +181,22 @@ internal object AircraftModelCatalog {
     private fun normalize(value: CharSequence): String =
         flatten(value).uppercase(Locale.US)
 
-    /** Substring match that refuses to fire inside a longer alphanumeric run. */
+    /**
+     * Substring match that refuses to fire inside a longer alphanumeric run,
+     * and also refuses when a number follows: `DJI Avata` must not be reported
+     * for a screen that says `DJI Avata 360`.
+     */
     private fun containsWord(haystack: String, needle: String): Boolean {
         var from = 0
         while (true) {
             val at = haystack.indexOf(needle, from)
             if (at < 0) return false
+            val end = at + needle.length
             val before = haystack.getOrNull(at - 1)
-            val after = haystack.getOrNull(at + needle.length)
-            if (!isWordChar(before) && !isWordChar(after)) return true
+            val after = haystack.getOrNull(end)
+            val extendedByNumber =
+                after == ' ' && haystack.getOrNull(end + 1)?.isDigit() == true
+            if (!isWordChar(before) && !isWordChar(after) && !extendedByNumber) return true
             from = at + 1
         }
     }

@@ -177,15 +177,18 @@ class DjiFlyAccessibilityService : AccessibilityService() {
 
         val prefs = getSharedPreferences("freefcc", Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
-        val unchanged =
-            match.code == prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, "").orEmpty() &&
-                match.name == prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, "").orEmpty()
+        val storedCode = prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, "").orEmpty()
+        val storedName = prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, "").orEmpty()
+        val code = AircraftModelCatalog.codeFor(match.name, match.code, storedName, storedCode)
+        val unchanged = code == storedCode && match.name == storedName
         val lastWriteAt = prefs.getLong(FccViewModel.PREF_AIRCRAFT_MODEL_AT, 0L)
         if (unchanged && now - lastWriteAt < MODEL_UI_REWRITE_MS) return true
 
         prefs.edit().apply {
-            if (match.code.isNotEmpty()) {
-                putString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, match.code)
+            if (code.isEmpty()) {
+                remove(FccViewModel.PREF_AIRCRAFT_MODEL_CODE)
+            } else {
+                putString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, code)
             }
             if (match.name.isNotEmpty()) {
                 putString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, match.name)
@@ -199,7 +202,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         if (!unchanged) {
             FccViewModel.logServiceEvent(
                 "Aircraft model read from the DJI app screen: source=$source " +
-                    "code=${match.code.ifEmpty { "unknown" }} " +
+                    "code=${code.ifEmpty { "unknown" }} " +
                     "name=${match.name.ifEmpty { "unknown" }}"
             )
         }
