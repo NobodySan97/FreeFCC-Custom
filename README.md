@@ -39,7 +39,7 @@ A free and open-source Android app that unlocks FCC mode, sends experimental 4G 
 | **Device Info** | Shows app version, controller code, aircraft model name/code, factory S/N, and LAN bridge address |
 | **Auto FCC** | Saves one of two optional startup modes: repeated DJI Fly Home Point detection, or a five-second country check that re-applies the profile only when the region no longer matches |
 | **Persistent Status** | Shows a foreground notification and starts the app service automatically after controller boot without sending FCC commands |
-| **Auto-Updater** | Checks `NobodySan97/FreeFCC` GitHub Releases and lets you download/install from the app |
+| **Auto-Updater** | Checks `NobodySan97/FreeFCC-Custom` GitHub Releases and lets you download/install from the app |
 | **LAN Diagnostic API** | Logs, live status, bounded OpenFCC/DJI `logcat`, one-shot localhost socket inventory, allowlisted app actions, and raw DUML request/response over HTTP on the controller's RFC1918 Wi-Fi address |
 | **Local by default** | Internet is used for update checks/downloads; the LAN API is off until enabled in the Log tab and stays inside the current Wi-Fi subnet |
 | **Open Profiles** | Command frames are plain JSON files you can inspect and edit |
@@ -51,7 +51,7 @@ A free and open-source Android app that unlocks FCC mode, sends experimental 4G 
 
 | Download | Link |
 |----------|------|
-| SkylabFCCfree App (APK) | [GitHub Releases](https://github.com/NobodySan97/FreeFCC/releases) |
+| SkylabFCCfree App (APK) | [GitHub Releases](https://github.com/NobodySan97/FreeFCC-Custom/releases) |
 | Helper Apps (zip) | [freefcc.duckdns.org/downloads/freefcc-helpers.zip](https://freefcc.duckdns.org/downloads/freefcc-helpers.zip) |
 
 Release changes are tracked in [CHANGELOG.md](CHANGELOG.md).
@@ -128,7 +128,7 @@ hour—so its CPU, I/O, and battery cost is small but continuous. The persistent
 **Send FCC Request** remains a one-shot manual full-profile action. Neither
 automatic mode nor the manual action opens DJI Fly; only **Open DJI Fly** does.
 
-If you test it on a model or firmware version not listed here, please [open an issue](https://github.com/danusha2345/SkylabFCCfree/issues) and let me know.
+If you test it on a model or firmware version not listed here, please [open an issue](https://github.com/NobodySan97/FreeFCC-Custom/issues) and let me know.
 
 ## Install Guide
 
@@ -182,7 +182,7 @@ full FCC apply.
 2. Turn on **Auto FCC — Home Point**, turn on **Auto FCC — every 5 sec**, or use the one-shot **Send FCC Request**. Turning one switch on turns the other off; turning the active switch off leaves both off.
 3. Open DJI Fly only with **Open DJI Fly**. Home Point mode remains armed and sends the full profile after every new flight-session Home Point, including after replacing the aircraft battery without restarting the controller. Five-second mode sends the full profile once and then runs one read-only `07:19` country check per tick; it re-applies the profile only when the country no longer matches.
 4. For 4G diagnostics, tap **Probe 4G Endpoint** first. This is read-only and only checks whether `/duss/mb/0x205` is reachable. **Send 4G Activation Frames** remains experimental and confirms writes only, not activation.
-   > **Note:** The integrated eSIM path on DJI Avata 360 is not yet proven compatible with the captured external-module profile. Please attach the LAN logs to an [issue](https://github.com/danusha2345/SkylabFCCfree/issues) when testing.
+   > **Note:** The integrated eSIM path on DJI Avata 360 is not yet proven compatible with the captured external-module profile. Please attach the LAN logs to an [issue](https://github.com/NobodySan97/FreeFCC-Custom/issues) when testing.
    The receiving-side analysis of the legacy sweep is documented in
    [Command set `0x51`](docs/WLM_CMDSET_51.md); the separate
    [third-party FCC/4G application survey](docs/THIRD_PARTY_FCC_4G_APP_RESEARCH.md)
@@ -248,7 +248,7 @@ If SkylabFCCfree helped you out, please consider starring the repo or supporting
 
 <div align="center">
 
-[![Star on GitHub](https://img.shields.io/badge/Star%20on%20GitHub-%E2%AD%90-yellow?style=for-the-badge&logo=github)](https://github.com/danusha2345/SkylabFCCfree)
+[![Star on GitHub](https://img.shields.io/badge/Star%20on%20GitHub-%E2%AD%90-yellow?style=for-the-badge&logo=github)](https://github.com/NobodySan97/FreeFCC-Custom)
 
 [![Support on Boosty](https://img.shields.io/badge/Boosty-Support%20development-FF7143?style=for-the-badge&logo=boosty&logoColor=white)](https://boosty.to/danusha/donate)
 
@@ -464,5 +464,5 @@ The DUML protocol implementation is based on the publicly documented [dji-firmwa
 Questions, issues, or feedback? Reach out:
 
 - **Email:** [freefccidothings@gmail.com](mailto:freefccidothings@gmail.com)
-- **GitHub Issues:** [github.com/danusha2345/SkylabFCCfree/issues](https://github.com/danusha2345/SkylabFCCfree/issues)
+- **GitHub Issues:** [github.com/NobodySan97/FreeFCC-Custom/issues](https://github.com/NobodySan97/FreeFCC-Custom/issues)
 - **Boosty:** [boosty.to/danusha/donate](https://boosty.to/danusha/donate)
