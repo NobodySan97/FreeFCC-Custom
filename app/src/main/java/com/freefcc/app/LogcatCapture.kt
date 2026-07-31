@@ -67,7 +67,7 @@ internal object LogcatCapture {
                     Thread.currentThread().interrupt()
                 }
             },
-            "SkylabFCC-Logcat-Watchdog"
+            "FreeFCC-Logcat-Watchdog"
         ).apply {
             isDaemon = true
             start()

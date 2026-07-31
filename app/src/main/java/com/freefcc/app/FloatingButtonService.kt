@@ -235,7 +235,7 @@ class FloatingButtonService : Service() {
         }
 
         val titleView = TextView(this).apply {
-            text = "⚡ SkylabFCC Quick Control"
+            text = "⚡ FreeFCC Custom Control"
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             typeface = Typeface.DEFAULT_BOLD
