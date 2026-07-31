@@ -452,7 +452,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 }
             )
         }
-        log("SkylabFCCfree v$APP_VERSION started on $model")
+        log("FreeFCC Custom v$APP_VERSION started on $model")
 
         if (prefs.getBoolean("lan_log_enabled", false)) {
             setLanLoggingEnabled(true)
@@ -469,7 +469,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             ) {
                 update {
                     copy(
-                        message = "Enable SkylabFCCfree Home Point Test in Accessibility settings."
+                        message = "Enable FreeFCC Custom Home Point Test in Accessibility settings."
                     )
                 }
             }
@@ -1705,7 +1705,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
     fun ensureInstallPermission(): Boolean {
         val pm = app.packageManager
         if (!pm.canRequestPackageInstalls()) {
-            log("Install permission needed — opening Settings. Grant 'Install unknown apps' for SkylabFCCfree, then tap Download again.")
+            log("Install permission needed — opening Settings. Grant 'Install unknown apps' for FreeFCC Custom, then tap Download again.")
             val settingsIntent = android.content.Intent(
                 android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES
             ).apply {
@@ -1779,7 +1779,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 // per-app. The RC2 may hide this Settings page — if so, the
                 // user needs to install via SD card + FileManager instead.
                 if (!pm.canRequestPackageInstalls()) {
-                    log("Install blocked — SkylabFCCfree needs 'Install unknown apps' permission.")
+                    log("Install blocked — FreeFCC Custom needs 'Install unknown apps' permission.")
                     log("Opening Settings to grant it. If the Settings page doesn't appear,")
                     log("install the update via SD card + FileManager instead.")
                     val settingsIntent = android.content.Intent(

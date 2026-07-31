@@ -91,7 +91,7 @@ class FccKeepaliveService : Service() {
         @Synchronized
         fun start(context: Context, mode: AutoFccMode = AutoFccMode.HOME_POINT_TEXT): Boolean {
             check(mode != AutoFccMode.HOME_POINT_TEXT || isDjiFlyTextAccessEnabled(context)) {
-                "Enable SkylabFCCfree Home Point Test in Accessibility settings first"
+                "Enable FreeFCC Custom Home Point Test in Accessibility settings first"
             }
             val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val hadPersistentRequest = preferences.getBoolean(PREF_KEEPALIVE, false)

@@ -97,10 +97,10 @@ internal object AppForegroundNotification {
     fun createChannel(context: Context) {
         val channel = NotificationChannel(
             AppForegroundService.CHANNEL_ID,
-            "SkylabFCCfree status",
+            "FreeFCC Custom status",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Shows that SkylabFCCfree is running"
+            description = "Shows that FreeFCC Custom is running"
         }
         context.getSystemService(NotificationManager::class.java)
             .createNotificationChannel(channel)
@@ -170,7 +170,7 @@ internal object AppForegroundNotification {
             label = if (selectedMode == null) "✓ Off" else "Off"
         )
         return Notification.Builder(context, AppForegroundService.CHANNEL_ID)
-            .setContentTitle("SkylabFCCfree")
+            .setContentTitle("FreeFCC Custom")
             .setContentText(
                 AppNotificationActionPolicy.statusText(selectedMode, accessibilityEnabled)
             )

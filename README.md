@@ -51,7 +51,7 @@ A free and open-source Android app that unlocks FCC mode, sends experimental 4G 
 
 | Download | Link |
 |----------|------|
-| SkylabFCCfree App (APK) | [GitHub Releases](https://github.com/NobodySan97/FreeFCC-Custom/releases) |
+| FreeFCC Custom App (APK) | [GitHub Releases](https://github.com/NobodySan97/FreeFCC-Custom/releases) |
 | Helper Apps (zip) | [freefcc.duckdns.org/downloads/freefcc-helpers.zip](https://freefcc.duckdns.org/downloads/freefcc-helpers.zip) |
 
 Release changes are tracked in [CHANGELOG.md](CHANGELOG.md).
@@ -111,9 +111,9 @@ and verifies the result, retrying the write/read pair up to three times. It then
 sends the 14-frame × 2-round FCC core profile and re-arms instead of stopping,
 so a later Home Point after an aircraft battery replacement triggers
 another full apply while the controller remains on. Duplicate UI events are
-debounced for 30 seconds. Enable **SkylabFCCfree Home Point Test** once in
+debounced for 30 seconds. Enable **FreeFCC Custom Home Point Test** once in
 Android Accessibility settings. The first attempt opens the required settings;
-after the service is enabled and you return to SkylabFCCfree, the mode starts.
+after the service is enabled and you return to FreeFCC Custom, the mode starts.
 
 **Auto FCC — every 5 sec** is the explicit polling alternative. It sends the
 complete profile once, then every five seconds runs a single read-only `07:19`
@@ -138,7 +138,7 @@ The original flow was tested on Mini 5 Pro with RC2 firmware v10.00.0700. No PC 
 
 **Format the microSD card in the RC2 first.** Insert the card into the controller, then go to the RC2's storage settings and format it. If you skip this, the RC2 won't let you browse files on the card.
 
-Download the helper apps zip and the SkylabFCCfree APK. Extract the zip, drop the APK into the extracted folder, then move the whole thing onto the microSD card. Stick the card into your RC2.
+Download the helper apps zip and the FreeFCC Custom APK. Extract the zip, drop the APK into the extracted folder, then move the whole thing onto the microSD card. Stick the card into your RC2.
 
 > The RC2 won't install apps from internal storage, only from the SD card. The card must be formatted in the controller itself before it can be browsed.
 
@@ -158,21 +158,21 @@ Hold the power button to shut down, then power back on. This registers the packa
 Back into your folder on the SD card. Install `03_ATVLauncher`, then tap
 **OPEN**.
 
-### 5. Install SkylabFCCfree
+### 5. Install FreeFCC Custom
 
-In ATV Launcher, open **Files**, find your folder, tap the SkylabFCCfree APK,
+In ATV Launcher, open **Files**, find your folder, tap the FreeFCC Custom APK,
 and install it. Tap **OPEN** once after installation so Android enables its
 boot receiver and the app can create its persistent status notification.
 
-`04_Edge Gestures` is not needed. On later controller boots SkylabFCCfree starts
+`04_Edge Gestures` is not needed. On later controller boots FreeFCC Custom starts
 its background service automatically. Tap its persistent notification to open
 the app and use **Open DJI Fly** to enter DJI Fly.
 
 ## How to Use
 
 On the first **Auto FCC — Home Point** run, the button opens Android
-Accessibility settings automatically. Enable **SkylabFCCfree Home Point Test** and
-return to SkylabFCCfree; the pending text-based mode starts automatically. The
+Accessibility settings automatically. Enable **FreeFCC Custom Home Point Test** and
+return to FreeFCC Custom; the pending text-based mode starts automatically. The
 service reads only accessibility events and visible text from `dji.go.v5`, and
 loads Home Point phrases from every locale present in the installed DJI Fly.
 Reading the screen does not open DUML; an armed Home Point match triggers one
@@ -206,7 +206,7 @@ full FCC apply.
    displayed as-is instead of `Not detected`.
 7. The **Log** tab can start the LAN diagnostic API; since 1.5.51 it stays **off until you switch it on**. It uses unencrypted HTTP and a fixed shared password. A UDP beacon broadcasts only the controller IP and port across the current Wi-Fi subnet; it does not include the password, logs, or command payloads. Disable the bridge on untrusted Wi-Fi. See [LAN Control API](docs/LAN_CONTROL_API.md) and the evidence-based [RC2 port and stream map](docs/RC2_PORT_AND_STREAM_MAP.md).
 
-SkylabFCCfree also keeps a low-priority foreground notification visible while
+FreeFCC Custom also keeps a low-priority foreground notification visible while
 the controller is running. The service starts after controller boot and after
 an in-place APK update. If an Auto FCC switch was selected, that mode is
 restored without opening DJI Fly; if both switches were off, no FCC command is
@@ -244,7 +244,7 @@ Open the DJI Fly app and go to the Transmission tab. Look at the horizontal bar 
 
 ## Support
 
-If SkylabFCCfree helped you out, please consider starring the repo or supporting development on Boosty.
+If FreeFCC Custom helped you out, please consider starring the repo or supporting development on Boosty.
 
 <div align="center">
 
@@ -286,7 +286,7 @@ RC Pro 2), so they were removed together with the unrelated
 `max_height=500` write. Other opaque requests remain pending separate
 hardware A/B tests. Country readback confirms
 the controller country state, not physical RF power, so verify the Transmission
-graph in DJI Fly. Pressing Back moves SkylabFCCfree to the background instead
+graph in DJI Fly. Pressing Back moves FreeFCC Custom to the background instead
 of destroying its Activity; Android process death still requires a new
 **Auto FCC** Connect. See the [DUML command audit](docs/DUML_COMMAND_AUDIT.md)
 for the evidence level of every frame and the

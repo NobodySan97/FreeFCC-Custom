@@ -274,7 +274,7 @@ private fun FccPage(state: AppState, viewModel: FccViewModel) {
         } else {
             Toast.makeText(
                 context,
-                "Enable SkylabFCCfree Home Point Test to use text-based Auto FCC",
+                "Enable FreeFCC Custom Home Point Test to use text-based Auto FCC",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -285,7 +285,7 @@ private fun FccPage(state: AppState, viewModel: FccViewModel) {
         } else {
             Toast.makeText(
                 context,
-                "Enable SkylabFCCfree Home Point Test, then return to SkylabFCCfree",
+                "Enable FreeFCC Custom Home Point Test, then return to FreeFCC Custom",
                 Toast.LENGTH_LONG
             ).show()
             try {
@@ -320,7 +320,7 @@ private fun FccPage(state: AppState, viewModel: FccViewModel) {
         } else {
             Toast.makeText(
                 context,
-                "Grant overlay permission for SkylabFCCfree",
+                "Grant overlay permission for FreeFCC Custom",
                 Toast.LENGTH_LONG
             ).show()
             try {
