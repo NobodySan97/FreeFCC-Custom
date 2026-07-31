@@ -2,9 +2,12 @@ package com.freefcc.app
 
 import android.net.LocalSocket
 import android.net.LocalSocketAddress
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -29,6 +32,90 @@ data class DumlFrame(
     val cmdId: Int,
     val dst: Int,
     val payload: ByteArray
+)
+
+internal data class AircraftModelIdentity(
+    val modelCode: String = "",
+    val modelName: String = ""
+)
+
+data class DumlRawExchange(
+    val matchedFrame: ByteArray?,
+    val validatedPayload: ByteArray?,
+    val lastCompleteUnmatchedFrame: ByteArray?,
+    val partialTail: ByteArray?,
+    val writeCompleted: Boolean,
+    val failureStage: String? = null
+) {
+    /**
+     * Backward-compatible primary evidence for existing callers. A complete
+     * unmatched frame is preferred over a later partial tail so diagnostics do
+     * not discard the last structurally valid frame.
+     */
+    val responseFrame: ByteArray?
+        get() = matchedFrame ?: lastCompleteUnmatchedFrame ?: partialTail
+}
+
+data class WireExchangeResult(
+    val writeCompleted: Boolean,
+    val responseBytes: ByteArray,
+    val failureStage: String? = null,
+    val termination: WireReadTermination? = null
+)
+
+enum class WireReadTermination {
+    DEADLINE,
+    EOF,
+    MAX_BYTES,
+    IO_ERROR
+}
+
+internal data class WireReadResult(
+    val bytes: ByteArray,
+    val termination: WireReadTermination
+)
+
+internal fun readBoundedWire(
+    input: InputStream,
+    maxBytes: Int,
+    deadlineNanos: Long,
+    setReadTimeout: (Int) -> Unit,
+    nanoTime: () -> Long = System::nanoTime
+): WireReadResult {
+    val output = ByteArrayOutputStream(minOf(maxBytes, 16_384))
+    val buffer = ByteArray(minOf(4_096, maxBytes))
+    while (output.size() < maxBytes) {
+        val remainingNanos = deadlineNanos - nanoTime()
+        if (remainingNanos <= 0) {
+            return WireReadResult(output.toByteArray(), WireReadTermination.DEADLINE)
+        }
+        setReadTimeout(
+            ((remainingNanos + 999_999L) / 1_000_000L)
+                .coerceAtMost(250L)
+                .coerceAtLeast(1L)
+                .toInt()
+        )
+        val count = try {
+            input.read(buffer, 0, minOf(buffer.size, maxBytes - output.size()))
+        } catch (_: SocketTimeoutException) {
+            continue
+        } catch (_: IOException) {
+            return WireReadResult(output.toByteArray(), WireReadTermination.IO_ERROR)
+        }
+        if (count <= 0) {
+            return WireReadResult(output.toByteArray(), WireReadTermination.EOF)
+        }
+        output.write(buffer, 0, count)
+    }
+    return WireReadResult(output.toByteArray(), WireReadTermination.MAX_BYTES)
+}
+
+private data class DumlStreamResult(
+    val completeFrames: List<ByteArray>,
+    val matchedFrame: ByteArray?,
+    val matchedPayload: ByteArray?,
+    val lastCompleteUnmatchedFrame: ByteArray?,
+    val partialTail: ByteArray?
 )
 
 /**
@@ -231,18 +318,18 @@ class DumlTransport {
     }
 
     /**
-     * Sends a list of frames over multiple rounds, discarding ACKs.
+     * Sends a list of frames over multiple rounds, draining ACKs best-effort.
      * Automatically finds the correct DUML port for the controller type.
      *
-     * Uses pipelined short-lived TCP connections (one frame per connection,
+     * Uses sequential short-lived TCP connections (one frame per connection,
      * matching the DJI proxy contract) with aggressive ACK handling: the ACK
      * read uses the shortest timeout that still reliably drains the proxy
      * response, and the post-ACK settle delay is minimal. This gives a fast
-     * apply (e.g. a 21-frame, 2-round FCC unlock completes in ~6s on a healthy
+     * apply (e.g. a multi-frame, 2-round FCC unlock completes in ~6s on a healthy
      * RC link, vs ~12s with the old generous timeouts).
      *
      * @param onProgress Called with a 0..1 float as frames are sent
-     * @return true if at least one frame was written successfully
+     * @return true only if every requested frame write completed successfully
      */
     fun sendFrames(
         frames: List<ByteArray>,
@@ -253,28 +340,32 @@ class DumlTransport {
         port: Int = PORT,
         onProgress: (Float) -> Unit = {}
     ): Boolean {
+        if (frames.isEmpty() || rounds <= 0) return false
+
         // If port is the default (40009), scan for the actual working port.
         // If port is explicitly set (e.g. 40007 for LED), use it directly.
         val effectivePort = if (port == PORT) findWorkingPort() else port
 
-        var anySuccess = false
+        var allSuccess = true
         val totalSends = frames.size * rounds
         var sent = 0
 
         for (round in 0 until rounds) {
-            for (frame in frames) {
-                if (sendOneFrame(frame, readWindowMs, effectivePort)) {
-                    anySuccess = true
+            for ((frameIndex, frame) in frames.withIndex()) {
+                if (!sendOneFrame(frame, readWindowMs, effectivePort)) {
+                    allSuccess = false
                 }
                 sent++
                 onProgress(sent.toFloat() / totalSends)
-                if (interFrameDelayMs > 0) Thread.sleep(interFrameDelayMs)
+                if (interFrameDelayMs > 0 && frameIndex < frames.lastIndex) {
+                    Thread.sleep(interFrameDelayMs)
+                }
             }
             if (interRoundDelayMs > 0 && round < rounds - 1) {
                 Thread.sleep(interRoundDelayMs)
             }
         }
-        return anySuccess
+        return allSuccess
     }
 
     /**
@@ -287,38 +378,170 @@ class DumlTransport {
      * @return response payload, or null if no response was received
      */
     fun sendAndReceive(frame: ByteArray, readWindowMs: Int = 500, port: Int = PORT): ByteArray? {
+        return sendAndReceiveRaw(frame, readWindowMs, port).validatedPayload
+    }
+
+    /** Sends one already-built frame to the exact requested port. */
+    fun sendFrame(
+        frame: ByteArray,
+        readWindowMs: Int = 80,
+        port: Int = PORT,
+        onWriteFlushed: () -> Unit = {}
+    ): Boolean = sendOneFrame(frame, readWindowMs, port, onWriteFlushed)
+
+    /**
+     * Sends one request and retains both the raw response frame and the payload
+     * that passed strict DUML response validation. The LAN diagnostic API uses
+     * the raw frame to explain timeouts or routing/sequence mismatches without
+     * silently discarding the evidence.
+     */
+    fun sendAndReceiveRaw(
+        frame: ByteArray,
+        readWindowMs: Int = 500,
+        port: Int = PORT,
+        autoDetectPort: Boolean = true,
+        wireFrame: ByteArray = frame,
+        onWriteFlushed: () -> Unit = {}
+    ): DumlRawExchange {
         var socket: Socket? = null
+        var failureStage = "connect"
+        var writeCompleted = false
         try {
-            val effectivePort = if (port == PORT) findWorkingPort() else port
+            val effectivePort = if (autoDetectPort && port == PORT) findWorkingPort() else port
             socket = Socket()
             socket.connect(InetSocketAddress(HOST, effectivePort), CONNECT_TIMEOUT_MS)
             socket.tcpNoDelay = true
-            socket.soTimeout = readWindowMs
 
-            socket.getOutputStream().apply { write(frame); flush() }
+            failureStage = "write"
+            socket.getOutputStream().apply { write(wireFrame); flush() }
+            writeCompleted = true
+            failureStage = "read"
+            onWriteFlushed()
 
-            val input = socket.getInputStream()
-            val header = readBytes(input, 11) ?: return null
-
-            // Guard against a short read returning fewer than 3 bytes —
-            // indexing header[0..2] for magic/length would otherwise throw.
-            if (header.size < 3) return null
-
-            // Verify magic byte before trusting the encoded length enough to read more
-            if (header[0] != 0x55.toByte()) return null
-
-            // Extract total length from bytes 1-2 (11-bit LE) to know how much more to read
-            val totalLength = (header[1].toInt() and 0xFF) or ((header[2].toInt() and 0x03) shl 8)
-            if (totalLength < 13 || totalLength > 1023) return null
-
-            // Read the rest (payload + 2 CRC bytes)
-            val remaining = readBytes(input, totalLength - 11) ?: return null
-            val response = header + remaining
-
-            return DumlBuilder.validateResponse(frame, response)
+            // The controller proxy may emit unsolicited telemetry before the
+            // response to our request. Consume complete unrelated frames until
+            // the strict validator finds the matching route/sequence/cmd or the
+            // caller's overall read window expires.
+            val result = readDumlStream(
+                input = socket.getInputStream(),
+                socket = socket,
+                deadlineNanos = System.nanoTime() +
+                    readWindowMs.coerceAtLeast(1) * 1_000_000L,
+                maxFrames = Int.MAX_VALUE,
+                matcher = { response -> DumlBuilder.validateResponse(frame, response) }
+            )
+            return DumlRawExchange(
+                matchedFrame = result.matchedFrame,
+                validatedPayload = result.matchedPayload,
+                lastCompleteUnmatchedFrame = result.lastCompleteUnmatchedFrame,
+                partialTail = result.partialTail,
+                writeCompleted = true
+            )
 
         } catch (_: IOException) {
-            return null
+            return DumlRawExchange(
+                matchedFrame = null,
+                validatedPayload = null,
+                lastCompleteUnmatchedFrame = null,
+                partialTail = null,
+                writeCompleted = writeCompleted,
+                failureStage = failureStage
+            )
+        } finally {
+            try { socket?.close() } catch (_: IOException) {}
+        }
+    }
+
+    /**
+     * Passively collects structurally valid DUML frames delivered to a fresh
+     * connection by the selected localhost proxy. This does not require root,
+     * but it only sees traffic the DJI broker publishes to this socket; it is
+     * not a packet sniffer for other processes' private TCP streams.
+     */
+    fun captureFrames(
+        durationMs: Int = 3_000,
+        maxFrames: Int = 64,
+        port: Int = PORT
+    ): List<ByteArray> {
+        require(durationMs in 100..10_000) { "invalid_duration_ms" }
+        require(maxFrames in 1..128) { "invalid_max_frames" }
+
+        val frames = ArrayList<ByteArray>(minOf(maxFrames, 64))
+        var socket: Socket? = null
+        try {
+            socket = Socket()
+            socket.connect(InetSocketAddress(HOST, port), CONNECT_TIMEOUT_MS)
+            socket.tcpNoDelay = true
+            val deadlineNanos = System.nanoTime() + durationMs * 1_000_000L
+            frames.addAll(
+                readDumlStream(
+                    input = socket.getInputStream(),
+                    socket = socket,
+                    deadlineNanos = deadlineNanos,
+                    maxFrames = maxFrames,
+                    matcher = null
+                ).completeFrames
+            )
+        } catch (_: IOException) {
+            // Return any complete frames already captured before disconnect.
+        } finally {
+            try { socket?.close() } catch (_: IOException) {}
+        }
+        return frames
+    }
+
+    /**
+     * Sends exact caller-provided bytes and returns the bounded raw byte stream
+     * received on the same localhost socket. No DUML/wrapper assumptions are
+     * made, allowing future protocol experiments without another APK rebuild.
+     */
+    fun exchangeWire(
+        wire: ByteArray,
+        durationMs: Int = 3_000,
+        maxBytes: Int = 16_384,
+        port: Int = PORT,
+        onWriteFlushed: () -> Unit = {}
+    ): WireExchangeResult {
+        require(wire.isNotEmpty() && wire.size <= 4_096) { "invalid_wire_size" }
+        require(durationMs in 100..10_000) { "invalid_duration_ms" }
+        require(maxBytes in 1..65_536) { "invalid_max_bytes" }
+
+        var socket: Socket? = null
+        var failureStage = "connect"
+        var writeCompleted = false
+        try {
+            socket = Socket()
+            socket.connect(InetSocketAddress(HOST, port), CONNECT_TIMEOUT_MS)
+            socket.tcpNoDelay = true
+            failureStage = "write"
+            socket.getOutputStream().apply {
+                write(wire)
+                flush()
+            }
+            writeCompleted = true
+            failureStage = "read"
+            onWriteFlushed()
+
+            val deadlineNanos = System.nanoTime() + durationMs * 1_000_000L
+            val readResult = readBoundedWire(
+                input = socket.getInputStream(),
+                maxBytes = maxBytes,
+                deadlineNanos = deadlineNanos,
+                setReadTimeout = { socket.soTimeout = it }
+            )
+            return WireExchangeResult(
+                writeCompleted = true,
+                responseBytes = readResult.bytes,
+                failureStage = if (readResult.termination == WireReadTermination.IO_ERROR) "read" else null,
+                termination = readResult.termination
+            )
+        } catch (_: IOException) {
+            return WireExchangeResult(
+                writeCompleted = writeCompleted,
+                responseBytes = ByteArray(0),
+                failureStage = failureStage,
+                termination = WireReadTermination.IO_ERROR
+            )
         } finally {
             try { socket?.close() } catch (_: IOException) {}
         }
@@ -329,42 +552,38 @@ class DumlTransport {
      *
      * Strategy (most reliable first):
      * 1. Passive listen on the DUML proxy for telemetry matching the full
-     *    1581XXXXXXXXXXX aircraft serial (16-20 chars). This is the real
+     *    1581XXXXXXXXXXX aircraft serial (16-22 chars). This is the real
      *    factory serial printed on the airframe.
-     * 2. If no full serial appears, also accept the short model-code pattern
-     *    W[AM]xxx (5-6 chars: WA341, WM630, etc.). The short form is what the
-     *    4G activation frames actually carry (see captured profiles), but the
-     *    full form is preferred for display and any 4G payload that wants it.
+     * 2. If no full serial appears, also accept the model-code pattern
+     *    W[AM]xxx plus an optional variant suffix (WA341, WM265T, etc.).
+     *    This form appears in 4G activation captures, but the full serial is
+     *    preferred for display and any 4G payload that wants it.
      *
      * The probe is passive: no DUML command is sent. The controller's proxy
      * emits unsolicited status broadcasts containing the drone serial in
      * ASCII roughly once per second when the aircraft is linked and powered.
      *
-     * The result is validated for 4G use: a 6-char W[AM]xxx model code is
-     * accepted only as a fallback, since the 4G payload format expects at
-     * least the model code. Callers that need the full 1581... serial should
-     * check the length of the returned string.
+     * The result is validated for 4G use: a WA/WM model code is accepted only
+     * as a fallback, since the 4G payload format expects at least the model
+     * code. Callers that need the full 1581... serial should check the length
+     * of the returned string.
      *
      * @param timeoutMs how long to listen for broadcasts (default 1500ms)
+     * @param port exact controller port when already known; null keeps discovery
      * @return the serial string (empty if nothing matched within the window)
      */
-    fun probeSerial(timeoutMs: Int = 1500): String {
-        // Try the full aircraft serial pattern first (1581 + 12-18 uppercase alphanumeric chars).
-        val result = listenForSerial(Regex("1581[0-9A-Z]{12,18}"), timeoutMs)
-        if (result.isNotEmpty()) return result
-
-        // Fallback: try the model code pattern (W[AM]xxx — e.g. WA341, WM630).
-        return listenForSerial(Regex("W[AM][0-9]{3}"), timeoutMs)
+    fun probeSerial(timeoutMs: Int = 1500, port: Int? = null): String {
+        return listenForSerial(timeoutMs, port)
     }
 
     /**
      * Opens a TCP socket to the DUML proxy and listens for data
      * matching the given regex pattern.
      */
-    private fun listenForSerial(pattern: Regex, timeoutMs: Int): String {
+    private fun listenForSerial(timeoutMs: Int, requestedPort: Int?): String {
         var socket: Socket? = null
         try {
-            val port = findWorkingPort()
+            val port = requestedPort ?: findWorkingPort()
             socket = Socket()
             socket.connect(InetSocketAddress(HOST, port), CONNECT_TIMEOUT_MS)
             socket.soTimeout = 200
@@ -382,7 +601,10 @@ class DumlTransport {
                         // telemetry is binary and UTF-8 decoding corrupts
                         // byte sequences that look like multi-byte chars.
                         buffer.append(String(buf, 0, n, Charsets.ISO_8859_1))
-                        pattern.find(buffer.toString())?.let { return it.value }
+                        extractAircraftIdentity(buffer)?.let { return it }
+                        if (buffer.length > SERIAL_SCAN_BUFFER_LIMIT) {
+                            buffer.delete(0, buffer.length - SERIAL_SCAN_OVERLAP)
+                        }
                     }
                 } catch (_: IOException) { /* read timeout — keep trying */ }
             }
@@ -419,16 +641,14 @@ class DumlTransport {
     }
 
     /**
-     * Fast pre-check for the 4G dongle presence without sending 128 frames.
+     * Read-only pre-check for the local 4G command endpoint.
      *
-     * Tries to open the abstract-namespace Unix domain socket the 4G module
-     * listens on. If connect() throws immediately (ENOENT/ENOCONN), the dongle
-     * is not attached and 4G activation cannot succeed. This avoids the
-     * 128-frame × 10ms failure loop and gives the user a clear, instant message.
-     *
-     * @return true if the 4G socket is connectable, false if no 4G dongle
+     * A successful connection only proves that the controller's DUSS router
+     * currently exposes `/duss/mb/0x205`. It does not distinguish an external
+     * Cellular Dongle from an integrated eSIM module and does not prove that
+     * the 128-frame activation profile is compatible with the linked aircraft.
      */
-    fun is4gDonglePresent(): Boolean {
+    fun is4gEndpointReachable(): Boolean {
         var socket: LocalSocket? = null
         return try {
             socket = LocalSocket(LocalSocket.SOCKET_DGRAM)
@@ -445,9 +665,16 @@ class DumlTransport {
 
     /**
      * Sends a single frame via TCP. Used for FCC, CE, LED, device info.
-     * Waits for the ACK so the controller has time to process the frame.
+     * Drains a possible ACK so the proxy has time to process the frame. Some
+     * profiles intentionally request no ACK, so success means that connect,
+     * write and flush completed; it does not prove the aircraft changed state.
      */
-    private fun sendOneFrame(frame: ByteArray, readWindowMs: Int, port: Int = PORT): Boolean {
+    private fun sendOneFrame(
+        frame: ByteArray,
+        readWindowMs: Int,
+        port: Int = PORT,
+        onWriteFlushed: () -> Unit = {}
+    ): Boolean {
         var socket: Socket? = null
         try {
             socket = Socket()
@@ -459,26 +686,11 @@ class DumlTransport {
             socket.soTimeout = maxOf(readWindowMs.coerceAtMost(120), 20)
 
             socket.getOutputStream().apply { write(frame); flush() }
+            onWriteFlushed()
 
-            // Wait for the ACK so the controller has time to process, then close.
+            // Best-effort ACK drain. A timeout is not a write failure because
+            // NO_ACK_NEEDED profiles legitimately return no response.
             try { socket.getInputStream().read(ackBuffer) } catch (_: IOException) {}
-            return true
-        } catch (_: IOException) { return false }
-        finally { try { socket?.close() } catch (_: IOException) {} }
-    }
-
-    /**
-     * Sends a single frame via Unix domain socket (abstract namespace).
-     * Used for 4G activation. Fire-and-forget: write, flush, close.
-     * No ACK read — the 4G module doesn't respond on this socket.
-     */
-    private fun sendOneFrameUnix(frame: ByteArray): Boolean {
-        var socket: LocalSocket? = null
-        try {
-            socket = LocalSocket(LocalSocket.SOCKET_DGRAM)
-            socket.connect(LocalSocketAddress(UNIX_SOCKET_4G, LocalSocketAddress.Namespace.ABSTRACT))
-
-            socket.getOutputStream().apply { write(frame); flush() }
             return true
         } catch (_: IOException) { return false }
         finally { try { socket?.close() } catch (_: IOException) {} }
@@ -492,8 +704,8 @@ class DumlTransport {
      * reuses it for every frame, matching the reference app's persistent
      * relay-session architecture. This avoids 127 redundant socket connect/
      * close syscalls (one per frame) and is the 1:1 match with the native
-     * relay send path. If the socket cannot be opened (no 4G dongle), returns
-     * false immediately — callers should pre-check with [is4gDonglePresent]
+     * relay send path. If the socket cannot be opened, returns false
+     * immediately — callers should pre-check with [is4gEndpointReachable]
      * for a better user message.
      *
      * Attempts every frame regardless of per-frame write failures, but only
@@ -527,7 +739,7 @@ class DumlTransport {
                 if (interFrameDelayMs > 0) Thread.sleep(interFrameDelayMs)
             }
         } catch (_: IOException) {
-            // Socket could not be opened (no 4G dongle) — every frame failed.
+            // Socket could not be opened — every frame failed.
             onProgress(1f)
             return false
         } finally {
@@ -536,15 +748,127 @@ class DumlTransport {
         return allSuccess
     }
 
-    private fun readBytes(input: java.io.InputStream, count: Int): ByteArray? {
-        val out = ByteArray(count)
-        var read = 0
-        while (read < count) {
-            val n = try { input.read(out, read, count - read) } catch (_: IOException) { return null }
-            if (n <= 0) return if (read > 0) out.copyOf(read) else null
-            read += n
+    /**
+     * Incrementally parses structurally valid DUML frames until a match, EOF,
+     * frame limit, or the shared deadline. Short socket timeouts only wake the
+     * loop to re-check that deadline; they never terminate parsing by themselves.
+     */
+    private fun readDumlStream(
+        input: java.io.InputStream,
+        socket: Socket,
+        deadlineNanos: Long,
+        maxFrames: Int,
+        matcher: ((ByteArray) -> ByteArray?)?
+    ): DumlStreamResult {
+        val completeFrames = ArrayList<ByteArray>(minOf(maxFrames, 64))
+        var pending = ByteArray(0)
+        var partialPrefix = ByteArray(0)
+        var lastCompleteUnmatchedFrame: ByteArray? = null
+
+        fun appendBounded(existing: ByteArray, bytes: ByteArray, length: Int = bytes.size): ByteArray {
+            if (length <= 0) return existing
+            val combined = ByteArray(existing.size + length)
+            existing.copyInto(combined)
+            bytes.copyInto(combined, existing.size, 0, length)
+            return if (combined.size <= PARTIAL_TAIL_LIMIT) {
+                combined
+            } else {
+                combined.copyOfRange(combined.size - PARTIAL_TAIL_LIMIT, combined.size)
+            }
         }
-        return out
+
+        fun partialTail(): ByteArray? {
+            val combined = appendBounded(partialPrefix, pending)
+            return combined.takeIf { it.isNotEmpty() }
+        }
+
+        fun result(
+            matchedFrame: ByteArray? = null,
+            matchedPayload: ByteArray? = null
+        ): DumlStreamResult = DumlStreamResult(
+            completeFrames = completeFrames,
+            matchedFrame = matchedFrame,
+            matchedPayload = matchedPayload,
+            lastCompleteUnmatchedFrame = lastCompleteUnmatchedFrame,
+            partialTail = if (matchedFrame == null) partialTail() else null
+        )
+
+        fun consumePending(): DumlStreamResult? {
+            while (pending.isNotEmpty()) {
+                val magicIndex = pending.indexOfFirst { it == 0x55.toByte() }
+                if (magicIndex < 0) {
+                    partialPrefix = appendBounded(partialPrefix, pending)
+                    pending = ByteArray(0)
+                    return null
+                }
+                if (magicIndex > 0) {
+                    partialPrefix = appendBounded(partialPrefix, pending, magicIndex)
+                    pending = pending.copyOfRange(magicIndex, pending.size)
+                }
+                if (pending.size < 4) return null
+
+                val totalLength = (pending[1].toInt() and 0xFF) or
+                    ((pending[2].toInt() and 0x03) shl 8)
+                val headerValid = totalLength in 13..1023 &&
+                    DumlBuilder.crc8(pending, 0, 3) == (pending[3].toInt() and 0xFF)
+                if (!headerValid) {
+                    // Shift by one byte only. The remaining candidate may already
+                    // contain the magic byte of the next real frame.
+                    partialPrefix = appendBounded(partialPrefix, pending, 1)
+                    pending = pending.copyOfRange(1, pending.size)
+                    continue
+                }
+                if (pending.size < totalLength) return null
+
+                val candidate = pending.copyOfRange(0, totalLength)
+                val expectedCrc = DumlBuilder.crc16(candidate, 0, totalLength - 2)
+                val actualCrc = (candidate[totalLength - 2].toInt() and 0xFF) or
+                    ((candidate[totalLength - 1].toInt() and 0xFF) shl 8)
+                if (expectedCrc != actualCrc) {
+                    partialPrefix = appendBounded(partialPrefix, pending, 1)
+                    pending = pending.copyOfRange(1, pending.size)
+                    continue
+                }
+
+                pending = pending.copyOfRange(totalLength, pending.size)
+                partialPrefix = ByteArray(0)
+                if (matcher == null) {
+                    completeFrames.add(candidate)
+                    if (completeFrames.size >= maxFrames) return result()
+                } else {
+                    val payload = matcher(candidate)
+                    if (payload != null) return result(candidate, payload)
+                    lastCompleteUnmatchedFrame = candidate
+                }
+            }
+            return null
+        }
+
+        val readBuffer = ByteArray(STREAM_READ_BUFFER_SIZE)
+        while (true) {
+            consumePending()?.let { return it }
+            val remainingNanos = deadlineNanos - System.nanoTime()
+            if (remainingNanos <= 0) return result()
+            socket.soTimeout = ((remainingNanos + 999_999L) / 1_000_000L)
+                .coerceAtMost(STREAM_READ_TIMEOUT_MS.toLong())
+                .coerceAtLeast(1L)
+                .toInt()
+            val count = try {
+                input.read(readBuffer)
+            } catch (_: SocketTimeoutException) {
+                continue
+            } catch (_: IOException) {
+                return result()
+            }
+            // EOF (or a non-progressing stream) is terminal, preventing the
+            // passive capture loop from spinning until the deadline.
+            if (count <= 0) return result()
+
+            val combined = ByteArray(pending.size + count)
+            pending.copyInto(combined)
+            readBuffer.copyInto(combined, pending.size, 0, count)
+            pending = combined
+        }
     }
 
     companion object {
@@ -560,6 +884,107 @@ class DumlTransport {
 
         /** TCP connect timeout for all socket opens to the DUML proxy. */
         private const val CONNECT_TIMEOUT_MS = 2000
+        private const val STREAM_READ_TIMEOUT_MS = 250
+        private const val STREAM_READ_BUFFER_SIZE = 4096
+        private const val PARTIAL_TAIL_LIMIT = 4096
+        private const val SERIAL_SCAN_BUFFER_LIMIT = 65_536
+        private const val SERIAL_SCAN_OVERLAP = 4_096
+        private val FULL_SERIAL_REGEX = Regex("(?<![0-9A-Z])1581[0-9A-Z]{12,18}(?![0-9A-Z])")
+        private val RC2_SERIAL_SUFFIX_REGEX = Regex("(?<![0-9A-Z])FA[0-9A-Z]{14}(?![0-9A-Z])")
+        private val MODEL_CODE_REGEX =
+            Regex("(?<![0-9A-Z])W[AM][0-9]{3}[A-Z]?(?![0-9A-Z])")
+        private val AIRCRAFT_PRODUCT_CODE_REGEX = Regex("^[A-Z][A-Z0-9]{1,15}$")
+        private val CONTROLLER_PRODUCT_CODE_REGEX = Regex("^(RC|RM|GL)[A-Z0-9]*$")
+        internal val AIRCRAFT_IDENTITY_PORTS = listOf(
+            PORT,
+            PORT_LED,
+            PORT_ALT_1,
+            PORT_ALT_2,
+            PORT_ALT_3,
+            PORT_ALT_4
+        )
+
+        /** Extracts the safest known identity forms from a binary telemetry window. */
+        internal fun extractAircraftIdentity(buffer: CharSequence): String? {
+            val text = buffer.toString()
+            return FULL_SERIAL_REGEX.find(text)?.value
+                ?: RC2_SERIAL_SUFFIX_REGEX.find(text)?.value
+                ?: MODEL_CODE_REGEX.find(text)?.value
+        }
+
+        /**
+         * Extracts the aircraft model from CRC-valid passive DUML frames.
+         *
+         * `00:82` carries the stable aircraft product code. `03:34` is the
+         * aircraft user string shown by DJI Fly, so callers must retain the
+         * model code as the primary identity instead of trusting the display
+         * name alone.
+         */
+        internal fun extractAircraftModelIdentity(
+            frames: Iterable<ByteArray>
+        ): AircraftModelIdentity? {
+            var modelCode = ""
+            var modelName = ""
+
+            frames.forEach { frame ->
+                if (frame.size < 13) return@forEach
+                val cmdSet = frame[9].toInt() and 0xFF
+                val cmdId = frame[10].toInt() and 0xFF
+                val payloadEnd = frame.size - 2
+
+                when {
+                    cmdSet == 0x00 && cmdId == 0x82 -> {
+                        val end = (11 until payloadEnd)
+                            .firstOrNull { frame[it].toInt() == 0 }
+                            ?: payloadEnd
+                        val payloadText = String(
+                            frame,
+                            11,
+                            end - 11,
+                            Charsets.US_ASCII
+                        ).trim().uppercase()
+                        if (
+                            AIRCRAFT_PRODUCT_CODE_REGEX.matches(payloadText) &&
+                            payloadText.any(Char::isDigit) &&
+                            !CONTROLLER_PRODUCT_CODE_REGEX.matches(payloadText)
+                        ) {
+                            modelCode = payloadText
+                        }
+                    }
+
+                    cmdSet == 0x03 && cmdId == 0x34 -> {
+                        val payloadStart = if (frame[11].toInt() == 0) 12 else 11
+                        if (payloadStart < payloadEnd) {
+                            val end = (payloadStart until payloadEnd)
+                                .firstOrNull { frame[it].toInt() == 0 }
+                                ?: payloadEnd
+                            val candidate = String(
+                                frame,
+                                payloadStart,
+                                end - payloadStart,
+                                Charsets.US_ASCII
+                            ).trim()
+                            if (
+                                candidate.length in 2..32 &&
+                                candidate.all { it.code in 0x20..0x7E }
+                            ) {
+                                modelName = candidate
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (modelName.isEmpty()) {
+                modelName = AircraftModelCatalog.nameForCode(modelCode)
+            }
+
+            return if (modelCode.isEmpty() && modelName.isEmpty()) {
+                null
+            } else {
+                AircraftModelIdentity(modelCode, modelName)
+            }
+        }
     }
 
     /** Reused read buffer for ACK reads — avoids a per-frame allocation. */

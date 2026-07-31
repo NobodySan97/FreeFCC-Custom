@@ -13,7 +13,7 @@ import java.security.MessageDigest
  * Checks for app updates by querying the GitHub Releases API.
  *
  * GitHub API endpoint:
- *   GET https://api.github.com/repos/doesthings/FreeFCC/releases/latest
+ *   GET https://api.github.com/repos/danusha2345/SkylabFCCfree/releases/latest
  *
  * Returns JSON with tag_name, name, body (changelog), and assets[] (download URLs).
  *
@@ -50,8 +50,16 @@ data class UpdateInfo(
 
 object UpdateChecker {
 
-    private const val REPO = "doesthings/FreeFCC"
-    private const val API_URL = "https://api.github.com/repos/$REPO/releases/latest"
+    internal fun normalizeReleaseBody(raw: String): String = raw
+        .replace("\\r\\n", "\n")
+        .replace("\\n", "\n")
+        .lineSequence()
+        .filterNot { line ->
+            line.startsWith("APK SHA-256:", ignoreCase = true) ||
+                line.startsWith("Signing certificate SHA-256:", ignoreCase = true)
+        }
+        .joinToString("\n")
+        .trim()
 
     /**
      * Fetches the latest release info from GitHub.
@@ -60,7 +68,7 @@ object UpdateChecker {
     fun fetchLatest(): UpdateInfo? {
         var conn: HttpURLConnection? = null
         return try {
-            conn = (URL(API_URL).openConnection() as HttpURLConnection).apply {
+            conn = (URL(ProjectLinks.LATEST_RELEASE_API).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 8000
                 readTimeout = 8000
@@ -75,7 +83,7 @@ object UpdateChecker {
 
             val tagName = json.optString("tag_name", "").removePrefix("v")
             val name = json.optString("name", "v$tagName")
-            val changelog = json.optString("body", "").trim()
+            val changelog = normalizeReleaseBody(json.optString("body", ""))
             val publishedAt = json.optString("published_at", "")
 
             // Find the first APK asset
@@ -90,7 +98,9 @@ object UpdateChecker {
                     apkUrl = asset.optString("browser_download_url", "")
                     apkSize = asset.optLong("size", 0)
                     // GitHub returns "sha256:<hex>" in the digest field.
-                    sha256 = asset.optString("digest", "").removePrefix("sha256:").ifEmpty { null }
+                    sha256 = asset.optString("digest", "")
+                        .removePrefix("sha256:")
+                        .takeIf { it.matches(Regex("[0-9a-fA-F]{64}")) }
                     break
                 }
             }
@@ -136,11 +146,11 @@ object UpdateChecker {
             val outputDir = File(context.cacheDir, "updates").apply { mkdirs() }
             val outputFile = File(outputDir, "freefcc_update.apk")
             val md = info.sha256?.let { MessageDigest.getInstance("SHA-256") }
+            var downloaded = 0L
 
             FileOutputStream(outputFile).use { fos ->
                 conn.inputStream.use { input ->
                     val buffer = ByteArray(8192)
-                    var downloaded = 0L
                     while (true) {
                         val read = input.read(buffer)
                         if (read <= 0) break
@@ -150,6 +160,11 @@ object UpdateChecker {
                         onProgress((downloaded.toFloat() / totalBytes).coerceIn(0f, 1f))
                     }
                 }
+            }
+
+            if (info.apkSize > 0 && downloaded != info.apkSize) {
+                outputFile.delete()
+                return null
             }
 
             // Verify the digest if GitHub provided one. A mismatch means the

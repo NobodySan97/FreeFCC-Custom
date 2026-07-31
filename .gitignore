@@ -11,6 +11,7 @@ app/build/
 gradle/.gradle/
 *.idsig
 .kotlin/
+.scratch/
 
 REMOTE_ID_INTERNAL.md
 
@@ -20,3 +21,6 @@ keystore.properties
 *.jks
 *.keystore
 
+# Local firmware/APK unpacking scratch, never committed
+extracted/
+freefcc-helpers.zip
