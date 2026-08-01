@@ -454,6 +454,13 @@ private fun FccPage(state: AppState, viewModel: FccViewModel) {
             }
         }
 
+        Spacer(Modifier.height(SectionSpacing))
+        SystemPermissionsCard(
+            context = context,
+            onRequestAccessibility = { requestHomePointAuto() },
+            onRequestOverlay = { requestFloatingButton(true) }
+        )
+
         // Aircraft GPS and LED controls share port 40007 and are serialized.
         Spacer(Modifier.height(SectionSpacing))
         GlowCard {
@@ -468,6 +475,56 @@ private fun FccPage(state: AppState, viewModel: FccViewModel) {
             }
         }
 
+    }
+}
+
+@Composable
+private fun SystemPermissionsCard(
+    context: android.content.Context,
+    onRequestAccessibility: () -> Unit,
+    onRequestOverlay: () -> Unit
+) {
+    val isAccessEnabled = remember(context) { FccKeepaliveService.isDjiFlyTextAccessEnabled(context) }
+    val isOverlayEnabled = remember(context) { Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context) }
+
+    GlowCard {
+        Text("Stato Sistema & Permessi", color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(modifier = Modifier.size(8.dp).background(if (isAccessEnabled) Green else Red, CircleShape))
+                Text("Accessibilità (Home Point)", color = TextWhite, fontSize = 12.sp)
+            }
+            Text(
+                if (isAccessEnabled) "ATTIVO 🟢" else "ATTIVA ↗",
+                color = if (isAccessEnabled) Green else Cyan,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable(!isAccessEnabled) { onRequestAccessibility() }
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(modifier = Modifier.size(8.dp).background(if (isOverlayEnabled) Green else Amber, CircleShape))
+                Text("Permesso Overlay Flottante", color = TextWhite, fontSize = 12.sp)
+            }
+            Text(
+                if (isOverlayEnabled) "CONCESSO 🟢" else "CONCEDI ↗",
+                color = if (isOverlayEnabled) Green else Amber,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable(!isOverlayEnabled) { onRequestOverlay() }
+            )
+        }
     }
 }
 

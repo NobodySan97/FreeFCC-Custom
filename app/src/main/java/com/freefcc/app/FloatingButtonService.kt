@@ -369,13 +369,20 @@ class FloatingButtonService : Service() {
                 if (result.observedCountry == "AU") {
                     radioStatusTextView?.text = "Stato Radio: 🟢 AU (FCC ⚡)"
                     radioStatusTextView?.setTextColor(Color.parseColor("#4CAF50"))
+                    floatingBgDrawable?.setStroke(dpToPx(2), Color.parseColor("#4CAF50"))
+                    floatingTextView?.setTextColor(Color.parseColor("#4CAF50"))
                 } else if (result.observedCountry != null) {
                     radioStatusTextView?.text = "Stato Radio: 🟠 ${result.observedCountry} (Standard)"
                     radioStatusTextView?.setTextColor(Color.parseColor("#FFFF9D4D"))
+                    floatingBgDrawable?.setStroke(dpToPx(2), Color.parseColor("#FFFF9D4D"))
+                    floatingTextView?.setTextColor(Color.parseColor("#FFFF9D4D"))
                 } else {
                     radioStatusTextView?.text = "Stato Radio: ⚪ Inattivo / Non rilevato"
                     radioStatusTextView?.setTextColor(Color.parseColor("#7E8E9F"))
+                    floatingBgDrawable?.setStroke(dpToPx(2), Color.parseColor("#7E8E9F"))
+                    floatingTextView?.setTextColor(Color.parseColor("#7E8E9F"))
                 }
+                floatingView?.invalidate()
             }
         }
     }
