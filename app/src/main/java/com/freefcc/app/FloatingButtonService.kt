@@ -61,7 +61,7 @@ class FloatingButtonService : Service() {
         }
 
         fun start(context: Context) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
+            if (!Settings.canDrawOverlays(context)) {
                 return
             }
             if (!isEnabled(context)) return
@@ -96,7 +96,7 @@ class FloatingButtonService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+        if (!Settings.canDrawOverlays(this)) {
             stopSelf()
             return
         }
@@ -105,14 +105,7 @@ class FloatingButtonService : Service() {
         updateStatusDisplay()
     }
 
-    private fun getOverlayType(): Int {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
-    }
+    private fun getOverlayType(): Int = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
 
     private fun createFloatingView() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager

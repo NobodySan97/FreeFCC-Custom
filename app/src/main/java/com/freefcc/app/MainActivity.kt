@@ -302,7 +302,7 @@ private fun FccPage(state: AppState, viewModel: FccViewModel) {
     val overlaySettingsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)) {
+        if (Settings.canDrawOverlays(context)) {
             viewModel.setFloatingButtonEnabled(true)
         } else {
             Toast.makeText(
@@ -533,7 +533,7 @@ private fun SystemPermissionsCard(
     onRequestOverlay: () -> Unit
 ) {
     val isAccessEnabled = remember(context) { FccKeepaliveService.isDjiFlyTextAccessEnabled(context) }
-    val isOverlayEnabled = remember(context) { Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context) }
+    val isOverlayEnabled = remember(context) { Settings.canDrawOverlays(context) }
 
     GlowCard {
         Text("Stato Sistema & Permessi", color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
