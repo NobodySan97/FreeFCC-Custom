@@ -1,72 +1,57 @@
-# Происхождение helper APK для DJI RC2
+# Helper APK Provenance for DJI RC2
 
-Дата проверки: 2026-07-24.
+Verification Date: 2026-07-24.
 
-Проверен локальный архив `freefcc-helpers.zip`:
+Checked local archive `freefcc-helpers.zip`:
 
-- размер содержимого APK: 16 589 690 bytes;
-- SHA-256 архива:
+- APK content size: 16,589,690 bytes;
+- Archive SHA-256:
   `f2f8d77ab384c9c0a0ebd9d6f00115b7dfbd3bbe0de56dca9967e83cf64b9fa2`.
 
-## Состав и подписи
+## Package Composition & Signatures
 
-| Файл | Package / version | SHA-256 APK | Signer certificate SHA-256 | Вывод |
+| File | Package / Version | APK SHA-256 | Signer Certificate SHA-256 | Conclusion |
 |---|---|---|---|---|
-| `01_PackageInstaller.apk` | `com.android.packageinstaller`, `11` (`30`) | `523361acbe62587fa61e00a92369e87daa0d812232b8942deba67771ccf2633a` | `a4aa1cdd2ea580cbbe67486b5f6f3cfea83f488889995afa70793daa516687da` | DJI-signed system package; побайтно совпадает с RC Pro 2 OTA build 139 и 576 |
-| `02_FileManager.apk` | `com.android.documentsui`, `0.20.12.23-7ab9a2e1` (`121`) | `b7a943cf1af7351da9135eeabfa3554f4ca5c9174ebcfb547e21bca030011b69` | `a4aa1cdd2ea580cbbe67486b5f6f3cfea83f488889995afa70793daa516687da` | DJI-signed DocumentsUI; точный исходный DJI build в локальном корпусе не найден |
-| `03_ATVLauncher.apk` | `ca.dstudio.atvlauncher.pro`, `0.1.21-pro` | `4bd6891e6762907857b9ad3d3182af4eac05bba1e33a128ababb72796e9e9d27` | `00dab5f09ba1aa2eff972d1c1f5ad14a9172ce09c51c588d10f63bb7fa9f9eb2` | Сторонний launcher, не подписан DJI |
-| `04_Edge Gestures.apk` | `com.ss.edgegestures`, `2.0.1` | `7c5c6ec02ba45f09a392b5249e0f1f668f285397dfd61657d566851075aa6864` | `3b61c2a82aff9f7652ffe0b04be3c8f248b5e1aa7063f1a3846f0cf5c778628a` | Стороннее приложение; текущему install flow не требуется |
+| `01_PackageInstaller.apk` | `com.android.packageinstaller`, `11` (`30`) | `523361acbe62587fa61e00a92369e87daa0d812232b8942deba67771ccf2633a` | `a4aa1cdd2ea580cbbe67486b5f6f3cfea83f488889995afa70793daa516687da` | DJI-signed system package; byte-for-byte matches RC Pro 2 OTA builds 139 and 576 |
+| `02_FileManager.apk` | `com.android.documentsui`, `0.20.12.23-7ab9a2e1` (`121`) | `b7a943cf1af7351da9135eeabfa3554f4ca5c9174ebcfb547e21bca030011b69` | `a4aa1cdd2ea580cbbe67486b5f6f3cfea83f488889995afa70793daa516687da` | DJI-signed DocumentsUI; exact source DJI build not found in local corpus |
+| `03_ATVLauncher.apk` | `ca.dstudio.atvlauncher.pro`, `0.1.21-pro` | `4bd6891e6762907857b9ad3d3182af4eac05bba1e33a128ababb72796e9e9d27` | `00dab5f09ba1aa2eff972d1c1f5ad14a9172ce09c51c588d10f63bb7fa9f9eb2` | Third-party launcher, not signed by DJI |
+| `04_Edge Gestures.apk` | `com.ss.edgegestures`, `2.0.1` | `7c5c6ec02ba45f09a392b5249e0f1f668f285397dfd61657d566851075aa6864` | `3b61c2a82aff9f7652ffe0b04be3c8f248b5e1aa7063f1a3846f0cf5c778628a` | Third-party app; not needed in current install flow |
 
-DJI certificate DN двух первых APK:
-`EMAILADDRESS=dji@dji.com, CN=DJI, OU=DJI, O=DJI, L=ShenZhen,
-ST=GuangDong, C=CN`.
+DJI certificate DN for the first two APKs:
+`EMAILADDRESS=dji@dji.com, CN=DJI, OU=DJI, O=DJI, L=ShenZhen, ST=GuangDong, C=CN`.
 
-Подпись доказывает происхождение от владельца приватного DJI signing key, но
-сама по себе не доказывает, из какой публичной прошивки был извлечён файл.
+The signature proves origin from the owner of the private DJI signing key, but does not in itself prove which public firmware build the file was extracted from.
 
-## Сопоставление с локальными OTA
+## Comparison with Local OTAs
 
-`01_PackageInstaller.apk` побайтно совпал с:
+`01_PackageInstaller.apk` byte-for-byte matched:
 
 - RC Pro 2 `V55.31.01.39/139`:
   `system/system/priv-app/PackageInstaller/PackageInstaller.apk`;
 - RC Pro 2 `V55.31.05.76/576`:
   `system/system/priv-app/PackageInstaller/PackageInstaller.apk`.
 
-Это сильное локальное доказательство, что первый helper взят из официального
-DJI system image, а не только переподписан похожим сертификатом.
+This provides strong local evidence that the first helper is taken from an official DJI system image rather than just re-signed with a matching certificate.
 
-`02_FileManager.apk` использует DJI package `com.android.documentsui` и
-содержит DJI provider `com.dji.providers.media.documents`. В имеющихся RC Pro 2
-OTA лежит более ранний `dpad_documentsui.apk`:
+`02_FileManager.apk` uses DJI package `com.android.documentsui` and contains DJI provider `com.dji.providers.media.documents`. Available RC Pro 2 OTAs contain an earlier `dpad_documentsui.apk`:
 
-| Поле | Helper | OTA build 139/576 |
+| Field | Helper | OTA build 139/576 |
 |---|---|---|
 | Version | `0.20.12.23-7ab9a2e1` (`121`) | `0.20.03.18-55be80c7` (`113`) |
 | SHA-256 | `b7a943cf...011b69` | `6b46b41d...14e21` |
-| Certificate | DJI `a4aa1cdd...687da` | тот же DJI certificate |
+| Certificate | DJI `a4aa1cdd...687da` | Same DJI certificate |
 
-Следовательно, FileManager действительно DJI-signed, но взят из другой или
-более новой DJI system build, отсутствующей в локальном корпусе. Поиск по
-точной версии, provider и hashes не дал публично индексируемого совпадения;
-это не позволяет назвать точную исходную модель/прошивку.
+Therefore, FileManager is indeed DJI-signed, but comes from another or newer DJI system build not present in the local corpus. Searching for the exact version, provider, and hashes yielded no publicly indexed match; this prevents identifying the exact source model/firmware.
 
-## Минимальная цепочка установки
+## Minimal Installation Chain
 
-Для текущего RC2 SD-card flow нужны:
+The current RC2 SD-card flow requires:
 
-1. `01_PackageInstaller` — устанавливается первым;
-2. `02_FileManager` — даёт нормальный выбор APK после перезапуска;
-3. `03_ATVLauncher` — открывает Files и затем SkylabFCCfree;
-4. SkylabFCCfree APK.
+1. `01_PackageInstaller` — installed first;
+2. `02_FileManager` — enables standard APK selection after restart;
+3. `03_ATVLauncher` — opens Files and then FreeFCC Custom;
+4. FreeFCC Custom APK.
 
-`04_Edge Gestures` не нужен: после первого ручного запуска SkylabFCCfree
-стартует своим boot receiver, а открыть интерфейс можно из постоянного
-уведомления. Объединить DJI system packages и сторонний launcher в один обычный
-APK без системной подписи/привилегий нельзя: Android не позволяет одному APK
-установить или заменить другие packages и получить их platform permissions.
+`04_Edge Gestures` is not required: after its initial manual launch, FreeFCC Custom starts via its boot receiver, and its interface can be opened from the persistent notification. Combining DJI system packages and a third-party launcher into a single regular APK without system signature/privileges is impossible: Android does not allow a single APK to install or replace other packages and acquire their platform permissions.
 
-Архив содержит сторонние APK, поэтому право на их публичное
-перераспространение и соответствующие лицензии нужно проверять отдельно от
-технической подписи. Без такой проверки README не должен утверждать, что
-архив полностью redistributable.
+The archive contains third-party APKs, so public redistribution rights and corresponding licenses should be verified separately from technical signatures.

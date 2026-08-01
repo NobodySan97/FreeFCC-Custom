@@ -1,54 +1,37 @@
-# Таблица параметров FC: индексный путь и LED-группа
+# Flight Controller Parameter Table: Index-Based Path and LED Group
 
-Дата: 2026-07-26. Стенд: DJI Air 3S + RC Pro 2 (`rc520`), FreeFCC 1.5.45,
-серийник борта `1581F895C259P007J3RC`. Всё ниже снято read-only через
-`wire_exchange` на wrapped порт `40007`; ни одной записи параметров не
-выполнялось.
+Date: 2026-07-26. Hardware Testbed: DJI Air 3S + RC Pro 2 (`rc520`), FreeFCC Custom 1.5.45, Aircraft S/N `1581F895C259P007J3RC`. All data below gathered read-only via `wire_exchange` on wrapped port `40007`; no parameter writes were executed.
 
-## Зачем индексный путь, если работает хеш
+## Why Use Index-Based Paths When Hashes Work?
 
-Хеш параметра — функция его полного имени
-(`hash(name + "_0")`, `h = ((h << 8) | byte) mod 0xfffffffb`). Имя
-model-specific, поэтому для новой модели хеш угадать нельзя. Индексный путь
-эту зависимость снимает: `03:E1` возвращает имя, а `03:E2`/`03:E3` читают и
-пишут значение по индексу, вообще не используя хеш.
+A parameter hash is a function of its full name (`hash(name + "_0")`, `h = ((h << 8) | byte) mod 0xfffffffb`). Names are model-specific, so for a new model, hashes cannot be guessed. Index-based access removes this dependency: `03:E1` returns the parameter name, while `03:E2`/`03:E3` read and write values by index without using hashes at all.
 
-## Что ответил борт
+## Aircraft Responses
 
-| Команда | Результат | Уровень |
+| Command | Result | Evidence Level |
 |---|---|---|
 | `03:E0` `table_no=0` | `status=0`, `entries_crc=0xd0d68370`, **`entries_num=1513`** | `CONFIRMED` |
-| `03:E1` `table_no=0`, `param_index=N` | Метаданные + имя; 755 записей снято | `CONFIRMED` |
-| `03:F7` hash `a259ceed` | `min=0`, `max=255`, `def=0xEF`, имя `forearm_led_ctrl` | `CONFIRMED` |
-| `03:F8` hash `a259ceed` | `00 a259ceed 00` — lamp выключен | `CONFIRMED` |
-| `03:F0` (формат 2015 by index) | Ни одного ответа за 8 попыток | `NEGATIVE` |
+| `03:E1` `table_no=0`, `param_index=N` | Metadata + name; 755 entries retrieved | `CONFIRMED` |
+| `03:F7` hash `a259ceed` | `min=0`, `max=255`, `def=0xEF`, name `forearm_led_ctrl` | `CONFIRMED` |
+| `03:F8` hash `a259ceed` | `00 a259ceed 00` — lamp OFF | `CONFIRMED` |
+| `03:F0` (2015 index format) | 0 responses in 8 attempts | `NEGATIVE` |
 
-То есть борт использует табличный формат 2017 (`E0/E1/E2/E3`), а плоский
-формат 2015 по индексу не обслуживает. Доступ по хешу (`F7/F8/F9`) работает
-параллельно с ним.
+The flight controller uses the 2017 table format (`E0/E1/E2/E3`), and does not respond to the flat 2015 index format. Hash-based access (`F7/F8/F9`) operates in parallel with it.
 
-## Формат ответа `03:E1`
+## `03:E1` Response Format
 
 ```
 u16 status | u16 table_no | u16 param_index | u16 type_id | u16 size
 u32 limit_def | u32 limit_min | u32 limit_max | ASCII name
 ```
 
-Имя начинается со смещения 22 и приходит **парой** — короткое и полное через
-`|`, например `forearm_led_ctrl|g_config.misc_cfg.forearm_lamp_ctrl`. Именно
-полная форма даёт хеш `0xedce59a2` (на проводе `a259ceed`), которым пользуются
-профили `led_on.json` / `led_off.json`.
+The name starts at offset 22 and arrives as a pair—short and full separated by `|`, e.g., `forearm_led_ctrl|g_config.misc_cfg.forearm_lamp_ctrl`. The full form yields the hash `0xedce59a2` (`a259ceed` on the wire), used by `led_on.json` / `led_off.json`.
 
-`type_id` совпадает с публичной таблицей: `0=u8 1=u16 2=u32 3=u64 4=i8 5=i16
-6=i32 7=i64 8=f32 9=f64`; для `f32` лимиты читаются как float.
+`type_id` matches public specifications: `0=u8 1=u16 2=u32 3=u64 4=i8 5=i16 6=i32 7=i64 8=f32 9=f64`; for `f32`, limits are read as float.
 
-У `03:F7` (по хешу) порядок лимитов другой — `min, max, def`, — и поля
-`param_index`/`table_no` отсутствуют. Два u16 перед лимитами в его ответе
-не декодированы.
+## Table 0 LED Group
 
-## LED-группа таблицы 0
-
-| Индекс | Тип | def | min..max | Имя |
+| Index | Type | Default | Min..Max | Name |
 |---:|---|---:|---|---|
 | 361 | u32 | 0 | 0..0xFFFFFFFF | `ext_led_ctrl` |
 | 362 | u8 | 239 (`0xEF`) | 0..255 | `forearm_led_ctrl\|g_config.misc_cfg.forearm_lamp_ctrl` |
@@ -57,23 +40,4 @@ u32 limit_def | u32 limit_min | u32 limit_max | ASCII name
 | 365 | u8 | 1 | 0..1 | `param_hidden_ledctrl_enable` |
 | 366 | u8 | 1 | 0..1 | `param_hidden_ledctrl_exist` |
 
-`0xEF` — это заводской default маски `forearm_led_ctrl`, а не «состояние ON».
-Приложение сейчас трактует как OFF только точный `0x00` и как ON только
-точный `0xEF`, всё остальное показывает как `PARTIAL`.
-
-## Транспорт: чем брать таблицу
-
-Одиночный запрос на `40007` теряется чаще, чем доходит: контрольный `03:F8`
-не ответил ни разу из пяти в одной серии и ответил с третьей попытки в
-другой. Пакетный режим надёжнее — в один `wire_exchange` укладывается до
-4096 байт `wire_hex`, то есть ~160 wrapped-кадров, и ответы приходят одним
-потоком. Батч из 40 индексов давал 10–37 ответов там, где одиночные запросы
-давали ноль.
-
-## Граница доказательства
-
-Снято 755 записей из 1513; остальные не ответили за четыре прохода. Это
-ограничение канала, а не таблицы: пропуски распределены случайно, а
-повторный проход добирал ранее пропущенные индексы. `03:E2`/`03:E3` на этом
-стенде не проверялись — известен только их формат запроса
-(`table_no`, `unknown1=1`, `param_index`) из публичного инструмента.
+`0xEF` is the factory default mask for `forearm_led_ctrl`, not a plain "ON state". The application interprets exact `0x00` as OFF and exact `0xEF` as ON; any other value displays as `PARTIAL`.

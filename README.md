@@ -244,15 +244,13 @@ Open the DJI Fly app and go to the Transmission tab. Look at the horizontal bar 
 
 ## Support & Upstream Repositories
 
-If FreeFCC Custom helped you out, please consider starring the repos or supporting development on Boosty.
+If FreeFCC Custom helped you out, please consider starring the repositories.
 
 <div align="center">
 
 [![Star on GitHub](https://img.shields.io/badge/Star%20on%20GitHub-%E2%AD%90-yellow?style=for-the-badge&logo=github)](https://github.com/NobodySan97/FreeFCC-Custom)
 [![Upstream SkylabFCCfree](https://img.shields.io/badge/Upstream-SkylabFCCfree-blue?style=for-the-badge&logo=github)](https://github.com/danusha2345/SkylabFCCfree)
 [![Upstream FreeFCC](https://img.shields.io/badge/Upstream-FreeFCC-blue?style=for-the-badge&logo=github)](https://github.com/doesthings/FreeFCC)
-
-[![Support on Boosty](https://img.shields.io/badge/Boosty-Support%20development-FF7143?style=for-the-badge&logo=boosty&logoColor=white)](https://boosty.to/danusha/donate)
 
 </div>
 
@@ -467,4 +465,3 @@ Questions, issues, or feedback? Reach out:
 
 - **Email:** [freefccidothings@gmail.com](mailto:freefccidothings@gmail.com)
 - **GitHub Issues:** [github.com/NobodySan97/FreeFCC-Custom/issues](https://github.com/NobodySan97/FreeFCC-Custom/issues)
-- **Boosty:** [boosty.to/danusha/donate](https://boosty.to/danusha/donate)

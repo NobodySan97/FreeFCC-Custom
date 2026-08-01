@@ -1,241 +1,51 @@
-# Добровольная отправка DUML-диагностики
+# Voluntary DUML Diagnostic Report Plan
 
-## Статус
+## Status
 
-Идея зафиксирована для будущей реализации. Сейчас приложение диагностические
-отчёты не отправляет, серверный endpoint не развёрнут.
+Documented for future implementation. Currently the app does not send diagnostic reports, and no server endpoint is deployed.
 
-## Зачем это нужно
+## Purpose
 
-Если FCC, Auto FCC, 4G, LED, GPS или другая DUML-функция не сработала,
-пользователь добровольно нажимает **Send diagnostic report**.
+If FCC, Auto FCC, 4G, LED, GPS, or another DUML feature fails, the user can voluntarily tap **Send diagnostic report**.
 
-Для поиска причины нужны прежде всего точная модель оборудования и реальные
-DUML-команды с ответами. Общий системный отчёт без этого мало полезен.
+To diagnose the root cause, precise hardware model information and real DUML commands with responses are required. Generic system reports without this data are rarely useful.
 
-## Что отправлять
+## What to Send
 
-### Оборудование
+### Hardware Info
 
-- версия SkylabFCCfree;
-- модель пульта:
-  - `Build.DEVICE`, например `rc331` или `rc520`;
+- FreeFCC Custom version;
+- Controller model:
+  - `Build.DEVICE`, e.g., `rc331` or `rc520`;
   - `Build.MODEL`;
-  - версия Android/прошивки;
-- модель дрона:
-  - обнаруженный DJI model/product code, например `WA530`;
-  - понятное название модели, если оно однозначно известно приложению.
+  - Android/firmware version;
+- Aircraft model:
+  - Detected DJI model/product code, e.g., `WA530`;
+  - User-friendly model name, if unambiguously known to the app.
 
-Модель нельзя определять только по старому локальному cache: в отчёте должно
-быть указано, подтверждена ли она в текущем подключении.
+The model should not be determined solely by an old local cache: the report must specify whether it was verified in the current session.
 
-### Подтверждённый путь определения моделей
+### Confirmed Model Detection Path
 
-Live-проверка DJI Air 3S + RC Pro 2 от 2026-07-26 показала:
+Live test with DJI Air 3S + RC Pro 2 (2026-07-26) demonstrated:
 
-- точный код дрона приходит в CRC-valid DUML push `00:82` как ASCII `WA234`;
-- человекочитаемое имя приходит в `03:34` как `00 + ASCII "DJI Air 3S"`;
-- оба frame идут `0xA2 → 0x82` через `40009` после запуска DJI Fly;
-- модель пульта возвращает read-only `00:01 VersionInquiry` на RC Pro 2 через
-  `port=8901`, `sender=0x2A`, `dst=0x06`: hardware string `RC520`;
-- controller push `00:81/00:82` также независимо содержит `rc520`.
-- в сборке FreeFCC `1.5.51` ручной `Refresh aircraft identity` на RC Pro 2
-  открыл DJI Fly, после Accessibility event заново записал
-  `WA234 + DJI Air 3S` и обновил timestamp проверки; это не чтение старого
-  cache.
+- The exact aircraft code arrives in CRC-valid DUML push `00:82` as ASCII `WA234`;
+- The human-readable name arrives in `03:34` as `00 + ASCII "DJI Air 3S"`;
+- Both frames flow `0xA2 → 0x82` via `40009` after DJI Fly starts;
+- Controller model returns via read-only `00:01 VersionInquiry` on RC Pro 2 via `port=8901`, `sender=0x2A`, `dst=0x06`: hardware string `RC520`;
+- Controller push `00:81/00:82` also independently contains `rc520`.
 
-`03:34` исторически называется `UAV User String Get`, поэтому отображаемое имя
-может быть изменяемым. В отчёт надо записывать пару `model_code + model_name`,
-а имя дополнительно сверять с локальной таблицей model-code → product-name.
-Для проверенной связки это `WA234 → DJI Air 3S`. С `1.5.54` эта таблица есть в
-коде — `AircraftModelCatalog`; она же читается в обратную сторону, когда экран
-DJI-приложения печатает название без кода.
+Full raw frames and negative routes are documented in [`AIR3S_RC_PRO2_LIVE_MAP.md`](AIR3S_RC_PRO2_LIVE_MAP.md). Production does not require a continuous listener: one short passive window after DJI Fly starts is sufficient, stopping immediately after identity is received. Coordinates and full factory serial numbers must never be saved from the surrounding stream.
 
-Полные raw frames и отрицательные маршруты зафиксированы в
-[`AIR3S_RC_PRO2_LIVE_MAP.md`](AIR3S_RC_PRO2_LIVE_MAP.md). Для production не
-нужен постоянный listener: достаточно одного короткого пассивного окна после
-старта DJI Fly с немедленной остановкой после получения identity. Из
-окружающего потока нельзя сохранять координаты и полный factory serial.
+### DUML Logs
 
-Live-проверка RM510 + DJI Mavic 3T от 2026-07-26 добавила enterprise route:
+- Last 100 DUML commands sent and received by the app;
+- Outcome of the last FCC operation;
+- Outcome of LED/GPS reads/writes;
+- Error logs if an exception occurred.
 
-- на `40009` без запущенного DJI Pilot 2 регулярно приходит CRC-valid
-  `0xA2 → 0x82`, `00:82`, payload начинается с ASCII `WM265T`;
-- `WM265T` однозначно отображается как `DJI Mavic 3T`;
-- полный factory serial отдельно приходит в `51:14`, но его raw value в
-  документацию и будущую анонимную статистику включать нельзя;
-- `03:34` без активного Pilot 2 не наблюдался, поэтому понятное имя берётся из
-  локальной таблицы по стабильному коду `WM265T`;
-- короткий passive scan через `40009` заполняет Info напрямую и не требует
-  запускать Pilot 2.
+### Privacy Safeguards
 
-Raw identity frame без персональных данных:
-
-```text
-55 4d 04 a8 a2 82 38 76 00 00 82
-57 4d 32 36 35 54 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 02 08 00 00 00 00 00 00 02 08 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 97 14
-```
-
-Collector также реагирует на `com.dji.industry.pilot`, но на проверенном
-пульте другой Accessibility-сервис намеренно завершает Pilot 2. Этот
-takeover-механизм сохранён без изменений: enterprise identity получается
-напрямую из DUML, а структура UI Pilot 2 всё ещё не нужна и не проверена.
-
-Поскольку на разных пультах route отличается, порядок короткого scan:
-наблюдавшийся runtime port, затем `40009`, `40007`, `8901`–`8904`. После
-получения кода и имени чтение прекращается.
-
-### Неисправная функция
-
-- что пользователь запускал: FCC, Auto FCC, 4G, LED, GPS или другое;
-- выбранный режим;
-- короткий комментарий пользователя;
-- итог: success, partial failure, timeout, no response или transport error.
-
-### DUML-команды и ответы
-
-Для каждой команды неисправной операции:
-
-- порядок команды в операции;
-- localhost port или abstract socket;
-- время и длительность обмена;
-- полный raw request в hex;
-- полный matching response в hex, если он был;
-- разобранные поля:
-  - sender и receiver;
-  - `cmd_set`;
-  - `cmd_id`;
-  - `cmd_type`;
-  - sequence;
-  - payload length;
-  - CRC validity;
-- выполнена ли запись в socket;
-- найден ли подходящий ACK/response;
-- причина завершения чтения: timeout, EOF, I/O error или size limit;
-- текст исключения, если оно возникло.
-
-Если операция состоит из нескольких кадров, например FCC profile или 4G
-sweep, отчёт должен содержать все отправленные кадры этой попытки и ответы на
-них. Так будет видно, на какой именно команде поведение отличается.
-
-Не следует добавлять постороннюю фоновую telemetry, которая пришла в socket
-до matching response. Её можно учитывать отдельным счётчиком, но не смешивать
-с ответом на команду.
-
-## Важное предупреждение
-
-Raw DUML payload может содержать serial или другой идентификатор устройства.
-Перед отправкой приложение должно прямо написать:
-
-> Диагностический отчёт содержит точные DUML-команды и ответы. Внутри них могут
-> находиться серийные номера или другие идентификаторы подключённого
-> оборудования. Отправка выполняется только с вашего согласия.
-
-Пользователь должен иметь возможность посмотреть весь отчёт перед отправкой.
-Не нужно отдельно добавлять serial, координаты, общий Android `logcat` или
-данные других приложений.
-
-## Пример одной DUML-транзакции
-
-```json
-{
-  "index": 1,
-  "transport": "tcp",
-  "port": 40009,
-  "duration_ms": 843,
-  "request_hex": "55...",
-  "response_hex": "55...",
-  "request": {
-    "sender": 42,
-    "receiver": 13,
-    "cmd_set": 3,
-    "cmd_id": 249,
-    "cmd_type": 64,
-    "sequence": 17,
-    "payload_length": 4,
-    "crc_valid": true
-  },
-  "response": {
-    "matched": true,
-    "crc_valid": true
-  },
-  "write_completed": true,
-  "termination": "matched_response"
-}
-```
-
-## Минимальный состав отчёта
-
-```json
-{
-  "schema_version": 1,
-  "report_id": "random-uuid",
-  "app_version": "1.5.x",
-  "controller": {
-    "device": "rc331",
-    "model": "DJI RC 2",
-    "firmware": "current-build-value"
-  },
-  "aircraft": {
-    "model_code": "WA530",
-    "model_name": "detected-model-name",
-    "verified_in_current_session": true
-  },
-  "operation": "fcc",
-  "selected_mode": "manual",
-  "result": "timeout",
-  "user_comment": "DJI Fly still shows CE",
-  "transactions": []
-}
-```
-
-## Как должна работать кнопка
-
-1. Приложение хранит ограниченный ring buffer последних DUML-транзакций.
-2. После проблемы пользователь нажимает **Send diagnostic report**.
-3. Приложение показывает модель пульта, модель дрона, операцию и raw
-   request/response.
-4. Пользователь подтверждает отправку.
-5. Сервер сохраняет отчёт и возвращает короткий `report_id`.
-
-Без нажатия и подтверждения пользователя ничего не отправляется.
-
-## Сервер
-
-Достаточно одного endpoint:
-
-`POST /api/v1/diagnostics/report`
-
-Требования:
-
-- HTTPS;
-- ограничение размера отчёта;
-- строгая JSON schema;
-- rate limit;
-- дедупликация по `report_id`;
-- доступ к отчётам только у администратора;
-- группировка по модели пульта, модели дрона, функции и DUML command ID.
-
-## Что потребуется при реализации
-
-- добавить запись DUML request/response в ограниченный ring buffer;
-- фиксировать transport, port, timing, parsed headers и termination reason;
-- гарантированно отделять matching response от посторонней telemetry;
-- надёжно определять модели пульта и дрона;
-- добавить просмотр и добровольную отправку отчёта;
-- развернуть endpoint;
-- проверить отчёты на RC2 и RC Pro 2 при success, timeout и no-response.
-
-## Критерии готовности
-
-- отчёт отправляется только по кнопке и после подтверждения;
-- в нём есть точная модель пульта и подтверждённая модель дрона;
-- присутствуют полные команды и matching responses неисправной операции;
-- видны порт, timing, parsed DUML headers и причина отсутствия ответа;
-- посторонняя telemetry не выдаётся за response;
-- многошаговая операция показывает, на каком кадре произошёл сбой;
-- пользователь получает `report_id`.
+- Never include GPS coordinates, Home Point location, or flight logs.
+- Never include Wi-Fi passwords, IP addresses, or personal accounts.
+- Serial numbers are anonymized or hashed before sending.
