@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.62 — 2026-08-01
+
+- **Dynamic RF Status Indicator:** Added visual color indicators (🟢 Green for active `AU`/FCC mode, 🟠 Orange for CE, ⚪ Gray when inactive) to the Floating Overlay button.
+- **System Permissions Status Card:** Added a live "Stato Sistema & Permessi" card on the home screen to monitor and grant Accessibility (Home Point) and Overlay permissions with one tap.
+- **Documentation & Localization:** Completed English translations of all 27 technical documentation files in `docs/` and updated upstream repository attributions.
+
 ## 1.5.61 — 2026-07-31
 
 - **FreeFCC Custom (NobodySan97):** New customized release with upgraded architecture and fully localized interface.
