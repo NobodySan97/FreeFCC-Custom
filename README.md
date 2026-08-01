@@ -8,6 +8,11 @@
 [![GitHub release](https://img.shields.io/github/v/release/danusha2345/SkylabFCCfree?style=flat-square)](https://github.com/danusha2345/SkylabFCCfree/releases)
 [![Boosty](https://img.shields.io/badge/Boosty-Support%20this%20project-FF7143?style=flat-square&logo=boosty&logoColor=white)](https://boosty.to/danusha/donate)
 
+### Say thanks to the author
+
+**USDT (TRC20):** `TKW1yLVa8F1A25vfuPaYoa891oLh1aLN7S`<br>
+**GRAM (TON):** `UQCYT0YE53DU3Zp957ouuwRn-lF8STtbwuRzjn6CMJcXiP0R`
+
 A free and open-source Android app that unlocks FCC mode, sends experimental 4G activation frames, and queries device info on DJI smart controllers with a screen (RC2, RC Pro 2, RC Plus). No external backend, paid activation, or tracking. Commands run locally from inspectable JSON profiles.
 
 </div>
