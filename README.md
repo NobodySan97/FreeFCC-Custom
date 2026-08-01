@@ -10,7 +10,7 @@
 A free and open-source Android app that unlocks FCC mode, sends experimental 4G activation frames, and queries device info on DJI smart controllers with a screen (RC2, RC Pro 2, RC Plus).
 
 > ℹ️ **Fork & Upstream Attribution**:  
-> This repository is a fork derived from [doesthings/FreeFCC](https://github.com/doesthings/FreeFCC). It incorporates additional enhancements including a Floating Overlay Mini Menu, Live Radio Country State detection (`AU` vs `CE`), In-Flight Toast feedback, and UI localization.
+> This repository is a custom fork derived from [danusha2345/SkylabFCCfree](https://github.com/danusha2345/SkylabFCCfree) and [doesthings/FreeFCC](https://github.com/doesthings/FreeFCC). It incorporates additional enhancements including a Floating Overlay Mini Menu, Live Radio Country State detection (`AU` vs `CE`), System Permissions Status Card, In-Flight Toast feedback, and UI localization.
 
 </div>
 
@@ -242,13 +242,15 @@ Open the DJI Fly app and go to the Transmission tab. Look at the horizontal bar 
 
 > If the signal graph hasn't changed, power cycle the controller and try again. Make sure the drone is powered on and linked before enabling FCC.
 
-## Support
+## Support & Upstream Repositories
 
-If FreeFCC Custom helped you out, please consider starring the repo or supporting development on Boosty.
+If FreeFCC Custom helped you out, please consider starring the repos or supporting development on Boosty.
 
 <div align="center">
 
 [![Star on GitHub](https://img.shields.io/badge/Star%20on%20GitHub-%E2%AD%90-yellow?style=for-the-badge&logo=github)](https://github.com/NobodySan97/FreeFCC-Custom)
+[![Upstream SkylabFCCfree](https://img.shields.io/badge/Upstream-SkylabFCCfree-blue?style=for-the-badge&logo=github)](https://github.com/danusha2345/SkylabFCCfree)
+[![Upstream FreeFCC](https://img.shields.io/badge/Upstream-FreeFCC-blue?style=for-the-badge&logo=github)](https://github.com/doesthings/FreeFCC)
 
 [![Support on Boosty](https://img.shields.io/badge/Boosty-Support%20development-FF7143?style=for-the-badge&logo=boosty&logoColor=white)](https://boosty.to/danusha/donate)
 
