@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.63 — 2026-08-01
+
+- **Interactive Update Banner:** Fixed update notification card on home screen to be fully clickable, adding a direct AGGIORNA / INSTALLA action button and real-time download progress bar.
+
 ## 1.5.62 — 2026-08-01
 
 - **Dynamic RF Status Indicator:** Added visual color indicators (🟢 Green for active `AU`/FCC mode, 🟠 Orange for CE, ⚪ Gray when inactive) to the Floating Overlay button.

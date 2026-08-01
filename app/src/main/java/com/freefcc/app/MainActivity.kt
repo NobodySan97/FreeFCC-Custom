@@ -355,28 +355,76 @@ private fun FccPage(state: AppState, viewModel: FccViewModel) {
         if (state.updateAvailable && updateInfo != null && !state.isCheckingUpdate) {
             Spacer(Modifier.height(SectionSpacing))
             GlowCard {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            when {
+                                state.isUpdateDownloaded -> viewModel.installUpdate()
+                                !state.isDownloadingUpdate -> viewModel.downloadUpdate()
+                            }
+                        }
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "Update available — v${updateInfo.version}",
-                            color = Green, fontSize = 14.sp, fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            "Tap Update to install",
-                            color = TextDim, fontSize = 12.sp
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Aggiornamento disponibile — v${updateInfo.version}",
+                                color = Green, fontSize = 14.sp, fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                when {
+                                    state.isUpdateDownloaded -> "Tocca per installare l'aggiornamento ↗"
+                                    state.isDownloadingUpdate -> "Scaricamento in corso... (${(state.updateDownloadProgress * 100).toInt()}%)"
+                                    else -> "Tocca per scaricare ed installare ↗"
+                                },
+                                color = TextDim, fontSize = 12.sp
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        when {
+                            state.isDownloadingUpdate -> {
+                                CircularProgressIndicator(
+                                    strokeWidth = 2.dp,
+                                    color = Green,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            else -> {
+                                Button(
+                                    onClick = {
+                                        if (state.isUpdateDownloaded) {
+                                            viewModel.installUpdate()
+                                        } else {
+                                            viewModel.downloadUpdate()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Green, contentColor = BgDark),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        if (state.isUpdateDownloaded) "INSTALLA" else "AGGIORNA",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (state.isDownloadingUpdate && state.updateDownloadProgress > 0f) {
+                        Spacer(Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { state.updateDownloadProgress },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Green,
+                            trackColor = TextGray.copy(alpha = 0.2f)
                         )
                     }
-                    Icon(
-                        Icons.Filled.NewReleases,
-                        contentDescription = "Update available",
-                        tint = Green,
-                        modifier = Modifier.size(24.dp)
-                    )
                 }
             }
         }
