@@ -97,6 +97,8 @@ internal object LanCommandCodec {
         return decoded
     }
 
+    private val HEX_CHARS = "0123456789abcdef".toCharArray()
+
     private fun decodeHex(raw: String, name: String, maxBytes: Int): ByteArray {
         val clean = (if (raw.startsWith("0x", ignoreCase = true)) raw.substring(2) else raw)
             .replace(" ", "")
@@ -104,14 +106,28 @@ internal object LanCommandCodec {
             .replace("_", "")
         require(clean.length % 2 == 0) { "odd_${name}_hex" }
         require(clean.length <= maxBytes * 2) { "${name}_too_long" }
-        require(clean.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) { "invalid_${name}_hex" }
-        return ByteArray(clean.length / 2) { index ->
-            clean.substring(index * 2, index * 2 + 2).toInt(16).toByte()
+        val len = clean.length
+        val result = ByteArray(len / 2)
+        var i = 0
+        while (i < len) {
+            val high = Character.digit(clean[i], 16)
+            val low = Character.digit(clean[i + 1], 16)
+            require(high != -1 && low != -1) { "invalid_${name}_hex" }
+            result[i / 2] = ((high shl 4) or low).toByte()
+            i += 2
         }
+        return result
     }
 
-    fun bytesToHex(bytes: ByteArray): String =
-        bytes.joinToString(separator = "") { "%02x".format(Locale.US, it.toInt() and 0xFF) }
+    fun bytesToHex(bytes: ByteArray): String {
+        val result = CharArray(bytes.size * 2)
+        for (i in bytes.indices) {
+            val v = bytes[i].toInt() and 0xFF
+            result[i * 2] = HEX_CHARS[v ushr 4]
+            result[i * 2 + 1] = HEX_CHARS[v and 0x0F]
+        }
+        return String(result)
+    }
 
     private fun parseInt(raw: String, name: String, min: Int, max: Int): Int {
         val value = raw.trim()

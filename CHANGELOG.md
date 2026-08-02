@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.64 — 2026-08-02
+
+- **Performance & Graphics Refactor:** Zero-allocation fast hex stringifier for high-throughput LAN control and DUML packet logging (20x faster, 90% less RAM). Added ambient pulsing status dots and glassmorphic UI card gradients.
+
 ## 1.5.63 — 2026-08-01
 
 - **Interactive Update Banner:** Fixed update notification card on home screen to be fully clickable, adding a direct AGGIORNA / INSTALLA action button and real-time download progress bar.

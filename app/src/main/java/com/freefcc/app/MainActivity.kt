@@ -544,7 +544,7 @@ private fun SystemPermissionsCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(modifier = Modifier.size(8.dp).background(if (isAccessEnabled) Green else Red, CircleShape))
+                PulsingStatusDot(color = if (isAccessEnabled) Green else Red, isPulsing = !isAccessEnabled)
                 Text("Accessibilità (Home Point)", color = TextWhite, fontSize = 12.sp)
             }
             Text(
@@ -562,7 +562,7 @@ private fun SystemPermissionsCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(modifier = Modifier.size(8.dp).background(if (isOverlayEnabled) Green else Amber, CircleShape))
+                PulsingStatusDot(color = if (isOverlayEnabled) Green else Amber, isPulsing = !isOverlayEnabled)
                 Text("Permesso Overlay Flottante", color = TextWhite, fontSize = 12.sp)
             }
             Text(
@@ -1391,12 +1391,77 @@ private fun DividerLine(alpha: Float = 0.5f) {
 }
 
 @Composable
-private fun GlowCard(content: @Composable () -> Unit) {
+private fun PulsingStatusDot(
+    color: Color,
+    sizeDp: Int = 8,
+    isPulsing: Boolean = true
+) {
+    if (!isPulsing) {
+        Box(modifier = Modifier.size(sizeDp.dp).background(color, CircleShape))
+        return
+    }
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.45f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size((sizeDp + 4).dp)) {
+        Box(
+            modifier = Modifier
+                .size((sizeDp * scale).dp)
+                .alpha(alpha * 0.45f)
+                .background(color, CircleShape)
+        )
+        Box(
+            modifier = Modifier
+                .size(sizeDp.dp)
+                .background(color, CircleShape)
+        )
+    }
+}
+
+@Composable
+private fun GlowCard(
+    modifier: Modifier = Modifier,
+    borderColor: Color = CardBorder,
+    content: @Composable () -> Unit
+) {
     Surface(
-        color = CardBg,
+        color = Color.Transparent,
         shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, CardBorder),
-        modifier = Modifier.fillMaxWidth()
+        border = BorderStroke(
+            1.dp,
+            Brush.horizontalGradient(
+                listOf(
+                    borderColor.copy(alpha = 0.5f),
+                    borderColor.copy(alpha = 0.15f),
+                    borderColor.copy(alpha = 0.4f)
+                )
+            )
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    listOf(CardBg, Color(0xFF11161D))
+                ),
+                shape = RoundedCornerShape(14.dp)
+            )
     ) {
         Column(
             modifier = Modifier
