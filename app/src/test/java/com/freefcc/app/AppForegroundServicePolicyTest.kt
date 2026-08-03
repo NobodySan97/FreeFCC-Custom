@@ -42,6 +42,33 @@ class AppForegroundServicePolicyTest {
                 AppForegroundService.ACTION_SELECT_HOME_POINT
             )
         )
+        assertNull(
+            AppNotificationActionPolicy.selectedMode(
+                AppForegroundService.ACTION_GPS_ON
+            )
+        )
+        assertFalse(
+            AppNotificationActionPolicy.turnsOff(
+                AppForegroundService.ACTION_GPS_OFF
+            )
+        )
+    }
+
+    @Test
+    fun notificationGpsActionsMapOnlyToTheRequestedState() {
+        assertEquals(
+            true,
+            AppNotificationActionPolicy.gpsEnabled(AppForegroundService.ACTION_GPS_ON)
+        )
+        assertEquals(
+            false,
+            AppNotificationActionPolicy.gpsEnabled(AppForegroundService.ACTION_GPS_OFF)
+        )
+        assertNull(
+            AppNotificationActionPolicy.gpsEnabled(
+                AppForegroundService.ACTION_SELECT_HOME_POINT
+            )
+        )
     }
 
     @Test

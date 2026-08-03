@@ -214,10 +214,14 @@ the controller is running. The service starts after controller boot and after
 an in-place APK update. If an Auto FCC switch was selected, that mode is
 restored without opening DJI Fly; if both switches were off, no FCC command is
 started. The notification shows **Home Point**, **every 5 seconds**, or **Off**
-and exposes all three choices as actions, so the mode can be changed without
-opening the app. Selecting Home Point opens Android Accessibility settings when
-the required service is not enabled yet. Tap the notification body to open the
-app. On Android 13 and newer, allow notifications when prompted; after an
+in its first control row, so the mode can be changed without opening the app.
+Expand it to use the second row with **GPS ON** and **GPS OFF**. Each GPS action
+runs the same two bounded write cycles as the app screen and then automatically
+performs up to three fresh-port status checks; the notification reports the
+verified state or an explicit unknown/mismatch result. Selecting Home Point opens
+Android Accessibility settings when the required service is not enabled yet. Tap
+the notification body to open the app. On Android 13 and newer, allow notifications
+when prompted; after an
 Android force-stop, open the app once to let the system enable automatic
 startup again.
 

@@ -1,43 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-
-    <!-- Four rotors: a compact aircraft mark that survives launcher masking. -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#FF9D4D"
-        android:strokeWidth="3.5"
-        android:strokeLineCap="round"
-        android:pathData="M27,37a7,7 0,1 0,14,0a7,7 0,1 0,-14,0 M67,37a7,7 0,1 0,14,0a7,7 0,1 0,-14,0 M27,66a7,7 0,1 0,14,0a7,7 0,1 0,-14,0 M67,66a7,7 0,1 0,14,0a7,7 0,1 0,-14,0" />
-
-    <!-- Arms and airframe. -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#FF9D4D"
-        android:strokeWidth="5"
-        android:strokeLineCap="round"
-        android:pathData="M39,41L48,47 M69,41L60,47 M39,62L48,56 M69,62L60,56" />
-    <path
-        android:fillColor="#FF9D4D"
-        android:pathData="M48,43L60,43L65,51L60,60L48,60L43,51Z" />
-    <path
-        android:fillColor="#0C0E11"
-        android:pathData="M51,47L57,47L60,52L57,56L51,56L48,52Z" />
-    <path
-        android:fillColor="#4ED69A"
-        android:pathData="M51,50a3,3 0,1 0,6,0a3,3 0,1 0,-6,0" />
-
-    <!-- Sky marker and flight path: general Skylab identity, not a 4G mark. -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#4ED69A"
-        android:strokeWidth="3"
-        android:strokeLineCap="round"
-        android:pathData="M54,24L54,31 M50.5,27.5L57.5,27.5 M32,75Q54,87 76,75" />
-    <path
-        android:fillColor="#4ED69A"
-        android:pathData="M29,73a3,3 0,1 0,6,0a3,3 0,1 0,-6,0" />
-</vector>
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/skylab_icon"
+    android:inset="18%" />

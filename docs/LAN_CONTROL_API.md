@@ -212,6 +212,9 @@ port-`40007` lease and after 250 ms start the same standalone
 a separate port lease. Live `rc520` evidence showed that reads sharing one bad
 lease could all fail even when the physical state changed, while a separate
 manual Refresh immediately returned the new value.
+The expanded persistent notification exposes the same bounded `gps_on` and
+`gps_off` operation as a second control row and reports the automatic fresh-port
+readback result directly in the notification.
 They never poll the proxy in the background:
 
 ```bash

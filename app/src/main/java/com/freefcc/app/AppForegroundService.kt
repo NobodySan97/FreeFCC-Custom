@@ -8,6 +8,16 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
+import android.view.View
+import android.widget.RemoteViews
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Keeps the app process visible and less likely to be reclaimed while the controller is on. */
 class AppForegroundService : Service() {
@@ -21,6 +31,10 @@ class AppForegroundService : Service() {
             "com.freefcc.app.notification.SELECT_PERIODIC"
         internal const val ACTION_SELECT_OFF =
             "com.freefcc.app.notification.SELECT_OFF"
+        internal const val ACTION_GPS_ON =
+            "com.freefcc.app.notification.GPS_ON"
+        internal const val ACTION_GPS_OFF =
+            "com.freefcc.app.notification.GPS_OFF"
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, AppForegroundService::class.java))
@@ -34,6 +48,9 @@ class AppForegroundService : Service() {
             }
         }
     }
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val gpsActionBusy = AtomicBoolean(false)
 
     override fun onCreate() {
         super.onCreate()
@@ -52,6 +69,10 @@ class AppForegroundService : Service() {
     }
 
     private fun applyNotificationAction(action: String?) {
+        AppNotificationActionPolicy.gpsEnabled(action)?.let { enabled ->
+            startGpsAction(enabled)
+            return
+        }
         val selectedMode = AppNotificationActionPolicy.selectedMode(action)
         if (selectedMode != null) {
             val currentMode = AutoFccSelection.load(this)
@@ -86,13 +107,152 @@ class AppForegroundService : Service() {
         }
     }
 
+    private fun startGpsAction(enabled: Boolean) {
+        val requestedLabel = if (enabled) "ON" else "OFF"
+        if (!gpsActionBusy.compareAndSet(false, true)) {
+            AppForegroundNotification.updateGpsStatus("GPS busy — please wait")
+            refreshNotification()
+            return
+        }
+
+        AppForegroundNotification.updateGpsStatus("GPS $requestedLabel: starting...")
+        refreshNotification()
+        FccViewModel.logServiceEvent("NOTIFICATION: GPS $requestedLabel requested")
+
+        serviceScope.launch {
+            try {
+                val sendResult = GpsCommandRunner.send(
+                    enabled = enabled,
+                    onProgress = { cycle, cycles, write, writes ->
+                        if (write == 1) {
+                            AppForegroundNotification.updateGpsStatus(
+                                "GPS $requestedLabel: cycle $cycle/$cycles"
+                            )
+                            refreshNotification()
+                        }
+                        FccViewModel.logServiceEvent(
+                            "NOTIFICATION: GPS $requestedLabel cycle $cycle/$cycles, " +
+                                "write $write/$writes"
+                        )
+                    },
+                    onCycleRepeated = { cycle, cycles ->
+                        FccViewModel.logServiceEvent(
+                            "NOTIFICATION: GPS $requestedLabel cycle $cycle/$cycles sent; " +
+                                "duplicating command"
+                        )
+                    }
+                )
+
+                when (sendResult) {
+                    GpsCommandSendResult.PORT_BUSY -> {
+                        AppForegroundNotification.updateGpsStatus("GPS: port 40007 busy")
+                        FccViewModel.logServiceEvent(
+                            "NOTIFICATION: GPS $requestedLabel could not acquire port 40007"
+                        )
+                    }
+                    GpsCommandSendResult.TRANSPORT_FAILED -> {
+                        AppForegroundNotification.updateGpsStatus(
+                            "GPS $requestedLabel: transport failed"
+                        )
+                        FccViewModel.logServiceEvent(
+                            "NOTIFICATION: GPS $requestedLabel command transport failed"
+                        )
+                    }
+                    GpsCommandSendResult.SENT -> {
+                        GpsControlStateStore.clear(this@AppForegroundService)
+                        AppForegroundNotification.updateGpsStatus(
+                            "GPS $requestedLabel sent · checking status..."
+                        )
+                        refreshNotification()
+                        delay(250)
+                        val statusResult = GpsCommandRunner.readFresh(
+                            onAttempt = { attempt, attempts ->
+                                AppForegroundNotification.updateGpsStatus(
+                                    "GPS $requestedLabel: status $attempt/$attempts..."
+                                )
+                                refreshNotification()
+                            },
+                            onMissing = { attempt, attempts ->
+                                FccViewModel.logServiceEvent(
+                                    "NOTIFICATION: GPS status attempt $attempt/$attempts missing"
+                                )
+                            }
+                        )
+                        applyGpsResult(enabled, statusResult.readback)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppForegroundNotification.updateGpsStatus(
+                    "GPS $requestedLabel error: ${e.message ?: e.javaClass.simpleName}"
+                )
+                FccViewModel.logServiceEvent(
+                    "NOTIFICATION: GPS $requestedLabel failed: ${e.javaClass.simpleName}: ${e.message}"
+                )
+            } finally {
+                gpsActionBusy.set(false)
+                refreshNotification()
+            }
+        }
+    }
+
+    private fun applyGpsResult(enabled: Boolean, readback: GpsReadback?) {
+        val requestedState = if (enabled) GpsState.ON else GpsState.OFF
+        val requestedLabel = requestedState.name
+        if (readback == null) {
+            AppForegroundNotification.updateGpsStatus(
+                "GPS $requestedLabel sent · status unknown"
+            )
+            FccViewModel.logServiceEvent(
+                "NOTIFICATION: GPS $requestedLabel sent; fresh status unavailable"
+            )
+            return
+        }
+
+        GpsControlStateStore.persist(this, readback, System.currentTimeMillis())
+        if (readback.state == requestedState) {
+            AppForegroundNotification.updateGpsStatus("GPS: verified $requestedLabel")
+            FccViewModel.logServiceEvent("NOTIFICATION: GPS verified $requestedLabel")
+        } else {
+            AppForegroundNotification.updateGpsStatus(
+                "GPS: ${readback.state.name} · requested $requestedLabel"
+            )
+            FccViewModel.logServiceEvent(
+                "NOTIFICATION: GPS mismatch: requested $requestedLabel, read ${readback.state}"
+            )
+        }
+    }
+
+    private fun refreshNotification() {
+        runCatching {
+            getSystemService(NotificationManager::class.java)
+                .notify(NOTIFICATION_ID, createNotification())
+        }
+    }
+
     private fun createNotification(): Notification =
         AppForegroundNotification.create(this)
+
+    override fun onDestroy() {
+        serviceScope.cancel()
+        super.onDestroy()
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 }
 
 internal object AppForegroundNotification {
+    @Volatile private var gpsStatusOverride: String? = null
+
+    fun updateGpsStatus(status: String) {
+        gpsStatusOverride = status
+    }
+
+    fun clearGpsStatus() {
+        gpsStatusOverride = null
+    }
+
     fun createChannel(context: Context) {
         val channel = NotificationChannel(
             AppForegroundService.CHANNEL_ID,
@@ -134,39 +294,21 @@ internal object AppForegroundNotification {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
         }
-        val homePointAction = notificationAction(
+        val compactView = createRemoteViews(
             context = context,
-            pendingIntent = homePointPendingIntent,
-            icon = android.R.drawable.ic_menu_mylocation,
-            label = if (selectedMode == AutoFccMode.HOME_POINT_TEXT) {
-                "✓ Home Point"
-            } else {
-                "Home Point"
-            }
+            selectedMode = selectedMode,
+            accessibilityEnabled = accessibilityEnabled,
+            openPendingIntent = openPendingIntent,
+            homePointPendingIntent = homePointPendingIntent,
+            showGpsControls = false
         )
-        val periodicAction = notificationAction(
+        val expandedView = createRemoteViews(
             context = context,
-            pendingIntent = serviceActionPendingIntent(
-                context,
-                AppForegroundService.ACTION_SELECT_PERIODIC,
-                requestCode = 2
-            ),
-            icon = android.R.drawable.ic_popup_sync,
-            label = if (selectedMode == AutoFccMode.PERIODIC_5S) {
-                "✓ Every 5 sec"
-            } else {
-                "Every 5 sec"
-            }
-        )
-        val offAction = notificationAction(
-            context = context,
-            pendingIntent = serviceActionPendingIntent(
-                context,
-                AppForegroundService.ACTION_SELECT_OFF,
-                requestCode = 3
-            ),
-            icon = android.R.drawable.ic_menu_close_clear_cancel,
-            label = if (selectedMode == null) "✓ Off" else "Off"
+            selectedMode = selectedMode,
+            accessibilityEnabled = accessibilityEnabled,
+            openPendingIntent = openPendingIntent,
+            homePointPendingIntent = homePointPendingIntent,
+            showGpsControls = true
         )
         return Notification.Builder(context, AppForegroundService.CHANNEL_ID)
             .setContentTitle("SkylabFCCfree")
@@ -180,23 +322,94 @@ internal object AppForegroundNotification {
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setContentIntent(openPendingIntent)
-            .addAction(homePointAction)
-            .addAction(periodicAction)
-            .addAction(offAction)
+            .setStyle(Notification.DecoratedCustomViewStyle())
+            .setCustomContentView(compactView)
+            .setCustomBigContentView(expandedView)
             .build()
     }
 
-    private fun notificationAction(
+    private fun createRemoteViews(
         context: Context,
-        pendingIntent: PendingIntent,
-        icon: Int,
-        label: String
-    ): Notification.Action {
-        return Notification.Action.Builder(
-            android.graphics.drawable.Icon.createWithResource(context, icon),
-            label,
-            pendingIntent
-        ).build()
+        selectedMode: AutoFccMode?,
+        accessibilityEnabled: Boolean,
+        openPendingIntent: PendingIntent,
+        homePointPendingIntent: PendingIntent,
+        showGpsControls: Boolean
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.notification_controls)
+        val gpsState = GpsControlStateStore.load(context)?.first?.state
+        views.setTextViewText(
+            R.id.notification_auto_status,
+            AppNotificationActionPolicy.statusText(selectedMode, accessibilityEnabled)
+        )
+        views.setTextViewText(
+            R.id.notification_home_point,
+            if (selectedMode == AutoFccMode.HOME_POINT_TEXT) "✓ Home Point" else "Home Point"
+        )
+        views.setTextViewText(
+            R.id.notification_periodic,
+            if (selectedMode == AutoFccMode.PERIODIC_5S) "✓ Every 5 sec" else "Every 5 sec"
+        )
+        views.setTextViewText(
+            R.id.notification_fcc_off,
+            if (selectedMode == null) "✓ Off" else "Off"
+        )
+        views.setTextViewText(
+            R.id.notification_gps_status,
+            gpsStatusOverride ?: gpsState?.let { "GPS: Last verified ${it.name}" }
+                ?: "GPS: status unknown"
+        )
+        views.setTextViewText(
+            R.id.notification_gps_on,
+            if (gpsState == GpsState.ON) "✓ GPS ON" else "GPS ON"
+        )
+        views.setTextViewText(
+            R.id.notification_gps_off,
+            if (gpsState == GpsState.OFF) "✓ GPS OFF" else "GPS OFF"
+        )
+        views.setViewVisibility(
+            R.id.notification_fcc_row,
+            if (showGpsControls) View.VISIBLE else View.GONE
+        )
+        views.setViewVisibility(
+            R.id.notification_gps_section,
+            if (showGpsControls) View.VISIBLE else View.GONE
+        )
+        views.setOnClickPendingIntent(R.id.notification_root, openPendingIntent)
+        views.setOnClickPendingIntent(R.id.notification_home_point, homePointPendingIntent)
+        views.setOnClickPendingIntent(
+            R.id.notification_periodic,
+            serviceActionPendingIntent(
+                context,
+                AppForegroundService.ACTION_SELECT_PERIODIC,
+                requestCode = 2
+            )
+        )
+        views.setOnClickPendingIntent(
+            R.id.notification_fcc_off,
+            serviceActionPendingIntent(
+                context,
+                AppForegroundService.ACTION_SELECT_OFF,
+                requestCode = 3
+            )
+        )
+        views.setOnClickPendingIntent(
+            R.id.notification_gps_on,
+            serviceActionPendingIntent(
+                context,
+                AppForegroundService.ACTION_GPS_ON,
+                requestCode = 4
+            )
+        )
+        views.setOnClickPendingIntent(
+            R.id.notification_gps_off,
+            serviceActionPendingIntent(
+                context,
+                AppForegroundService.ACTION_GPS_OFF,
+                requestCode = 5
+            )
+        )
+        return views
     }
 
     private fun serviceActionPendingIntent(
@@ -217,6 +430,12 @@ internal object AppForegroundNotification {
 }
 
 internal object AppNotificationActionPolicy {
+    fun gpsEnabled(action: String?): Boolean? = when (action) {
+        AppForegroundService.ACTION_GPS_ON -> true
+        AppForegroundService.ACTION_GPS_OFF -> false
+        else -> null
+    }
+
     fun selectedMode(action: String?): AutoFccMode? = when (action) {
         AppForegroundService.ACTION_SELECT_HOME_POINT -> AutoFccMode.HOME_POINT_TEXT
         AppForegroundService.ACTION_SELECT_PERIODIC -> AutoFccMode.PERIODIC_5S

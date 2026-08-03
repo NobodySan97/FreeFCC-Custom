@@ -110,9 +110,9 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         val APP_VERSION: String = BuildConfig.VERSION_NAME
 
         private const val MAX_LOG_ENTRIES = 200
-        private const val PREF_GPS_STATE = "gps_last_verified_state"
-        private const val PREF_GPS_RAW = "gps_last_verified_raw"
-        private const val PREF_GPS_AT = "gps_last_verified_at"
+        private const val PREF_GPS_STATE = GpsControlStateStore.PREF_STATE
+        private const val PREF_GPS_RAW = GpsControlStateStore.PREF_RAW
+        private const val PREF_GPS_AT = GpsControlStateStore.PREF_AT
         private const val PREF_LED_STATE = "led_last_verified_state"
         private const val PREF_LED_RAW = "led_last_verified_raw"
         private const val PREF_LED_AT = "led_last_verified_at"
@@ -353,6 +353,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     private fun persistGpsReadback(readback: GpsReadback, verifiedAtMs: Long) {
+        AppForegroundNotification.clearGpsStatus()
         prefs.edit()
             .putString(PREF_GPS_STATE, readback.state.name)
             .putInt(PREF_GPS_RAW, readback.rawValue)
@@ -1115,6 +1116,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             log("GPS busy — please wait.")
             return false
         }
+        AppForegroundNotification.clearGpsStatus()
         val requestedLabel = if (enabled) "ON" else "OFF"
         update {
             copy(
@@ -1127,71 +1129,51 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         log("Turning GPS ${requestedLabel.lowercase(Locale.US)}...")
 
         runOnIO {
-            var portLease: Port40007Lock.Lease? = null
             var followUpRead = false
             try {
-                portLease = Port40007Lock.acquireForLed()
-                if (portLease == null) {
-                    update { copy(gpsStatus = "GPS port busy") }
-                    log("GPS command failed to acquire port 40007")
-                    return@runOnIO
-                }
-
-                val commandCycles = 2
-                val writesPerCycle = 5
-                var anyWriteSucceeded = false
-
-                for (cycle in 1..commandCycles) {
-                    for (write in 1..writesPerCycle) {
+                val sendResult = GpsCommandRunner.send(
+                    enabled = enabled,
+                    onProgress = { cycle, cycles, write, writes ->
                         update {
                             copy(
-                                gpsStatus = "GPS $requestedLabel cycle $cycle/$commandCycles, " +
-                                    "write $write/$writesPerCycle..."
+                                gpsStatus = "GPS $requestedLabel cycle $cycle/$cycles, " +
+                                    "write $write/$writes..."
                             )
                         }
                         log(
-                            "GPS $requestedLabel cycle $cycle/$commandCycles, " +
-                                "write $write/$writesPerCycle"
+                            "GPS $requestedLabel cycle $cycle/$cycles, " +
+                                "write $write/$writes"
                         )
+                    },
+                    onCycleRepeated = { cycle, cycles ->
+                        log("GPS $requestedLabel cycle $cycle/$cycles sent; duplicating command")
+                    }
+                )
 
-                        val request = GpsControlProtocol.buildWriteRequest(enabled)
-                        val writeSucceeded = DumlTransport().sendFrame(
-                            frame = Profiles.wrapFrame(request),
-                            readWindowMs = 150,
-                            port = DumlTransport.PORT_LED
-                        )
-                        anyWriteSucceeded = anyWriteSucceeded || writeSucceeded
-                        if (write < writesPerCycle) {
-                            delay(100)
+                when (sendResult) {
+                    GpsCommandSendResult.PORT_BUSY -> {
+                        update { copy(gpsStatus = "GPS port busy") }
+                        log("GPS command failed to acquire port 40007")
+                    }
+                    GpsCommandSendResult.TRANSPORT_FAILED -> {
+                        log("GPS $requestedLabel command transport failed")
+                        update { copy(gpsStatus = "GPS command transport failed") }
+                    }
+                    GpsCommandSendResult.SENT -> {
+                        // Live rc520 evidence: the command can apply physically,
+                        // while reads in the same port lease never return. Clear
+                        // stale state now and refresh only after releasing 40007.
+                        GpsControlStateStore.clear(app)
+                        update {
+                            copy(
+                                gpsState = GpsState.UNKNOWN,
+                                gpsRawValue = null,
+                                gpsStatus = "$requestedLabel commands sent; waiting for fresh status..."
+                            )
                         }
+                        followUpRead = true
+                        log("GPS $requestedLabel commands sent; scheduling fresh-port status read")
                     }
-                    if (cycle < commandCycles) {
-                        log("GPS $requestedLabel cycle $cycle/$commandCycles sent; duplicating command")
-                        delay(250)
-                    }
-                }
-
-                if (!anyWriteSucceeded) {
-                    log("GPS $requestedLabel command transport failed")
-                    update { copy(gpsStatus = "GPS command transport failed") }
-                } else {
-                    // Live rc520 evidence: the command can apply physically,
-                    // while reads in the same port lease never return. Clear
-                    // stale state now and refresh only after releasing 40007.
-                    prefs.edit()
-                        .remove(PREF_GPS_STATE)
-                        .remove(PREF_GPS_RAW)
-                        .remove(PREF_GPS_AT)
-                        .apply()
-                    update {
-                        copy(
-                            gpsState = GpsState.UNKNOWN,
-                            gpsRawValue = null,
-                            gpsStatus = "$requestedLabel commands sent; waiting for fresh status..."
-                        )
-                    }
-                    followUpRead = true
-                    log("GPS $requestedLabel commands sent; scheduling fresh-port status read")
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -1205,7 +1187,6 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                     )
                 }
             } finally {
-                portLease?.let(Port40007Lock::releaseFromLed)
                 gpsOperationBusy.set(false)
                 update { copy(isGpsBusy = false) }
             }
