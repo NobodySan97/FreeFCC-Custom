@@ -11,27 +11,22 @@ import java.security.MessageDigest
 
 /**
  * Checks for app updates by querying the GitHub Releases API.
- *
- * GitHub API endpoint:
- *   GET https://api.github.com/repos/NobodySan97/FreeFCC-Custom/releases/latest
- *
- * Returns JSON with tag_name, name, body (changelog), and assets[] (download URLs).
- *
- * The download flow:
- *   1. Download the APK to app cache dir
- *   2. Verify the SHA-256 digest against the GitHub asset digest
- *   3. Return the file path — the ViewModel opens an install Intent
+ * Supports both Stable ("latest") and Experimental ("all releases / prerelease") channels.
  */
 data class UpdateInfo(
-    val version: String,       // e.g. "1.4"
-    val title: String,         // e.g. "v1.4 — Altitude Unlock"
+    val version: String,       // e.g. "1.5.66"
+    val title: String,         // e.g. "v1.5.66 — FreeFCC Custom Release"
     val changelog: String,    // release body (markdown)
     val downloadUrl: String,  // direct APK URL
     val apkSize: Long,        // bytes
     val publishedAt: String,  // ISO date
-    val sha256: String?       // expected hex digest from GitHub, or null if absent
+    val sha256: String?,      // expected hex digest from GitHub, or null if absent
+    val isPreRelease: Boolean = false
 ) {
-    fun isNewerThan(currentVersion: String): Boolean {
+    fun isNewerThan(currentVersion: String, targetChannel: String = "stable"): Boolean {
+        if (targetChannel == "stable" && isPreRelease) {
+            return false
+        }
         val cur = parseVersion(currentVersion)
         val new = parseVersion(version)
         val maxLen = maxOf(cur.size, new.size)
@@ -44,7 +39,7 @@ data class UpdateInfo(
     }
 
     private fun parseVersion(v: String): List<Int> {
-        return v.removePrefix("v").split(".").mapNotNull { it.toIntOrNull() }
+        return v.removePrefix("v").split("-").first().split(".").mapNotNull { it.toIntOrNull() }
     }
 }
 
@@ -63,12 +58,14 @@ object UpdateChecker {
 
     /**
      * Fetches the latest release info from GitHub.
+     * If includePreRelease is true, queries all releases and returns the newest release or pre-release.
      * Returns null on any error (network, parse, etc).
      */
-    fun fetchLatest(): UpdateInfo? {
+    fun fetchLatest(includePreRelease: Boolean = false): UpdateInfo? {
         var conn: HttpURLConnection? = null
         return try {
-            conn = (URL(ProjectLinks.LATEST_RELEASE_API).openConnection() as HttpURLConnection).apply {
+            val apiUrl = if (includePreRelease) ProjectLinks.ALL_RELEASES_API else ProjectLinks.LATEST_RELEASE_API
+            conn = (URL(apiUrl).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 8000
                 readTimeout = 8000
@@ -79,12 +76,19 @@ object UpdateChecker {
             if (conn.responseCode != 200) return null
 
             val body = conn.inputStream.bufferedReader().use { it.readText() }
-            val json = JSONObject(body)
+            val json = if (includePreRelease) {
+                val array = org.json.JSONArray(body)
+                if (array.length() == 0) return null
+                array.getJSONObject(0)
+            } else {
+                JSONObject(body)
+            }
 
             val tagName = json.optString("tag_name", "").removePrefix("v")
             val name = json.optString("name", "v$tagName")
             val changelog = normalizeReleaseBody(json.optString("body", ""))
             val publishedAt = json.optString("published_at", "")
+            val isPreRelease = json.optBoolean("prerelease", false)
 
             // Find the first APK asset
             val assets = json.optJSONArray("assets") ?: return null
@@ -97,7 +101,6 @@ object UpdateChecker {
                 if (nameField.endsWith(".apk", ignoreCase = true)) {
                     apkUrl = asset.optString("browser_download_url", "")
                     apkSize = asset.optLong("size", 0)
-                    // GitHub returns "sha256:<hex>" in the digest field.
                     sha256 = asset.optString("digest", "")
                         .removePrefix("sha256:")
                         .takeIf { it.matches(Regex("[0-9a-fA-F]{64}")) }
@@ -114,7 +117,8 @@ object UpdateChecker {
                 downloadUrl = apkUrl,
                 apkSize = apkSize,
                 publishedAt = publishedAt,
-                sha256 = sha256
+                sha256 = sha256,
+                isPreRelease = isPreRelease
             )
         } catch (e: Exception) {
             Log.w("FreeFCC-Update", "fetchLatest failed: ${e.javaClass.simpleName}: ${e.message}")
@@ -167,9 +171,6 @@ object UpdateChecker {
                 return null
             }
 
-            // Verify the digest if GitHub provided one. A mismatch means the
-            // file was tampered with, the connection was MITM'd, or the
-            // release changed underneath us — refuse to install in all cases.
             if (md != null) {
                 val actual = md.digest().joinToString("") { "%02x".format(it) }
                 if (!actual.equals(info.sha256, ignoreCase = true)) {

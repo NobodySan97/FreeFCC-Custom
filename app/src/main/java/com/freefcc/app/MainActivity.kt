@@ -1073,6 +1073,51 @@ private fun UpdatePage(state: AppState, viewModel: FccViewModel) {
                 )
             }
 
+            Spacer(Modifier.height(10.dp))
+            DividerLine()
+            Spacer(Modifier.height(10.dp))
+
+            Text("Update Channel", color = TextGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val isStable = state.updateChannel == "stable"
+                Surface(
+                    onClick = { viewModel.setUpdateChannel("stable") },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isStable) Green.copy(0.2f) else BgLight.copy(0.3f),
+                    border = BorderStroke(1.dp, if (isStable) Green else CardBorder.copy(0.4f)),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp)
+                    ) {
+                        Text("🟢 Stable", color = if (isStable) Green else TextGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                val isExperimental = state.updateChannel == "experimental"
+                Surface(
+                    onClick = { viewModel.setUpdateChannel("experimental") },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isExperimental) Amber.copy(0.2f) else BgLight.copy(0.3f),
+                    border = BorderStroke(1.dp, if (isExperimental) Amber else CardBorder.copy(0.4f)),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp)
+                    ) {
+                        Text("🧪 Beta / Pre-release", color = if (isExperimental) Amber else TextGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
             if (state.updateAvailable) {
                 Spacer(Modifier.height(10.dp))
                 DividerLine()

@@ -2,7 +2,7 @@
 
 ## 1.5.66 — 2026-08-03
 
-- **UI Restyling & Native Memory Safety:** Added FCC Power Ring Gauge with sweep gradient rotation, bobbing drone flight animation in aircraft identity card, pulsing halo ring on floating overlay button, native AccessibilityNodeInfo memory leak resolution, ToneGenerator audio beep feedback for DJI RC/RC2 controllers, and total download count badge in README.
+- **UI Restyling, Update Channel Switcher & Memory Safety:** Added FCC Power Ring Gauge with sweep gradient rotation, bobbing drone flight animation in aircraft identity card, pulsing halo ring on floating overlay button, Update Channel Switcher (🟢 Stable vs 🧪 Beta) with rollback support, native AccessibilityNodeInfo memory leak resolution, ToneGenerator audio beep feedback for DJI RC/RC2 controllers, and total download count badge in README.
 
 ## 1.5.65 — 2026-08-03
 

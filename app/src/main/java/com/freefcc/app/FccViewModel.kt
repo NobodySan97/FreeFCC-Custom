@@ -66,6 +66,7 @@ data class AppState(
     val isUpdateDownloaded: Boolean = false,
     val updateAvailable: Boolean = false,
     val updateChecked: Boolean = false,
+    val updateChannel: String = "stable",
     // Keepalive state
     val isKeepaliveRunning: Boolean = false,
     val selectedAutoMode: AutoFccMode? = null,
@@ -125,6 +126,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         internal const val AIRCRAFT_MODEL_SOURCE_UI = "dji_app_screen"
         internal const val AIRCRAFT_MODEL_SOURCE_DUML = "duml_passive"
         internal const val AIRCRAFT_MODEL_FRESH_MS = 5 * 60_000L
+        internal const val PREF_UPDATE_CHANNEL = "update_channel"
         private val processLogLock = Any()
         private val processLogs = ArrayDeque<String>()
         private val lanDiagnosticBusy = AtomicBoolean(false)
@@ -240,6 +242,8 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
 
     init {
         prefs.registerOnSharedPreferenceChangeListener(preferenceListener)
+        val savedChannel = prefs.getString(PREF_UPDATE_CHANNEL, "stable") ?: "stable"
+        update { copy(updateChannel = savedChannel) }
         // MainActivity.onCreate() calls init() below on every Activity re-creation
         // (e.g. config change), but this class init{} runs exactly once per
         // ViewModel instance — the collector must live here, not in init().
@@ -1652,35 +1656,40 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
 
     // --- Updates ---
 
+    fun setUpdateChannel(channel: String) {
+        prefs.edit().putString(PREF_UPDATE_CHANNEL, channel).apply()
+        update { copy(updateChannel = channel) }
+        log("Switched update channel to: ${if (channel == "experimental") "Experimental (Beta)" else "Stable"}")
+        checkForUpdates(force = true)
+    }
+
     fun checkForUpdates(force: Boolean = false) {
         if (_state.value.isCheckingUpdate) return
-        // Rate-limit: don't hit GitHub API more than once per hour.
-        // Unauthenticated limit is 60 requests/hour per IP.
-        // The timestamp is saved ONLY on success — a failed check does NOT
-        // consume the rate-limit window, so the user can retry immediately.
+        val channel = prefs.getString(PREF_UPDATE_CHANNEL, "stable") ?: "stable"
         val lastCheck = prefs.getLong("last_update_check", 0)
         val now = System.currentTimeMillis()
         if (!force && now - lastCheck < 60 * 60 * 1000 && _state.value.updateChecked && _state.value.updateInfo != null) {
             return
         }
-        update { copy(isCheckingUpdate = true) }
-        log("Checking for updates...")
+        update { copy(isCheckingUpdate = true, updateChannel = channel) }
+        log("Checking for updates (${if (channel == "experimental") "Experimental" else "Stable"})...")
 
         runOnIO {
-            val info = UpdateChecker.fetchLatest()
+            val info = UpdateChecker.fetchLatest(includePreRelease = (channel == "experimental"))
             if (info == null) {
-                // Don't save lastCheck on failure — let the user retry immediately.
-                update { copy(isCheckingUpdate = false, updateChecked = true) }
+                update { copy(isCheckingUpdate = false, updateChecked = true, updateChannel = channel) }
                 log("Update check failed — no internet or GitHub unreachable. Tap Retry to try again.")
                 return@runOnIO
             }
 
-            // Save the timestamp only on success.
             prefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply()
 
-            val isNewer = info.isNewerThan(APP_VERSION)
+            val isNewer = info.isNewerThan(APP_VERSION, channel) ||
+                (channel == "stable" && info.version != APP_VERSION && !info.isPreRelease)
+
             update {
                 copy(
+                    updateChannel = channel,
                     updateInfo = info,
                     isCheckingUpdate = false,
                     updateChecked = true,
@@ -1688,7 +1697,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 )
             }
             if (isNewer) {
-                log("Update available: v${info.version}")
+                log("Update available (${if (info.isPreRelease) "Beta" else "Stable"}): v${info.version}")
             } else {
                 log("App is up to date (v$APP_VERSION)")
             }
