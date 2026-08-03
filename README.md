@@ -6,6 +6,7 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/NobodySan97/FreeFCC-Custom?style=flat-square)](https://github.com/NobodySan97/FreeFCC-Custom/releases)
+[![Downloads](https://img.shields.io/github/downloads/NobodySan97/FreeFCC-Custom/total?style=flat-square&color=brightgreen)](https://github.com/NobodySan97/FreeFCC-Custom/releases)
 
 A free and open-source Android app that unlocks FCC mode, sends experimental 4G activation frames, and queries device info on DJI smart controllers with a screen (RC2, RC Pro 2, RC Plus).
 

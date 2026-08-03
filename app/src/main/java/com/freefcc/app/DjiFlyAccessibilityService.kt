@@ -308,6 +308,16 @@ class DjiFlyAccessibilityService : AccessibilityService() {
             for (index in 0 until node.childCount) {
                 node.getChild(index)?.let(pending::addLast)
             }
+            if (node != root) {
+                runCatching { node.recycle() }
+            }
+        }
+        runCatching { root.recycle() }
+        while (pending.isNotEmpty()) {
+            val unvisited = pending.removeFirst()
+            if (unvisited != root) {
+                runCatching { unvisited.recycle() }
+            }
         }
         return labels
     }

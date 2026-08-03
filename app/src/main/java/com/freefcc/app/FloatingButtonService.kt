@@ -280,6 +280,20 @@ class FloatingButtonService : Service() {
             LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { setMargins(0, 0, 0, dpToPx(8)) })
 
+        // Restore CE Mode Button
+        val ceRestoreBtn = Button(this).apply {
+            text = "🇪🇺 Ripristina CE Mode (Standard)"
+            setTextColor(Color.parseColor("#FFFF9D4D"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            background = createButtonDrawable("#30241A")
+            setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(8))
+            setOnClickListener { applyRegion("DE") }
+        }
+        container.addView(ceRestoreBtn, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(0, 0, 0, dpToPx(8)) })
+
         // Open Full App Button
         val openAppBtn = Button(this).apply {
             text = "🚀 Apri App Completa"
@@ -353,6 +367,25 @@ class FloatingButtonService : Service() {
         }
     }
 
+    private var lastVibratedCountry: String? = null
+
+    private fun applyRegion(country: String) {
+        scope.launch {
+            val transport = DumlTransport()
+            val port = transport.getDetectedPort().takeIf { it > 0 } ?: DumlTransport.PORT
+            val result = FccCountryRegion.ensure(transport, port, targetCountry = country)
+            withContext(Dispatchers.Main) {
+                if (result.observedCountry == "AU" && lastVibratedCountry != "AU") {
+                    lastVibratedCountry = "AU"
+                    FccHaptics.vibrateSuccess(this@FloatingButtonService)
+                } else if (result.observedCountry != "AU") {
+                    lastVibratedCountry = result.observedCountry
+                }
+                queryRadioState()
+            }
+        }
+    }
+
     private fun queryRadioState() {
         scope.launch {
             val transport = DumlTransport()
@@ -360,11 +393,16 @@ class FloatingButtonService : Service() {
             val result = FccCountryRegion.ensure(transport, port)
             withContext(Dispatchers.Main) {
                 if (result.observedCountry == "AU") {
+                    if (lastVibratedCountry != "AU") {
+                        lastVibratedCountry = "AU"
+                        FccHaptics.vibrateSuccess(this@FloatingButtonService)
+                    }
                     radioStatusTextView?.text = "Stato Radio: 🟢 AU (FCC ⚡)"
                     radioStatusTextView?.setTextColor(Color.parseColor("#4CAF50"))
                     floatingBgDrawable?.setStroke(dpToPx(2), Color.parseColor("#4CAF50"))
                     floatingTextView?.setTextColor(Color.parseColor("#4CAF50"))
                 } else if (result.observedCountry != null) {
+                    lastVibratedCountry = result.observedCountry
                     radioStatusTextView?.text = "Stato Radio: 🟠 ${result.observedCountry} (Standard)"
                     radioStatusTextView?.setTextColor(Color.parseColor("#FFFF9D4D"))
                     floatingBgDrawable?.setStroke(dpToPx(2), Color.parseColor("#FFFF9D4D"))

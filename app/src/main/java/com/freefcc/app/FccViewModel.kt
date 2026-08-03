@@ -710,6 +710,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 )
 
                 if (success) {
+                    FccHaptics.vibrateSuccess(app)
                     update {
                         copy(
                             status = "fcc_written",

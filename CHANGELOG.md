@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.66 — 2026-08-03
+
+- **UI Restyling & Native Memory Safety:** Added FCC Power Ring Gauge with sweep gradient rotation, bobbing drone flight animation in aircraft identity card, pulsing halo ring on floating overlay button, native AccessibilityNodeInfo memory leak resolution, ToneGenerator audio beep feedback for DJI RC/RC2 controllers, and total download count badge in README.
+
+## 1.5.65 — 2026-08-03
+
+- **Audio Feedback & Quick CE/FCC Switch:** Added system audio tone beep feedback (`ToneGenerator`) upon FCC verification for speaker-only DJI RC / RC2 controllers, quick CE (Standard) vs FCC (AU) mode switch in the overlay mini menu, and dynamic country targeting.
+
 ## 1.5.64 — 2026-08-02
 
 - **Performance & Graphics Refactor:** Zero-allocation fast hex stringifier for high-throughput LAN control and DUML packet logging (20x faster, 90% less RAM). Added ambient pulsing status dots and glassmorphic UI card gradients.

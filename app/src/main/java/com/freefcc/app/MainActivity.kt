@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
@@ -432,6 +433,8 @@ private fun FccPage(state: AppState, viewModel: FccViewModel) {
         Spacer(Modifier.height(8.dp))
 
         GlowCard {
+            FccPowerRingGauge(state)
+            Spacer(Modifier.height(6.dp))
             ModeBadge(state)
             Spacer(Modifier.height(6.dp))
 
@@ -1327,24 +1330,134 @@ private fun BodyText(text: String, color: Color = TextGray) {
 }
 
 @Composable
+private fun FccPowerRingGauge(state: AppState) {
+    val active = state.isFccEnabled
+    val ringColor = if (active) Green else Cyan
+    val infiniteTransition = rememberInfiniteTransition(label = "powerRing")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(6000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ringRotation"
+    )
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "ringPulse"
+    )
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Canvas(modifier = Modifier.size(90.dp)) {
+            val strokeWidth = 5.dp.toPx()
+            val radius = (size.minDimension - strokeWidth) / 2
+            val centerOffset = Offset(size.width / 2, size.height / 2)
+
+            drawCircle(
+                color = CardBorder.copy(0.4f),
+                radius = radius,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
+            )
+
+            rotate(degrees = if (active) rotation else 0f, pivot = centerOffset) {
+                drawArc(
+                    brush = Brush.sweepGradient(
+                        listOf(
+                            ringColor.copy(0.1f),
+                            ringColor.copy(pulseAlpha),
+                            ringColor.copy(0.2f),
+                            ringColor.copy(pulseAlpha)
+                        )
+                    ),
+                    startAngle = 0f,
+                    sweepAngle = if (active) 280f else 180f,
+                    useCenter = false,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = strokeWidth,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                )
+            }
+        }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                if (active) Icons.Filled.Bolt else Icons.Filled.CellTower,
+                contentDescription = null,
+                tint = ringColor,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                if (active) "FCC ⚡" else "CE 🇪🇺",
+                color = TextWhite,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Black
+            )
+            Text(
+                if (active) "27-30 dBm" else "20 dBm",
+                color = ringColor,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+    }
+}
+
+@Composable
 private fun SerialRow(serial: String, enabled: Boolean = true, onRefresh: () -> Unit) {
     val identityLabel = if (serial.startsWith("W")) "Model: " else "S/N: "
     val identityValue = serial.ifEmpty { "Not detected — tap refresh" }
+    val isConnected = serial.isNotEmpty()
+
+    val infiniteTransition = rememberInfiniteTransition(label = "droneFlight")
+    val bobbingOffset by infiniteTransition.animateFloat(
+        initialValue = -2.5f,
+        targetValue = 2.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "droneBobbing"
+    )
+
     Surface(
         color = BgLight.copy(0.4f),
         shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, if (isConnected) Green.copy(0.4f) else CardBorder.copy(0.5f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
-            Icon(Icons.Filled.Flight, null, tint = Cyan.copy(0.6f), modifier = Modifier.size(18.dp))
+            Box(
+                modifier = Modifier.offset(y = if (isConnected) bobbingOffset.dp else 0.dp)
+            ) {
+                Icon(
+                    Icons.Filled.Flight,
+                    null,
+                    tint = if (isConnected) Green else Cyan.copy(0.6f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
             Spacer(Modifier.width(10.dp))
             Text(identityLabel, color = TextGray, fontSize = 12.sp)
             Text(
                 identityValue,
-                color = TextWhite,
+                color = if (isConnected) TextWhite else TextDim,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,

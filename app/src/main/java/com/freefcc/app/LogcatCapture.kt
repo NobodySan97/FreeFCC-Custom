@@ -93,7 +93,8 @@ internal object LogcatCapture {
             error = e.message ?: "logcat_read_failed"
         } finally {
             watchdog.interrupt()
-            process.destroy()
+            runCatching { process.inputStream.close() }
+            runCatching { process.destroyForcibly() }
         }
         return LogcatCaptureResult(lineCount, truncated, error)
     }
