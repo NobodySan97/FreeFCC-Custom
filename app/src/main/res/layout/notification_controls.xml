@@ -23,40 +23,37 @@
         android:layout_height="36dp"
         android:orientation="horizontal">
 
-        <Button
+        <TextView
             android:id="@+id/notification_home_point"
-            style="@android:style/Widget.Material.Button.Borderless.Small"
+            style="@android:style/TextAppearance.Material.Notification"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:minHeight="0dp"
-            android:minWidth="0dp"
+            android:background="@android:color/transparent"
+            android:gravity="center"
             android:padding="0dp"
-            android:textAllCaps="false"
             android:textSize="11sp" />
 
-        <Button
+        <TextView
             android:id="@+id/notification_periodic"
-            style="@android:style/Widget.Material.Button.Borderless.Small"
+            style="@android:style/TextAppearance.Material.Notification"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:minHeight="0dp"
-            android:minWidth="0dp"
+            android:background="@android:color/transparent"
+            android:gravity="center"
             android:padding="0dp"
-            android:textAllCaps="false"
             android:textSize="11sp" />
 
-        <Button
+        <TextView
             android:id="@+id/notification_fcc_off"
-            style="@android:style/Widget.Material.Button.Borderless.Small"
+            style="@android:style/TextAppearance.Material.Notification"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:minHeight="0dp"
-            android:minWidth="0dp"
+            android:background="@android:color/transparent"
+            android:gravity="center"
             android:padding="0dp"
-            android:textAllCaps="false"
             android:textSize="11sp" />
     </LinearLayout>
 
@@ -80,28 +77,26 @@
             android:layout_height="36dp"
             android:orientation="horizontal">
 
-            <Button
+            <TextView
                 android:id="@+id/notification_gps_on"
-                style="@android:style/Widget.Material.Button.Borderless.Small"
+                style="@android:style/TextAppearance.Material.Notification"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:minHeight="0dp"
-                android:minWidth="0dp"
+                android:background="@android:color/transparent"
+                android:gravity="center"
                 android:padding="0dp"
-                android:textAllCaps="false"
                 android:textSize="12sp" />
 
-            <Button
+            <TextView
                 android:id="@+id/notification_gps_off"
-                style="@android:style/Widget.Material.Button.Borderless.Small"
+                style="@android:style/TextAppearance.Material.Notification"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:minHeight="0dp"
-                android:minWidth="0dp"
+                android:background="@android:color/transparent"
+                android:gravity="center"
                 android:padding="0dp"
-                android:textAllCaps="false"
                 android:textSize="12sp" />
         </LinearLayout>
     </LinearLayout>
