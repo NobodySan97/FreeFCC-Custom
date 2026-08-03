@@ -218,7 +218,10 @@ in its first control row, so the mode can be changed without opening the app.
 Expand it to use the second row with **GPS ON** and **GPS OFF**. Each GPS action
 runs the same four bounded write cycles as the app screen and then automatically
 performs up to three fresh-port status checks; the notification reports the
-verified state or an explicit unknown/mismatch result. Selecting Home Point opens
+verified state or an explicit unknown/mismatch result. The custom control block
+uses explicit opaque white text because DJI SystemUI resolves inherited
+notification text colors as dark after replacing the former system action row.
+Selecting Home Point opens
 Android Accessibility settings when the required service is not enabled yet. Tap
 the notification body to open the app. On Android 13 and newer, allow notifications
 when prompted; after an
