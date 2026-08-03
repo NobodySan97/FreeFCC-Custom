@@ -1109,7 +1109,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         log("GPS state read back: $label")
     }
 
-    /** Writes an explicit master GPS state five times, then verifies on fresh leases. */
+    /** Writes two bounded GPS command cycles, then verifies on fresh leases. */
     fun setGps(enabled: Boolean): Boolean {
         if (!gpsOperationBusy.compareAndSet(false, true)) {
             log("GPS busy — please wait.")
@@ -1137,22 +1137,37 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                     return@runOnIO
                 }
 
+                val commandCycles = 2
+                val writesPerCycle = 5
                 var anyWriteSucceeded = false
 
-                for (attempt in 1..5) {
-                    update { copy(gpsStatus = "GPS $requestedLabel attempt $attempt/5...") }
-                    log("GPS $requestedLabel attempt $attempt/5")
+                for (cycle in 1..commandCycles) {
+                    for (write in 1..writesPerCycle) {
+                        update {
+                            copy(
+                                gpsStatus = "GPS $requestedLabel cycle $cycle/$commandCycles, " +
+                                    "write $write/$writesPerCycle..."
+                            )
+                        }
+                        log(
+                            "GPS $requestedLabel cycle $cycle/$commandCycles, " +
+                                "write $write/$writesPerCycle"
+                        )
 
-                    val request = GpsControlProtocol.buildWriteRequest(enabled)
-                    val writeSucceeded = DumlTransport().sendFrame(
-                        frame = Profiles.wrapFrame(request),
-                        readWindowMs = 150,
-                        port = DumlTransport.PORT_LED
-                    )
-                    anyWriteSucceeded = anyWriteSucceeded || writeSucceeded
-                    if (attempt < 5) {
-                        log("GPS $requestedLabel write sent; repeating bounded command")
-                        delay(100)
+                        val request = GpsControlProtocol.buildWriteRequest(enabled)
+                        val writeSucceeded = DumlTransport().sendFrame(
+                            frame = Profiles.wrapFrame(request),
+                            readWindowMs = 150,
+                            port = DumlTransport.PORT_LED
+                        )
+                        anyWriteSucceeded = anyWriteSucceeded || writeSucceeded
+                        if (write < writesPerCycle) {
+                            delay(100)
+                        }
+                    }
+                    if (cycle < commandCycles) {
+                        log("GPS $requestedLabel cycle $cycle/$commandCycles sent; duplicating command")
+                        delay(250)
                     }
                 }
 
