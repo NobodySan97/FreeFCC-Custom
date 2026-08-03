@@ -11,7 +11,7 @@
 
     <TextView
         android:id="@+id/notification_auto_status"
-        style="@android:style/TextAppearance.Material.Notification.Title"
+        style="@style/TextAppearance.Compat.Notification.Title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:maxLines="1"
@@ -25,7 +25,7 @@
 
         <TextView
             android:id="@+id/notification_home_point"
-            style="@android:style/TextAppearance.Material.Notification"
+            style="@style/TextAppearance.Compat.Notification.Title"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -36,7 +36,7 @@
 
         <TextView
             android:id="@+id/notification_periodic"
-            style="@android:style/TextAppearance.Material.Notification"
+            style="@style/TextAppearance.Compat.Notification.Title"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -47,7 +47,7 @@
 
         <TextView
             android:id="@+id/notification_fcc_off"
-            style="@android:style/TextAppearance.Material.Notification"
+            style="@style/TextAppearance.Compat.Notification.Title"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -65,7 +65,7 @@
 
         <TextView
             android:id="@+id/notification_gps_status"
-            style="@android:style/TextAppearance.Material.Notification"
+            style="@style/TextAppearance.Compat.Notification.Title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
@@ -79,7 +79,7 @@
 
             <TextView
                 android:id="@+id/notification_gps_on"
-                style="@android:style/TextAppearance.Material.Notification"
+                style="@style/TextAppearance.Compat.Notification.Title"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
@@ -90,7 +90,7 @@
 
             <TextView
                 android:id="@+id/notification_gps_off"
-                style="@android:style/TextAppearance.Material.Notification"
+                style="@style/TextAppearance.Compat.Notification.Title"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"

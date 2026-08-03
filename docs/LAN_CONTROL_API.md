@@ -205,8 +205,11 @@ reply must be retained without interpretation.
 The GPS actions use the model-independent little-endian hash `82 95 42 c5`
 (`0xC5429582`) for `g_config.gps_cfg.gps_enable`. `gps_read` sends at most three
 wrapped read-only `03:F8` attempts and stops after the first validated reply.
-`gps_on` and `gps_off` send two bounded command cycles of five idempotent `03:F9`
-writes 100 ms apart, with 250 ms between cycles. They then release their
+`gps_on` and `gps_off` send four bounded command cycles of five idempotent `03:F9`
+writes 100 ms apart, with 250 ms between cycles. This 20-write bound includes
+the equivalent of a second manual press: live `rc331` evidence showed all ten
+writes in the first pair completing while fresh readback still returned the old
+state, followed by the next pair applying OFF. They then release their
 port-`40007` lease and after 250 ms start the same standalone
 `03:F8` Refresh path used by `gps_read`. Each of the three status attempts uses
 a separate port lease. Live `rc520` evidence showed that reads sharing one bad

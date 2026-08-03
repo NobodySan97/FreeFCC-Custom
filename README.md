@@ -191,7 +191,7 @@ full FCC apply.
    [third-party FCC/4G application survey](docs/THIRD_PARTY_FCC_4G_APP_RESEARCH.md)
    compares NLD FCC, OpenFCC, Drone Tweaks, Drone-Hacks and the official DJI
    LTE path.
-5. The aircraft-control card is split evenly: GPS on the left and LED on the right. Each side has its own manual refresh and explicit ON/OFF buttons, available without starting Auto FCC first. GPS ON/OFF sends two bounded command cycles of five idempotent writes 100 ms apart, with 250 ms between cycles, releases port `40007`, and after 250 ms automatically runs a three-attempt status Refresh. Every status attempt opens a new port lease instead of reusing a failed one. LED ON/OFF makes at most two complete reference-pattern command cycles. GPS/LED stay on the wrapped `40007` path because live RC Pro 2 tests found no matching readback on `40009` or `8901`. The last validated replies persist across app reopen with a `Last verified` timestamp, and a failed manual refresh does not erase them. A GPS write invalidates the older cached value until the fresh Refresh completes, so the UI never presents the pre-command OFF/ON as current. Neither side polls port `40007` in the background.
+5. The aircraft-control card is split evenly: GPS on the left and LED on the right. Each side has its own manual refresh and explicit ON/OFF buttons, available without starting Auto FCC first. GPS ON/OFF sends four bounded command cycles of five idempotent writes 100 ms apart, with 250 ms between cycles, releases port `40007`, and after 250 ms automatically runs a three-attempt status Refresh. Every status attempt opens a new port lease instead of reusing a failed one. The 20-write bound includes the equivalent of a second manual press because live `rc331` logs showed that the first ten writes can leave the verified state unchanged. LED ON/OFF makes at most two complete reference-pattern command cycles. GPS/LED stay on the wrapped `40007` path because live RC Pro 2 tests found no matching readback on `40009` or `8901`. The last validated replies persist across app reopen with a `Last verified` timestamp, and a failed manual refresh does not erase them. A GPS write invalidates the older cached value until the fresh Refresh completes, so the UI never presents the pre-command OFF/ON as current. Neither side polls port `40007` in the background.
 6. The **Info** tab shows the controller code, aircraft model name/code and
    factory S/N. Since 1.5.54 the model is read **off the DJI app screen** — DJI
    Fly and Pilot 2 print both the product code and the commercial name, so a
@@ -216,7 +216,7 @@ restored without opening DJI Fly; if both switches were off, no FCC command is
 started. The notification shows **Home Point**, **every 5 seconds**, or **Off**
 in its first control row, so the mode can be changed without opening the app.
 Expand it to use the second row with **GPS ON** and **GPS OFF**. Each GPS action
-runs the same two bounded write cycles as the app screen and then automatically
+runs the same four bounded write cycles as the app screen and then automatically
 performs up to three fresh-port status checks; the notification reports the
 verified state or an explicit unknown/mismatch result. Selecting Home Point opens
 Android Accessibility settings when the required service is not enabled yet. Tap

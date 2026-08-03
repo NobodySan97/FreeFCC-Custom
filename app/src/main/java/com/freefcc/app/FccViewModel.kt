@@ -1110,7 +1110,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         log("GPS state read back: $label")
     }
 
-    /** Writes two bounded GPS command cycles, then verifies on fresh leases. */
+    /** Writes four bounded GPS command cycles, then verifies on fresh leases. */
     fun setGps(enabled: Boolean): Boolean {
         if (!gpsOperationBusy.compareAndSet(false, true)) {
             log("GPS busy — please wait.")

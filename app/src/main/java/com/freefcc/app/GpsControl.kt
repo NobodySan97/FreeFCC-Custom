@@ -28,7 +28,10 @@ internal data class GpsFreshReadResult(
 
 /** Shared bounded GPS wire operations used by the app UI, LAN and notification actions. */
 internal object GpsCommandRunner {
-    private const val COMMAND_CYCLES = 2
+    // Live rc331 evidence showed that one pair of cycles can flush all writes
+    // while the verified aircraft state remains unchanged. Keep the operation
+    // bounded, but include the equivalent of the second manual press.
+    private const val COMMAND_CYCLES = 4
     private const val WRITES_PER_CYCLE = 5
 
     suspend fun send(
