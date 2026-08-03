@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.68-beta — 2026-08-03
+
+- **Experimental UI & Graphic Rework:** Complete redesign of app dashboard layout, telemetry status top header with beta tag, cyberpunk terminal log colorizer, update channel switcher (🟢 Stable vs 🧪 Beta), and native memory leak protections.
+
 ## 1.5.66 — 2026-08-03
 
 - **UI Restyling, Update Channel Switcher & Memory Safety:** Added FCC Power Ring Gauge with sweep gradient rotation, bobbing drone flight animation in aircraft identity card, pulsing halo ring on floating overlay button, Update Channel Switcher (🟢 Stable vs 🧪 Beta) with rollback support, native AccessibilityNodeInfo memory leak resolution, ToneGenerator audio beep feedback for DJI RC/RC2 controllers, and total download count badge in README.

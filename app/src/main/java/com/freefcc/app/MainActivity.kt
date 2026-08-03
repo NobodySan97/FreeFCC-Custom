@@ -1240,19 +1240,32 @@ private fun FccHeader(state: AppState) {
         Text(
             "FreeFCC Custom",
             color = Cyan,
-            fontSize = 22.sp,
+            fontSize = 21.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = 0.5.sp
         )
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(8.dp))
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = Amber.copy(0.18f),
+            border = BorderStroke(1.dp, Amber.copy(0.5f))
+        ) {
+            Text(
+                "🧪 BETA",
+                color = Amber,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        }
+        Spacer(Modifier.weight(1f))
         Text(
             versionAndModel,
             color = TextDim,
-            fontSize = 12.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
