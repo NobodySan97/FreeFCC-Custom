@@ -663,6 +663,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             log("DUML port $effectivePort busy — wait for Auto FCC or diagnostics to finish.")
             return false
         }
+        UsageStatistics.recordAction(app, UsageAction.MANUAL_FCC)
         update { copy(status = "applying", isBusy = true, busyProgress = 0f, message = "Sending FCC request...") }
         log("Sending FCC request...")
 
@@ -793,6 +794,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         ) {
             return false
         }
+        UsageStatistics.recordAction(app, UsageAction.forAutoMode(nextMode))
 
         if (currentMode != null && currentMode != nextMode) {
             FccKeepaliveService.stop(app, clearSelection = false)
@@ -837,6 +839,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
      * background while the flight app runs.
      */
     fun launchDjiFly(): Boolean {
+        UsageStatistics.recordAction(app, UsageAction.LAUNCH_DJI_FLY)
         val pm = app.packageManager
         // Try the standard launch intent first
         var intent = pm.getLaunchIntentForPackage("dji.go.v5")
@@ -918,6 +921,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             log("Hardware busy — please wait for the current operation to finish.")
             return false
         }
+        UsageStatistics.recordAction(app, UsageAction.FOUR_G_ACTIVATE)
         update { copy(is4gBusy = true, busyProgress = 0f, fourGMessage = "") }
         log("Sending 4G activation frames...")
 
@@ -1116,6 +1120,10 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             log("GPS busy — please wait.")
             return false
         }
+        UsageStatistics.recordAction(
+            app,
+            if (enabled) UsageAction.GPS_ON else UsageAction.GPS_OFF
+        )
         AppForegroundNotification.clearGpsStatus()
         val requestedLabel = if (enabled) "ON" else "OFF"
         update {
@@ -1327,6 +1335,10 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             log("LED busy — please wait.")
             return false
         }
+        UsageStatistics.recordAction(
+            app,
+            if (on) UsageAction.LED_ON else UsageAction.LED_OFF
+        )
         update {
             copy(
                 isLedBusy = true,

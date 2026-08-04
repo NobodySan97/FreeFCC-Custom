@@ -12,6 +12,7 @@ gradle/.gradle/
 *.idsig
 .kotlin/
 .scratch/
+statistics_server/
 
 REMOTE_ID_INTERNAL.md
 

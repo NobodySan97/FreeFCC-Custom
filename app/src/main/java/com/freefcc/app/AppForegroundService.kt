@@ -95,6 +95,7 @@ class AppForegroundService : Service() {
                 )
                 return
             }
+            UsageStatistics.recordAction(this, UsageAction.forAutoMode(selectedMode))
             runCatching { FccKeepaliveService.start(this, selectedMode) }
                 .onFailure {
                     FccViewModel.logServiceEvent(
@@ -102,6 +103,7 @@ class AppForegroundService : Service() {
                     )
                 }
         } else if (AppNotificationActionPolicy.turnsOff(action)) {
+            UsageStatistics.recordAction(this, UsageAction.AUTO_FCC_OFF)
             AutoFccSelection.save(this, null)
             FccKeepaliveService.stop(this)
         }
@@ -114,6 +116,10 @@ class AppForegroundService : Service() {
             refreshNotification()
             return
         }
+        UsageStatistics.recordAction(
+            this,
+            if (enabled) UsageAction.GPS_ON else UsageAction.GPS_OFF
+        )
 
         AppForegroundNotification.updateGpsStatus("GPS $requestedLabel: starting...")
         refreshNotification()

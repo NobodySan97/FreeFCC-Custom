@@ -266,6 +266,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         val root = rootInActiveWindow ?: return
         val labels = collectVisibleLabels(root)
         if (labels.isEmpty()) return
+        UsageStatistics.captureControllerSerialFromUi(this, labels)
         captureAircraftModelFromUi("visible_ui", labels)
         val homePointText = labels.firstOrNull { value ->
             DjiFlyHomePointMatcher.matches(value, homePointPhrases)

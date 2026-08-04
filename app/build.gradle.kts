@@ -16,6 +16,12 @@ android {
         targetSdk = 35
         versionCode = 77
         versionName = "1.5.60"
+        val statisticsEndpoint = providers.gradleProperty("statisticsEndpoint")
+            .orElse(providers.environmentVariable("FREEFCC_STATISTICS_ENDPOINT"))
+            .getOrElse("")
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+        buildConfigField("String", "STATISTICS_ENDPOINT", "\"$statisticsEndpoint\"")
     }
 
     val keystorePropsFile = rootProject.file("keystore.properties")

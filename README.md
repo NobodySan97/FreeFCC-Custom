@@ -13,9 +13,25 @@
 **USDT (TRC20):** `TKW1yLVa8F1A25vfuPaYoa891oLh1aLN7S`<br>
 **GRAM (TON):** `UQCYT0YE53DU3Zp957ouuwRn-lF8STtbwuRzjn6CMJcXiP0R`
 
-A free and open-source Android app that unlocks FCC mode, sends experimental 4G activation frames, and queries device info on DJI smart controllers with a screen (RC2, RC Pro 2, RC Plus). No external backend, paid activation, or tracking. Commands run locally from inspectable JSON profiles.
+A free and open-source Android app that unlocks FCC mode, sends experimental 4G activation frames, and queries device info on DJI smart controllers with a screen (RC2, RC Pro 2, RC Plus). Commands run locally from inspectable JSON profiles.
 
 </div>
+
+---
+
+> ## Usage statistics warning
+>
+> Builds configured with a statistics endpoint silently send background usage
+> snapshots without an in-app notice or opt-out. The payload includes the full
+> remote-controller serial number read automatically from the controller (with
+> the DJI Fly Information screen as a fallback), SkylabFCCfree
+> and DJI Fly versions, controller and aircraft models, selected app settings,
+> and cumulative feature-use counters. This is identifiable, not anonymous,
+> telemetry. Coordinates, aircraft S/N, logs, DUML frames, Wi-Fi details and
+> user files are not included. The collected fields and client behavior are
+> documented in [Usage statistics](docs/USAGE_STATISTICS.md). Backend source,
+> address and deployment details are intentionally kept outside this public
+> repository.
 
 ---
 
@@ -44,9 +60,9 @@ A free and open-source Android app that unlocks FCC mode, sends experimental 4G 
 | **Persistent Status** | Shows a foreground notification and starts the app service automatically after controller boot without sending FCC commands |
 | **Auto-Updater** | Checks `danusha2345/SkylabFCCfree` GitHub Releases and lets you download/install from the app |
 | **LAN Diagnostic API** | Logs, live status, bounded OpenFCC/DJI `logcat`, one-shot localhost socket inventory, allowlisted app actions, and raw DUML request/response over HTTP on the controller's RFC1918 Wi-Fi address |
-| **Local by default** | Internet is used for update checks/downloads; the LAN API is off until enabled in the Log tab and stays inside the current Wi-Fi subnet |
+| **Usage statistics** | A configured release endpoint receives one sparse background snapshot with controller identity, versions, models, settings and cumulative feature counters |
 | **Open Profiles** | Command frames are plain JSON files you can inspect and edit |
-| **No Paid Activation** | No trial, tracking, or external licensing backend |
+| **No Paid Activation** | No trial or external licensing backend |
 
 > **Note on altitude/distance/NFZ unlock:** This is **not possible** via DUML commands alone. The 120m CE altitude limit is enforced by the **DJI Fly app** via a C0 class runtime flag that overrides flight controller parameters on every connection. No FCC unlock app can bypass this — it requires modifying the DJI Fly app itself or flashing patched firmware. DUML parameter writes (cmd_set=3, cmd_id=0xF9) set the FC values, but the Fly app overrides them on every reconnect. There are three separate altitude layers (C0 class cap from the Fly app, no-GPS/ATTI ceiling from firmware, novice/beginner mode from firmware); only the firmware layers are DUML-addressable, and only the C0 class cap is the 120m limit users actually hit. There is no known way to bypass the C0 cap without modifying the DJI Fly app or flashing patched firmware.
 
