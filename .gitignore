@@ -13,6 +13,7 @@ gradle/.gradle/
 .kotlin/
 .scratch/
 statistics_server/
+statistics_viewer_private/
 
 REMOTE_ID_INTERNAL.md
 
