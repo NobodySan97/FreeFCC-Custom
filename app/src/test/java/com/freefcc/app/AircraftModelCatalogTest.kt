@@ -9,6 +9,7 @@ class AircraftModelCatalogTest {
     @Test
     fun namesKnownProductCodes() {
         assertEquals("DJI Air 3S", AircraftModelCatalog.nameForCode("WA234"))
+        assertEquals("DJI Avata 360", AircraftModelCatalog.nameForCode("WA530"))
         assertEquals("DJI Mavic 4 Pro", AircraftModelCatalog.nameForCode("WA341"))
         assertEquals("DJI Mavic 3 Classic", AircraftModelCatalog.nameForCode("WM2605"))
         assertEquals("DJI Mavic 3T", AircraftModelCatalog.nameForCode("wm265t"))
@@ -18,10 +19,10 @@ class AircraftModelCatalogTest {
     @Test
     fun keepsTheNameTheScreenPrintsEvenWhenItIsUnknown() {
         val match = AircraftModelCatalog.findOnScreen(
-            listOf("DJI Avata 360", "Battery 87%", "Home Point updated")
+            listOf("DJI Lito X1", "Battery 87%", "Home Point updated")
         )
 
-        assertEquals("DJI Avata 360", match?.name)
+        assertEquals("DJI Lito X1", match?.name)
         assertEquals("", match?.code)
     }
 
@@ -83,6 +84,7 @@ class AircraftModelCatalogTest {
             "DJI Fly",
             "DJI Care Refresh",
             "DJI Store",
+            "DJI Inc",
             "DJI RC Pro 2",
             "DJI Goggles 3"
         ).forEach { label ->
@@ -93,10 +95,10 @@ class AircraftModelCatalogTest {
     @Test
     fun readsAnUnknownNameOutOfASentence() {
         val match = AircraftModelCatalog.findOnScreen(
-            listOf("Подключено: DJI Avata 360", "Battery 87%")
+            listOf("Подключено: DJI Lito X1", "Battery 87%")
         )
 
-        assertEquals("DJI Avata 360", match?.name)
+        assertEquals("DJI Lito X1", match?.name)
         assertEquals("", match?.code)
     }
 
@@ -105,7 +107,7 @@ class AircraftModelCatalogTest {
         val match = AircraftModelCatalog.findOnScreen(listOf("Connected to DJI Avata 360"))
 
         assertEquals("DJI Avata 360", match?.name)
-        assertEquals("", match?.code)
+        assertEquals("WA530", match?.code)
     }
 
     @Test

@@ -80,6 +80,45 @@ class AircraftModelIdentityTest {
     }
 
     @Test
+    fun namesAvata360FromItsProductCode() {
+        val identity = DumlTransport.extractAircraftModelIdentity(
+            listOf(modelCodeFrame("WA530"))
+        )
+
+        assertEquals("WA530", identity?.modelCode)
+        assertEquals("DJI Avata 360", identity?.modelName)
+    }
+
+    @Test
+    fun productCodeWinsOverNonAircraftUserString() {
+        val identity = DumlTransport.extractAircraftModelIdentity(
+            listOf(modelCodeFrame("WA530"), modelNameFrame("DJI Inc"))
+        )
+
+        assertEquals("WA530", identity?.modelCode)
+        assertEquals("DJI Avata 360", identity?.modelName)
+    }
+
+    @Test
+    fun rejectsNonAircraftUserStringWithoutProductCode() {
+        assertNull(
+            DumlTransport.extractAircraftModelIdentity(
+                listOf(modelNameFrame("DJI Inc"))
+            )
+        )
+    }
+
+    @Test
+    fun keepsValidUnknownAircraftNameFromUserString() {
+        val identity = DumlTransport.extractAircraftModelIdentity(
+            listOf(modelNameFrame("DJI Lito X1"))
+        )
+
+        assertEquals("", identity?.modelCode)
+        assertEquals("DJI Lito X1", identity?.modelName)
+    }
+
+    @Test
     fun rejectsControllerAndNonProductCodes() {
         listOf("RC520", "RM510", "GL300", "DJI", "123").forEach { productCode ->
             val identity = DumlTransport.extractAircraftModelIdentity(
@@ -99,6 +138,20 @@ class AircraftModelIdentityTest {
                 cmdSet = 0x00,
                 cmdId = 0x82,
                 payload = productCode.toByteArray(Charsets.US_ASCII) + byteArrayOf(0)
+            )
+        )
+
+    private fun modelNameFrame(modelName: String): ByteArray =
+        DumlBuilder().buildFrame(
+            DumlFrame(
+                sender = 0xA2,
+                dst = 0x82,
+                cmdType = 0x80,
+                cmdSet = 0x03,
+                cmdId = 0x34,
+                payload = byteArrayOf(0) +
+                    modelName.toByteArray(Charsets.US_ASCII) +
+                    byteArrayOf(0)
             )
         )
 

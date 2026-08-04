@@ -915,10 +915,9 @@ class DumlTransport {
         /**
          * Extracts the aircraft model from CRC-valid passive DUML frames.
          *
-         * `00:82` carries the stable aircraft product code. `03:34` is the
-         * aircraft user string shown by DJI Fly, so callers must retain the
-         * model code as the primary identity instead of trusting the display
-         * name alone.
+         * `00:82` carries the stable aircraft product code. `03:34` is an
+         * aircraft user string, not necessarily a commercial model name, so
+         * the product code remains the primary identity.
          */
         internal fun extractAircraftModelIdentity(
             frames: Iterable<ByteArray>
@@ -968,16 +967,19 @@ class DumlTransport {
                                 candidate.length in 2..32 &&
                                 candidate.all { it.code in 0x20..0x7E }
                             ) {
-                                modelName = candidate
+                                AircraftModelCatalog.findOnScreen(listOf(candidate))
+                                    ?.name
+                                    ?.takeIf(String::isNotEmpty)
+                                    ?.let { modelName = it }
                             }
                         }
                     }
                 }
             }
 
-            if (modelName.isEmpty()) {
-                modelName = AircraftModelCatalog.nameForCode(modelCode)
-            }
+            AircraftModelCatalog.nameForCode(modelCode)
+                .takeIf(String::isNotEmpty)
+                ?.let { modelName = it }
 
             return if (modelCode.isEmpty() && modelName.isEmpty()) {
                 null

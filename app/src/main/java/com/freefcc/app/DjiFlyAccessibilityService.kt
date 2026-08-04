@@ -89,6 +89,8 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         private const val DJI_PILOT_2_PACKAGE = "com.dji.industry.pilot"
         private val MODEL_CAPTURE_PACKAGES = setOf(DJI_FLY_PACKAGE, DJI_PILOT_2_PACKAGE)
         private const val MODEL_UI_REWRITE_MS = 60_000L
+        private const val MODEL_HOME_POINT_DELAY_MS = 8_000L
+        private const val MODEL_HARDWARE_IDLE_WAIT_MS = 15_000L
         private val HOME_POINT_RESOURCE_NAMES = listOf(
             "fpv_tips_smart_rth_homepoint_update",
             "fpv_setting_shortcut_update_return_point_succeed_toast",
@@ -163,26 +165,27 @@ class DjiFlyAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Reads the model straight off the DJI app screen, which prints both the
-     * product code and the commercial name. This is also the only thing that
-     * lets the DUML read below run: a name on screen is the proof that an
-     * aircraft is powered on and linked.
+     * Reads the model straight off the DJI app screen. A trusted screen model
+     * or a Home Point event can allow the bounded passive DUML fallback below;
+     * neither path writes a command to the aircraft.
      */
     private fun captureAircraftModelFromUi(source: String, texts: Collection<String>): Boolean {
         if (texts.isEmpty()) return false
         val match = AircraftModelCatalog.findOnScreen(texts) ?: return false
-        if (match.code.isEmpty() && match.name.isNotEmpty()) {
-            captureAircraftCodeFromDuml(match.name)
-        }
 
         val prefs = getSharedPreferences("freefcc", Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         val storedCode = prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, "").orEmpty()
         val storedName = prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, "").orEmpty()
         val code = AircraftModelCatalog.codeFor(match.name, match.code, storedName, storedCode)
-        val unchanged = code == storedCode && match.name == storedName
+        val name = match.name.ifEmpty { storedName.takeIf { code == storedCode }.orEmpty() }
+        val unchanged = code == storedCode && name == storedName
         val lastWriteAt = prefs.getLong(FccViewModel.PREF_AIRCRAFT_MODEL_AT, 0L)
-        if (unchanged && now - lastWriteAt < MODEL_UI_REWRITE_MS) return true
+        val needsPassiveIdentity = code.isEmpty() || name.isEmpty()
+        if (unchanged && now - lastWriteAt < MODEL_UI_REWRITE_MS) {
+            if (needsPassiveIdentity) captureAircraftCodeFromDuml(name)
+            return true
+        }
 
         prefs.edit().apply {
             if (code.isEmpty()) {
@@ -190,8 +193,10 @@ class DjiFlyAccessibilityService : AccessibilityService() {
             } else {
                 putString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, code)
             }
-            if (match.name.isNotEmpty()) {
-                putString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, match.name)
+            if (name.isEmpty()) {
+                remove(FccViewModel.PREF_AIRCRAFT_MODEL_NAME)
+            } else {
+                putString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, name)
             }
             putString(
                 FccViewModel.PREF_AIRCRAFT_MODEL_SOURCE,
@@ -199,11 +204,18 @@ class DjiFlyAccessibilityService : AccessibilityService() {
             )
             putLong(FccViewModel.PREF_AIRCRAFT_MODEL_AT, now)
         }.apply()
+        val probeStarted = needsPassiveIdentity && captureAircraftCodeFromDuml(
+            modelName = name,
+            forceStatisticsAfterProbe = !unchanged
+        )
+        if (!unchanged && !probeStarted) {
+            UsageStatistics.scheduleUpload(this, force = true)
+        }
         if (!unchanged) {
             FccViewModel.logServiceEvent(
-                "Aircraft model read from the DJI app screen: source=$source " +
-                    "code=${code.ifEmpty { "unknown" }} " +
-                    "name=${match.name.ifEmpty { "unknown" }}"
+                    "Aircraft model read from the DJI app screen: source=$source " +
+                        "code=${code.ifEmpty { "unknown" }} " +
+                        "name=${name.ifEmpty { "unknown" }}"
             )
         }
         return true
@@ -215,14 +227,32 @@ class DjiFlyAccessibilityService : AccessibilityService() {
      * aircraft off the ports stay silent anyway, so there is nothing to retry.
      * No DUML command is written.
      */
-    private fun captureAircraftCodeFromDuml(modelName: String) {
-        if (modelName == codeProbeDoneForName) return
-        if (!modelCaptureBusy.compareAndSet(false, true)) return
-        codeProbeDoneForName = modelName
+    private fun captureAircraftCodeFromDuml(
+        modelName: String,
+        forceStatisticsAfterProbe: Boolean = false,
+        delayBeforeProbeMs: Long = 0L
+    ): Boolean {
+        val probeKey = modelName.ifEmpty { "<connected-aircraft>" }
+        if (probeKey == codeProbeDoneForName) return false
+        if (!modelCaptureBusy.compareAndSet(false, true)) return false
+        codeProbeDoneForName = probeKey
         val prefs = getSharedPreferences("freefcc", Context.MODE_PRIVATE)
 
         thread(name = "FreeFCC-aircraft-model", isDaemon = true) {
+            var shouldForceStatistics = forceStatisticsAfterProbe
             try {
+                if (delayBeforeProbeMs > 0L) Thread.sleep(delayBeforeProbeMs)
+                val idleDeadline = System.currentTimeMillis() + MODEL_HARDWARE_IDLE_WAIT_MS
+                while (HardwareLock.busy.value && System.currentTimeMillis() < idleDeadline) {
+                    Thread.sleep(250L)
+                }
+                if (HardwareLock.busy.value) {
+                    codeProbeDoneForName = ""
+                    FccViewModel.logServiceEvent(
+                        "Aircraft code lookup deferred: hardware stayed busy"
+                    )
+                    return@thread
+                }
                 val identity = AircraftModelProbe.capture(
                     FccRuntime.tracker.state.value.controllerPort
                 )
@@ -234,12 +264,34 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                     return@thread
                 }
 
+                val storedCode = prefs
+                    .getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, "")
+                    .orEmpty()
+                val storedName = prefs
+                    .getString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, "")
+                    .orEmpty()
+                val candidateName = identity.modelName.ifEmpty { modelName }
+                val resolvedCode = AircraftModelCatalog.codeFor(
+                    name = candidateName,
+                    observedCode = identity.modelCode,
+                    storedName = storedName,
+                    storedCode = storedCode
+                )
+                val resolvedName = candidateName.ifEmpty {
+                    storedName.takeIf { resolvedCode == storedCode }.orEmpty()
+                }
+                shouldForceStatistics = shouldForceStatistics ||
+                    resolvedCode != storedCode || resolvedName != storedName
                 prefs.edit().apply {
-                    if (identity.modelCode.isNotEmpty()) {
-                        putString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, identity.modelCode)
+                    if (resolvedCode.isEmpty()) {
+                        remove(FccViewModel.PREF_AIRCRAFT_MODEL_CODE)
+                    } else {
+                        putString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, resolvedCode)
                     }
-                    if (identity.modelName.isNotEmpty()) {
-                        putString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, identity.modelName)
+                    if (resolvedName.isEmpty()) {
+                        remove(FccViewModel.PREF_AIRCRAFT_MODEL_NAME)
+                    } else {
+                        putString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, resolvedName)
                     }
                     putString(
                         FccViewModel.PREF_AIRCRAFT_MODEL_SOURCE,
@@ -249,13 +301,17 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                 }.apply()
                 FccViewModel.logServiceEvent(
                     "Aircraft code lookup for $modelName: " +
-                        "code=${identity.modelCode.ifEmpty { "unknown" }} " +
-                        "name=${identity.modelName.ifEmpty { "unknown" }}"
+                        "code=${resolvedCode.ifEmpty { "unknown" }} " +
+                        "name=${resolvedName.ifEmpty { "unknown" }}"
                 )
             } finally {
                 modelCaptureBusy.set(false)
+                if (shouldForceStatistics) {
+                    UsageStatistics.scheduleUpload(this, force = true)
+                }
             }
         }
+        return true
     }
 
     private fun logVisibleUiSnapshot() {
@@ -294,6 +350,22 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                 "auto_fcc_trigger_accepted=$accepted " +
                 "text=${value.toString().replace(Regex("\\s+"), " ").take(240)}"
         )
+        val prefs = getSharedPreferences("freefcc", Context.MODE_PRIVATE)
+        if (
+            prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, "").isNullOrBlank() ||
+            prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, "").isNullOrBlank()
+        ) {
+            captureAircraftCodeFromDuml(
+                modelName = prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, "").orEmpty(),
+                delayBeforeProbeMs = if (
+                    accepted || AutoFccSelection.load(this) == AutoFccMode.HOME_POINT_TEXT
+                ) {
+                    MODEL_HOME_POINT_DELAY_MS
+                } else {
+                    0L
+                }
+            )
+        }
     }
 
     private fun collectVisibleLabels(root: AccessibilityNodeInfo): Set<String> {
