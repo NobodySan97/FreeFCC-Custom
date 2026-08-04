@@ -55,6 +55,7 @@ jobs:
       SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
       SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
       SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+      FREEFCC_STATISTICS_ENDPOINT: ${{ secrets.FREEFCC_STATISTICS_ENDPOINT }}
 
     steps:
       - uses: actions/checkout@v4
@@ -71,9 +72,9 @@ jobs:
       - name: Check signing secrets are present
         id: secrets
         run: |
-          if [ -z "$SIGNING_KEYSTORE_B64" ] || [ -z "$SIGNING_STORE_PASSWORD" ] || [ -z "$SIGNING_KEY_ALIAS" ] || [ -z "$SIGNING_KEY_PASSWORD" ]; then
+          if [ -z "$SIGNING_KEYSTORE_B64" ] || [ -z "$SIGNING_STORE_PASSWORD" ] || [ -z "$SIGNING_KEY_ALIAS" ] || [ -z "$SIGNING_KEY_PASSWORD" ] || [ -z "$FREEFCC_STATISTICS_ENDPOINT" ]; then
             echo "have_secrets=false" >> "$GITHUB_OUTPUT"
-            echo "Warning: signing secrets not configured — skipping signed build." >&2
+            echo "Warning: signing or statistics endpoint secret not configured — skipping signed build." >&2
           else
             echo "have_secrets=true" >> "$GITHUB_OUTPUT"
           fi
