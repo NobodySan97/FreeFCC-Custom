@@ -1392,7 +1392,7 @@ private fun FccPowerRingGauge(state: AppState) {
     val active = state.isFccEnabled
     val ringColor = if (active) Green else Cyan
     val infiniteTransition = rememberInfiniteTransition(label = "powerRing")
-    val rotation by infiniteTransition.animateFloat(
+    val rotationState = infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
@@ -1401,7 +1401,7 @@ private fun FccPowerRingGauge(state: AppState) {
         ),
         label = "ringRotation"
     )
-    val pulseAlpha by infiniteTransition.animateFloat(
+    val pulseAlphaState = infiniteTransition.animateFloat(
         initialValue = 0.4f,
         targetValue = 0.95f,
         animationSpec = infiniteRepeatable(
@@ -1421,6 +1421,8 @@ private fun FccPowerRingGauge(state: AppState) {
             val strokeWidth = 5.dp.toPx()
             val radius = (size.minDimension - strokeWidth) / 2
             val centerOffset = Offset(size.width / 2, size.height / 2)
+            val currentRotation = rotationState.value
+            val currentPulseAlpha = pulseAlphaState.value
 
             drawCircle(
                 color = CardBorder.copy(0.4f),
@@ -1428,14 +1430,14 @@ private fun FccPowerRingGauge(state: AppState) {
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
             )
 
-            rotate(degrees = if (active) rotation else 0f, pivot = centerOffset) {
+            rotate(degrees = if (active) currentRotation else 0f, pivot = centerOffset) {
                 drawArc(
                     brush = Brush.sweepGradient(
                         listOf(
                             ringColor.copy(0.1f),
-                            ringColor.copy(pulseAlpha),
+                            ringColor.copy(currentPulseAlpha),
                             ringColor.copy(0.2f),
-                            ringColor.copy(pulseAlpha)
+                            ringColor.copy(currentPulseAlpha)
                         )
                     ),
                     startAngle = 0f,
@@ -1481,7 +1483,7 @@ private fun SerialRow(serial: String, enabled: Boolean = true, onRefresh: () -> 
     val isConnected = serial.isNotEmpty()
 
     val infiniteTransition = rememberInfiniteTransition(label = "droneFlight")
-    val bobbingOffset by infiniteTransition.animateFloat(
+    val bobbingState = infiniteTransition.animateFloat(
         initialValue = -2.5f,
         targetValue = 2.5f,
         animationSpec = infiniteRepeatable(
@@ -1502,7 +1504,9 @@ private fun SerialRow(serial: String, enabled: Boolean = true, onRefresh: () -> 
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
             Box(
-                modifier = Modifier.offset(y = if (isConnected) bobbingOffset.dp else 0.dp)
+                modifier = Modifier.offset {
+                    androidx.compose.ui.unit.IntOffset(0, if (isConnected) bobbingState.value.dp.roundToPx() else 0)
+                }
             ) {
                 Icon(
                     Icons.Filled.Flight,

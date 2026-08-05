@@ -32,6 +32,7 @@ internal object AircraftModelCatalog {
         "WA141" to "DJI Flip",
         "WA520" to "DJI Avata 2",
         "WA521" to "DJI Neo",
+        "WA530" to "DJI Avata 360",
         "WM162" to "DJI Mini 3 Pro",
         "WM169" to "DJI Avata",
         "WM260" to "DJI Mavic 3",
@@ -94,7 +95,8 @@ internal object AircraftModelCatalog {
         "FLY", "GO", "GO4", "PILOT", "ASSISTANT", "MIMO", "STORE", "ACCOUNT",
         "CARE", "FORUM", "ACADEMY", "SUPPORT", "SERVICE", "VIRTUAL", "GOGGLES",
         "MOTION", "RC", "RM", "GL", "MIC", "OSMO", "POCKET", "ACTION", "POWER",
-        "TERRA", "CELLULAR", "TRANSMISSION", "SDK"
+        "TERRA", "CELLULAR", "TRANSMISSION", "SDK", "INC", "LTD", "LIMITED",
+        "COMPANY", "TECHNOLOGY"
     )
 
     fun nameForCode(code: String): String =

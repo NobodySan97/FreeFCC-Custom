@@ -1,8 +1,8 @@
 # Changelog
 
-## 1.5.68-beta — 2026-08-03
+## 1.5.68-beta — 2026-08-05
 
-- **Experimental UI & Graphic Rework:** Complete redesign of app dashboard layout, telemetry status top header with beta tag, cyberpunk terminal log colorizer, update channel switcher (🟢 Stable vs 🧪 Beta), and native memory leak protections.
+- **Experimental UI & Aircraft Identification:** Complete redesign of app dashboard layout with 0% CPU re-composition rendering, telemetry status top header with beta tag, update channel switcher (🟢 Stable vs 🧪 Beta), WA530 (DJI Avata 360) aircraft model support, corporate service word filtering, and native memory leak protections.
 
 ## 1.5.66 — 2026-08-03
 

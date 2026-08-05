@@ -18,10 +18,10 @@ class AircraftModelCatalogTest {
     @Test
     fun keepsTheNameTheScreenPrintsEvenWhenItIsUnknown() {
         val match = AircraftModelCatalog.findOnScreen(
-            listOf("DJI Avata 360", "Battery 87%", "Home Point updated")
+            listOf("DJI Lito X1", "Battery 87%", "Home Point updated")
         )
 
-        assertEquals("DJI Avata 360", match?.name)
+        assertEquals("DJI Lito X1", match?.name)
         assertEquals("", match?.code)
     }
 
@@ -93,10 +93,10 @@ class AircraftModelCatalogTest {
     @Test
     fun readsAnUnknownNameOutOfASentence() {
         val match = AircraftModelCatalog.findOnScreen(
-            listOf("Подключено: DJI Avata 360", "Battery 87%")
+            listOf("Подключено: DJI Lito X1", "Battery 87%")
         )
 
-        assertEquals("DJI Avata 360", match?.name)
+        assertEquals("DJI Lito X1", match?.name)
         assertEquals("", match?.code)
     }
 
@@ -105,7 +105,7 @@ class AircraftModelCatalogTest {
         val match = AircraftModelCatalog.findOnScreen(listOf("Connected to DJI Avata 360"))
 
         assertEquals("DJI Avata 360", match?.name)
-        assertEquals("", match?.code)
+        assertEquals("WA530", match?.code)
     }
 
     @Test
