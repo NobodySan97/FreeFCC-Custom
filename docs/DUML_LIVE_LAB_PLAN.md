@@ -357,7 +357,7 @@ keepalive/`BootReceiver`. После Home Point она может восстан
 | Ручной `Re-apply` | 42/42 writes completed; пользователь физически подтвердил FCC | Полный `fcc.json` работает на текущем aircraft/controller session |
 | Сравнение профилей | keepalive: 4 frames × 1; manual: 21 frames × 2 | При старте keepalive нужен полный bootstrap; короткий профиль допустим только после него |
 | Passive `40009`, 3 s | 26 CRC-valid frames; `06:AE`, `06:77`, `06:A4`, `00:81`, `00:82` | Новый parser устойчиво разбирает живой поток |
-| Identity telemetry | `00:81` и `00:82` содержат ASCII `rc3331` | Это runtime controller telemetry; не aircraft serial |
+| Identity telemetry | `00:81` и `00:82` содержат ASCII `rc331` | Это runtime controller telemetry; не aircraft serial |
 | Direct `03:F8` на `40009` | write completed, matching response нет, получен unmatched `06:AE` | Direct path по-прежнему не возвращает lamp read response |
 | Wrapped `03:F8` на `40007` | `wire_exchange` вернул 1989 B; внутри response `551304030302ad108003f800a259ceedefaec0` | Валидный payload `00 a259ceed ef`: lamp parameter прочитан, значение default/on |
 | Device info / serial | `No response from controller`; serial пуст | Текущие structured routes не подтверждены |

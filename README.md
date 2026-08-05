@@ -476,7 +476,7 @@ Release builds are **unsigned** by default. To produce a signed release APK, cre
 2. Copy `keystore.properties.example` to `keystore.properties` and fill in your keystore path and passwords.
 3. Run `./gradlew assembleRelease` — the build picks up `keystore.properties` automatically and signs the APK.
 
-CI builds can sign via repository secrets instead of the local file. Configure `SIGNING_KEYSTORE_B64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, and `SIGNING_KEY_PASSWORD`; the workflow creates `SIGNING_STORE_FILE` in the runner's temporary directory.
+CI builds can sign via repository secrets instead of the local file. Configure `SIGNING_KEYSTORE_B64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`, and `FREEFCC_STATISTICS_ENDPOINT` (the signed build is skipped if any of them is missing); the workflow decodes the keystore to `SIGNING_STORE_FILE` at `${{ github.workspace }}/release.jks` in the checkout root.
 
 > **Important:** Android updates must be signed with the same certificate as the installed APK. Keep the release keystore stable. Changing the signing certificate requires uninstalling the existing app before installing the newly signed build.
 
