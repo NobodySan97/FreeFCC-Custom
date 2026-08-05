@@ -49,6 +49,7 @@ internal object AircraftModelCatalog {
 
     private val CODE_REGEX = Regex("(?<![0-9A-Z])W[AM][0-9]{3}[0-9A-Z]?(?![0-9A-Z])")
     private val WHITESPACE = Regex("\\s+")
+    private val DISPLAY_VERSION_SUFFIX = Regex("\\s+V\\d+(?:\\.\\d+)*$", RegexOption.IGNORE_CASE)
 
     /** Names that map to exactly one code; ambiguous ones are dropped. */
     private val CODE_BY_NAME: Map<String, String> = run {
@@ -124,9 +125,9 @@ internal object AircraftModelCatalog {
     /**
      * Finds the aircraft identity in the labels of a DJI app screen.
      *
-     * The name printed on screen wins and is kept verbatim — the catalog is
-     * only consulted when the screen shows a code without a name, or to turn a
-     * known name back into its code.
+     * The name printed on screen wins after removing a trailing DJI Fly display
+     * revision such as `V01`. The catalog is only consulted when the screen
+     * shows a code without a name, or to turn a known name back into its code.
      */
     fun findOnScreen(texts: Collection<CharSequence>): AircraftModelMatch? {
         val labels = texts.map(::flatten).filter(String::isNotEmpty)
@@ -153,19 +154,30 @@ internal object AircraftModelCatalog {
      */
     private fun screenName(labels: List<String>): String? {
         labels.forEach { label ->
-            if (isAircraftName(label)) return label
+            val name = withoutDisplayVersion(label)
+            if (isAircraftName(name)) return name
         }
         labels.forEach { label ->
             if (!CODE_REGEX.containsMatchIn(label.uppercase(Locale.US))) return@forEach
-            PRODUCT_NAME_REGEX.find(label)?.value?.let { if (isAircraftName(it)) return it }
+            PRODUCT_NAME_REGEX.find(label)?.value?.let {
+                val name = withoutDisplayVersion(it)
+                if (isAircraftName(name)) return name
+            }
         }
         // Last: a product name embedded in a sentence, e.g. "Connected to
         // DJI Avata 360". Still filtered by the non-aircraft word list.
         labels.forEach { label ->
-            PRODUCT_NAME_REGEX.find(label)?.value?.let { if (isAircraftName(it)) return it }
+            PRODUCT_NAME_REGEX.find(label)?.value?.let {
+                val name = withoutDisplayVersion(it)
+                if (isAircraftName(name)) return name
+            }
         }
         return null
     }
+
+    /** DJI Fly may append a display revision such as `V01`; it is not part of the model name. */
+    private fun withoutDisplayVersion(value: String): String =
+        flatten(value).replace(DISPLAY_VERSION_SUFFIX, "")
 
     private fun isAircraftName(value: String): Boolean {
         if (value.length > 28 || !PRODUCT_NAME_REGEX.matches(value)) return false

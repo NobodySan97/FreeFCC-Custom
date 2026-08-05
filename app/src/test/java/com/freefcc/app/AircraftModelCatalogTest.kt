@@ -37,6 +37,14 @@ class AircraftModelCatalogTest {
     }
 
     @Test
+    fun dropsDisplayRevisionFromAircraftName() {
+        val match = AircraftModelCatalog.findOnScreen(listOf("DJI Air 3S V01"))
+
+        assertEquals("DJI Air 3S", match?.name)
+        assertEquals("WA234", match?.code)
+    }
+
+    @Test
     fun readsANameThatSharedItsLabelWithTheCode() {
         val match = AircraftModelCatalog.findOnScreen(listOf("Aircraft: DJI Avata 360 (WA530)"))
 
