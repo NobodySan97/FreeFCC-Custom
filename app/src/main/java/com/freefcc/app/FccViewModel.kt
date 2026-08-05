@@ -283,8 +283,11 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         val normalizedCached = cachedIdentity.trim().uppercase(Locale.US)
         val legacyModelCode = MODEL_CODE_PATTERN.find(normalizedCached)?.value.orEmpty()
         val cachedSerial = normalizedCached.takeUnless { legacyModelCode.isNotEmpty() }.orEmpty()
-        if (cachedModelCode.isEmpty() && legacyModelCode.isNotEmpty()) {
-            prefs.edit().putString(PREF_AIRCRAFT_MODEL_CODE, legacyModelCode).apply()
+        if (legacyModelCode.isNotEmpty()) {
+            prefs.edit().apply {
+                if (cachedModelCode.isEmpty()) putString(PREF_AIRCRAFT_MODEL_CODE, legacyModelCode)
+                remove("aircraft_serial")
+            }.apply()
         }
         if (
             cachedSerial.isNotEmpty() ||
@@ -2422,7 +2425,9 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             prefs.edit().putString(PREF_AIRCRAFT_MODEL_CODE, modelCode).apply()
         } else {
             update { copy(aircraftSerial = normalized) }
+            val changed = prefs.getString("aircraft_serial", "").orEmpty() != normalized
             prefs.edit().putString("aircraft_serial", normalized).apply()
+            if (changed) UsageStatistics.scheduleUpload(app, force = true)
         }
     }
 

@@ -166,6 +166,7 @@ class UsageStatisticsTest {
                 controllerModel = "DJI RC 2",
                 djiFlyVersionName = "1.21.4",
                 djiFlyVersionCode = 1021040,
+                aircraftSerial = "1581F6ABCDEF1234",
                 aircraftModelCode = "WA530",
                 aircraftModelName = "DJI Avata 360",
                 settings = mapOf("auto_fcc_mode" to "home_point_text"),
@@ -175,8 +176,9 @@ class UsageStatisticsTest {
 
         assertTrue(json.contains("\"controller_serial\":\"5WTBH123456789\""))
         assertTrue(json.contains("\"controller_serial_source\":\"getprop_ro_serialno\""))
+        assertTrue(json.contains("\"schema_version\":2"))
+        assertTrue(json.contains("\"aircraft_serial\":\"1581F6ABCDEF1234\""))
         assertTrue(json.contains("\"gps_off\":3"))
-        assertFalse(json.contains("aircraft_serial"))
         assertFalse(json.contains("coordinate"))
         assertFalse(json.contains("logcat"))
     }

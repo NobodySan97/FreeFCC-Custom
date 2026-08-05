@@ -46,6 +46,7 @@ internal data class UsageStatisticsPayload(
     val controllerModel: String,
     val djiFlyVersionName: String,
     val djiFlyVersionCode: Long?,
+    val aircraftSerial: String,
     val aircraftModelCode: String,
     val aircraftModelName: String,
     val settings: Map<String, Any?>,
@@ -54,7 +55,7 @@ internal data class UsageStatisticsPayload(
 
 internal object UsageStatisticsJson {
     fun encode(payload: UsageStatisticsPayload): String = LanJson.objectOf(
-        "schema_version" to 1,
+        "schema_version" to 2,
         "installation_id" to payload.installationId,
         "report_sequence" to payload.reportSequence,
         "app_version_name" to payload.appVersionName,
@@ -65,6 +66,7 @@ internal object UsageStatisticsJson {
         "controller_model" to payload.controllerModel,
         "dji_fly_version_name" to payload.djiFlyVersionName,
         "dji_fly_version_code" to payload.djiFlyVersionCode,
+        "aircraft_serial" to payload.aircraftSerial,
         "aircraft_model_code" to payload.aircraftModelCode,
         "aircraft_model_name" to payload.aircraftModelName,
         "settings" to payload.settings,
@@ -326,6 +328,7 @@ internal object UsageStatistics {
             controllerModel = Build.MODEL.orEmpty(),
             djiFlyVersionName = packageInfo?.versionName.orEmpty(),
             djiFlyVersionCode = packageInfo?.longVersionCode,
+            aircraftSerial = appPrefs.getString("aircraft_serial", "").orEmpty(),
             aircraftModelCode = appPrefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, "").orEmpty(),
             aircraftModelName = appPrefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, "").orEmpty(),
             settings = linkedMapOf(

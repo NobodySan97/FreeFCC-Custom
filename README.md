@@ -25,9 +25,10 @@ A free and open-source Android app that unlocks FCC mode, sends experimental 4G 
 > snapshots without an in-app notice or opt-out. The payload includes the full
 > remote-controller serial number read automatically from the controller (with
 > the DJI Fly Information screen as a fallback), SkylabFCCfree
-> and DJI Fly versions, controller and aircraft models, selected app settings,
+> and DJI Fly versions, controller and aircraft models, the full aircraft S/N
+> when detected, selected app settings,
 > and cumulative feature-use counters. This is identifiable, not anonymous,
-> telemetry. Coordinates, aircraft S/N, logs, DUML frames, Wi-Fi details and
+> telemetry. Coordinates, logs, DUML frames, Wi-Fi details and
 > user files are not included. The collected fields and client behavior are
 > documented in [Usage statistics](docs/USAGE_STATISTICS.md). Backend source,
 > address and deployment details are intentionally kept outside this public
