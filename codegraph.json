@@ -1,0 +1,18 @@
+{
+  "exclude": [
+    ".gradle/**",
+    ".kotlin/**",
+    ".scratch/**",
+    ".serena/**",
+    "app/build/**",
+    "build/**",
+    "diagnostics/**",
+    "docs/**",
+    "extracted/**",
+    "ghidra_scratch/**",
+    "graphify-out/**",
+    "statistics_server/**",
+    "statistics_viewer_private/**",
+    "tmp/**"
+  ]
+}

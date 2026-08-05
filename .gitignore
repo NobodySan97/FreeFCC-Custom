@@ -12,6 +12,9 @@ gradle/.gradle/
 *.idsig
 .kotlin/
 .scratch/
+.playwright-cli/
+.codegraph/
+.serena/memories/
 statistics_server/
 statistics_viewer_private/
 
