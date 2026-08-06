@@ -91,7 +91,8 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         private const val MODEL_UI_REWRITE_MS = 60_000L
         private const val MODEL_HOME_POINT_DELAY_MS = 8_000L
         private const val MODEL_HARDWARE_IDLE_WAIT_MS = 15_000L
-        private const val SERIAL_PROBE_INTERVAL_MS = 30_000L
+        private const val SERIAL_PROBE_INTERVAL_MS = 10_000L
+        private const val SERIAL_PROBE_WINDOW_MS = 60_000L
         private val AIRCRAFT_MODEL_CODE_PATTERN = Regex("^W[AM][0-9]{3}[A-Z]?$")
         private val HOME_POINT_RESOURCE_NAMES = listOf(
             "fpv_tips_smart_rth_homepoint_update",
@@ -115,6 +116,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
     private val serialCaptureBusy = AtomicBoolean(false)
     @Volatile private var lastSerialProbeAtMs = 0L
     @Volatile private var pendingSwapName = ""
+    @Volatile private var serialProbeWindowStartedAtMs = 0L
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -212,6 +214,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                 putString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, name)
             }
             if (aircraftSwapped) {
+                serialProbeWindowStartedAtMs = 0L
                 AircraftSerialGuard.rememberDropped(
                     this,
                     prefs.getString(AircraftSerialGuard.KEY_SERIAL, "").orEmpty(),
@@ -254,8 +257,14 @@ class DjiFlyAccessibilityService : AccessibilityService() {
      */
     private fun captureAircraftSerialFromDuml(): Boolean {
         val prefs = getSharedPreferences("freefcc", Context.MODE_PRIVATE)
-        if (prefs.getString("aircraft_serial", "").orEmpty().isNotEmpty()) return false
+        if (prefs.getString(AircraftSerialGuard.KEY_SERIAL, "").orEmpty().isNotEmpty()) return false
         val now = System.currentTimeMillis()
+        if (serialProbeWindowStartedAtMs == 0L) serialProbeWindowStartedAtMs = now
+        // An aircraft that does not put its serial on the bus never will —
+        // Lito X1 only pushes it while the Information screen is open. Give up
+        // after a minute instead of polling the port for the whole session;
+        // the next aircraft opens a fresh window.
+        if (now - serialProbeWindowStartedAtMs > SERIAL_PROBE_WINDOW_MS) return false
         if (now - lastSerialProbeAtMs < SERIAL_PROBE_INTERVAL_MS) return false
         if (!serialCaptureBusy.compareAndSet(false, true)) return false
         lastSerialProbeAtMs = now
