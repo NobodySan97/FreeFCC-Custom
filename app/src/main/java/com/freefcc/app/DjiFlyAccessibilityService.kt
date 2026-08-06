@@ -91,6 +91,8 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         private const val MODEL_UI_REWRITE_MS = 60_000L
         private const val MODEL_HOME_POINT_DELAY_MS = 8_000L
         private const val MODEL_HARDWARE_IDLE_WAIT_MS = 15_000L
+        private const val SERIAL_PROBE_INTERVAL_MS = 30_000L
+        private val AIRCRAFT_MODEL_CODE_PATTERN = Regex("^W[AM][0-9]{3}[A-Z]?$")
         private val HOME_POINT_RESOURCE_NAMES = listOf(
             "fpv_tips_smart_rth_homepoint_update",
             "fpv_setting_shortcut_update_return_point_succeed_toast",
@@ -110,6 +112,8 @@ class DjiFlyAccessibilityService : AccessibilityService() {
     private var lastUiHomePointMatchAtMs = 0L
     private val modelCaptureBusy = AtomicBoolean(false)
     @Volatile private var codeProbeDoneForName = ""
+    private val serialCaptureBusy = AtomicBoolean(false)
+    @Volatile private var lastSerialProbeAtMs = 0L
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -227,6 +231,53 @@ class DjiFlyAccessibilityService : AccessibilityService() {
     }
 
     /**
+     * Reads the aircraft S/N while it is still unknown, so that an ordinary
+     * session picks it up without the user pressing Connect or opening the Info
+     * tab. The model name cannot serve as the trigger — DJI Fly does not always
+     * name the aircraft, and the catalog does not know every one of them.
+     *
+     * The aircraft only broadcasts its serial once it is on the link, so this
+     * retries on a slow beat while DJI Fly is on screen, then stops for good as
+     * soon as the serial is known. One 1200ms window per beat keeps port 40007
+     * essentially free — DJI Fly loses the aircraft when the port is held.
+     */
+    private fun captureAircraftSerialFromDuml(): Boolean {
+        val prefs = getSharedPreferences("freefcc", Context.MODE_PRIVATE)
+        if (prefs.getString("aircraft_serial", "").orEmpty().isNotEmpty()) return false
+        val now = System.currentTimeMillis()
+        if (now - lastSerialProbeAtMs < SERIAL_PROBE_INTERVAL_MS) return false
+        if (!serialCaptureBusy.compareAndSet(false, true)) return false
+        lastSerialProbeAtMs = now
+
+        thread(name = "FreeFCC-aircraft-serial", isDaemon = true) {
+            var port40007Lease: Port40007Lock.Lease? = null
+            var sessionLease: DumlPortSessionLock.Lease? = null
+            try {
+                if (HardwareLock.busy.value) return@thread
+                port40007Lease = Port40007Lock.acquireForExternalBlocking(timeoutMs = 500)
+                    ?: return@thread
+                sessionLease = DumlPortSessionLock.tryBegin(DumlTransport.PORT_LED)
+                    ?: return@thread
+                val serial = DumlTransport().probeSerial(
+                    port = DumlTransport.PORT_LED,
+                    attempts = 1
+                )
+                // A model code is not a serial; the aircraft may also still be
+                // linking, so anything else just waits for the next beat.
+                if (serial.isEmpty() || AIRCRAFT_MODEL_CODE_PATTERN.matches(serial)) return@thread
+                prefs.edit().putString("aircraft_serial", serial).apply()
+                UsageStatistics.scheduleUpload(this, force = true)
+                FccViewModel.logServiceEvent("Aircraft S/N read on link: $serial")
+            } finally {
+                sessionLease?.close()
+                port40007Lease?.close()
+                serialCaptureBusy.set(false)
+            }
+        }
+        return true
+    }
+
+    /**
      * Resolves the product code for a model the screen named but did not code,
      * with one short passive window. Runs at most once per model name: with the
      * aircraft off the ports stay silent anyway, so there is nothing to retry.
@@ -328,7 +379,11 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         val labels = collectVisibleLabels(root)
         if (labels.isEmpty()) return
         UsageStatistics.captureControllerSerialFromUi(this, labels)
-        UsageStatistics.captureAircraftSerialFromUi(this, labels)
+        // The Information screen is the sure source, the bus the opportunistic
+        // one; whichever names the aircraft first wins.
+        if (!UsageStatistics.captureAircraftSerialFromUi(this, labels)) {
+            captureAircraftSerialFromDuml()
+        }
         captureAircraftModelFromUi("visible_ui", labels)
         val homePointText = labels.firstOrNull { value ->
             DjiFlyHomePointMatcher.matches(value, homePointPhrases)
