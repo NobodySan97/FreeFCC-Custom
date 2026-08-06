@@ -39,6 +39,11 @@ internal data class AircraftModelIdentity(
     val modelName: String = ""
 )
 
+internal data class AircraftLinkIdentity(
+    val serial: String = "",
+    val model: AircraftModelIdentity? = null
+)
+
 data class DumlRawExchange(
     val matchedFrame: ByteArray?,
     val validatedPayload: ByteArray?,
@@ -581,48 +586,73 @@ class DumlTransport {
      * @return the serial string (empty if nothing matched within the window)
      */
     fun probeSerial(timeoutMs: Int = 1500, port: Int? = null, attempts: Int = 3): String {
+        return probeAircraftLinkIdentity(timeoutMs, port, attempts).serial
+    }
+
+    /** Reads S/N and model frames from each bounded passive socket session. */
+    internal fun probeAircraftLinkIdentity(
+        timeoutMs: Int = 1500,
+        port: Int? = null,
+        attempts: Int = 3
+    ): AircraftLinkIdentity {
+        var modelCode = ""
+        var modelName = ""
         repeat(attempts) {
-            val serial = listenForSerial(timeoutMs, port)
-            if (serial.isNotEmpty()) return serial
+            val observed = listenForAircraftLinkIdentity(timeoutMs, port)
+            observed.model?.let { model ->
+                if (model.modelCode.isNotEmpty()) modelCode = model.modelCode
+                if (model.modelName.isNotEmpty()) modelName = model.modelName
+            }
+            if (observed.serial.isNotEmpty()) {
+                return AircraftLinkIdentity(
+                    serial = observed.serial,
+                    model = combinedModelIdentity(modelCode, modelName)
+                )
+            }
         }
-        return ""
+        return AircraftLinkIdentity(model = combinedModelIdentity(modelCode, modelName))
     }
 
     /**
      * Opens a TCP socket to the DUML proxy and listens for data
-     * matching the given regex pattern.
+     * once, extracting the serial and CRC-valid model frames from the same
+     * received bytes.
      */
-    private fun listenForSerial(timeoutMs: Int, requestedPort: Int?): String {
+    private fun listenForAircraftLinkIdentity(
+        timeoutMs: Int,
+        requestedPort: Int?
+    ): AircraftLinkIdentity {
         var socket: Socket? = null
         try {
             val port = requestedPort ?: findWorkingPort()
             socket = Socket()
             socket.connect(InetSocketAddress(HOST, port), CONNECT_TIMEOUT_MS)
-            socket.soTimeout = 200
-
             val buffer = StringBuilder()
-            val buf = ByteArray(4096)
-            val input = socket.getInputStream()
-            val deadline = System.currentTimeMillis() + timeoutMs
-
-            while (System.currentTimeMillis() < deadline) {
-                try {
-                    val n = input.read(buf)
-                    if (n > 0) {
-                        // Use ISO-8859-1 for 1:1 byte-to-char mapping — DUML
-                        // telemetry is binary and UTF-8 decoding corrupts
-                        // byte sequences that look like multi-byte chars.
-                        buffer.append(String(buf, 0, n, Charsets.ISO_8859_1))
-                        extractAircraftIdentity(buffer)?.let { return it }
-                        if (buffer.length > SERIAL_SCAN_BUFFER_LIMIT) {
-                            buffer.delete(0, buffer.length - SERIAL_SCAN_OVERLAP)
-                        }
+            val result = readDumlStream(
+                input = socket.getInputStream(),
+                socket = socket,
+                deadlineNanos = System.nanoTime() + timeoutMs * 1_000_000L,
+                // The parser stops at this limit and cannot resume: whatever it
+                // had half-read is gone with it. `40007` publishes about 128
+                // valid frames a second, so a limit near that number would end
+                // the window a fifth of the way in and cost the scan the bytes
+                // the serial arrives in. Keep it far out of reach so the window
+                // deadline stays the only thing that stops the read.
+                maxFrames = LINK_IDENTITY_FRAME_LIMIT,
+                matcher = null,
+                onBytesRead = { bytes, count ->
+                    // ISO-8859-1 preserves a 1:1 byte-to-char mapping for the
+                    // serial scan while the frame parser consumes the same bytes.
+                    buffer.append(String(bytes, 0, count, Charsets.ISO_8859_1))
+                    if (buffer.length > SERIAL_SCAN_BUFFER_LIMIT) {
+                        buffer.delete(0, buffer.length - SERIAL_SCAN_OVERLAP)
                     }
-                } catch (_: IOException) { /* read timeout — keep trying */ }
-            }
+                }
+            )
+            return extractAircraftLinkIdentity(buffer, result.completeFrames)
         } catch (_: IOException) { /* connection failed */ }
         finally { try { socket?.close() } catch (_: IOException) {} }
-        return ""
+        return AircraftLinkIdentity()
     }
 
     /**
@@ -770,7 +800,8 @@ class DumlTransport {
         socket: Socket,
         deadlineNanos: Long,
         maxFrames: Int,
-        matcher: ((ByteArray) -> ByteArray?)?
+        matcher: ((ByteArray) -> ByteArray?)?,
+        onBytesRead: ((ByteArray, Int) -> Unit)? = null
     ): DumlStreamResult {
         val completeFrames = ArrayList<ByteArray>(minOf(maxFrames, 64))
         var pending = ByteArray(0)
@@ -875,6 +906,7 @@ class DumlTransport {
             // EOF (or a non-progressing stream) is terminal, preventing the
             // passive capture loop from spinning until the deadline.
             if (count <= 0) return result()
+            onBytesRead?.invoke(readBuffer, count)
 
             val combined = ByteArray(pending.size + count)
             pending.copyInto(combined)
@@ -901,6 +933,7 @@ class DumlTransport {
         private const val PARTIAL_TAIL_LIMIT = 4096
         private const val SERIAL_SCAN_BUFFER_LIMIT = 65_536
         private const val SERIAL_SCAN_OVERLAP = 4_096
+        private const val LINK_IDENTITY_FRAME_LIMIT = 512
         private val FULL_SERIAL_REGEX = Regex("(?<![0-9A-Z])1581[0-9A-Z]{12,18}(?![0-9A-Z])")
         private val RC2_SERIAL_SUFFIX_REGEX = Regex("(?<![0-9A-Z])FA[0-9A-Z]{14}(?![0-9A-Z])")
         private val MODEL_CODE_REGEX =
@@ -923,6 +956,24 @@ class DumlTransport {
                 ?: RC2_SERIAL_SUFFIX_REGEX.find(text)?.value
                 ?: MODEL_CODE_REGEX.find(text)?.value
         }
+
+        internal fun extractAircraftLinkIdentity(
+            buffer: CharSequence,
+            frames: Iterable<ByteArray>
+        ): AircraftLinkIdentity = AircraftLinkIdentity(
+            serial = extractAircraftIdentity(buffer).orEmpty(),
+            model = extractAircraftModelIdentity(frames)
+        )
+
+        private fun combinedModelIdentity(
+            modelCode: String,
+            modelName: String
+        ): AircraftModelIdentity? =
+            if (modelCode.isEmpty() && modelName.isEmpty()) {
+                null
+            } else {
+                AircraftModelIdentity(modelCode, modelName)
+            }
 
         /**
          * Extracts the aircraft model from CRC-valid passive DUML frames.

@@ -344,9 +344,6 @@ private fun FccPage(state: AppState, viewModel: FccViewModel) {
         Spacer(Modifier.height(8.dp))
 
         GlowCard {
-            ModeBadge(state)
-            Spacer(Modifier.height(6.dp))
-
             if (state.isBusy) {
                 ProgressDisplay(state.busyProgress, state.message)
             } else if (state.message.isNotEmpty()) {
@@ -1063,72 +1060,6 @@ private fun PageTitle(title: String, icon: androidx.compose.ui.graphics.vector.I
         Icon(icon, null, tint = Cyan, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(9.dp))
         Text(title, color = TextWhite, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-private fun ModeBadge(state: AppState) {
-    val active = state.isFccEnabled
-    val presentation = fccUiPresentation(active)
-    val bgBrush = if (active) {
-        Brush.horizontalGradient(listOf(Color(0xFF2A1A10), Color(0xFF3A2113), Color(0xFF2A1A10)))
-    } else {
-        Brush.horizontalGradient(listOf(BgLight.copy(0.4f), BgLight.copy(0.2f)))
-    }
-
-    val checkScale = remember { Animatable(0f) }
-    LaunchedEffect(active) {
-        if (active) {
-            checkScale.snapTo(0f)
-            checkScale.animateTo(1.2f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
-            checkScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
-        } else {
-            checkScale.snapTo(0f)
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(bgBrush)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "MODE",
-                color = TextDim,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.5.sp
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                presentation.badgeTitle,
-                color = if (active) Amber else TextWhite,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Black
-            )
-            Spacer(Modifier.weight(1f))
-            if (active) {
-                Icon(
-                    Icons.Outlined.Info, null, tint = Amber,
-                    modifier = Modifier.size(24.dp).scale(checkScale.value)
-                )
-            } else {
-                Icon(
-                    Icons.Outlined.Radio, null, tint = TextDim,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        }
-        Spacer(Modifier.height(2.dp))
-        Text(
-            presentation.detail,
-            color = if (active) Amber.copy(0.8f) else TextGray,
-            fontSize = 10.sp,
-            maxLines = 1
-        )
     }
 }
 

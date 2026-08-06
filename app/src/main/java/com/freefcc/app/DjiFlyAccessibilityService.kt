@@ -257,8 +257,8 @@ class DjiFlyAccessibilityService : AccessibilityService() {
      *
      * The aircraft only broadcasts its serial once it is on the link, so this
      * retries on a slow beat while DJI Fly is on screen, then stops for good as
-     * soon as the serial is known. One 1200ms window per beat keeps port 40007
-     * essentially free — DJI Fly loses the aircraft when the port is held.
+     * soon as the serial is known. One short bounded window per beat keeps port
+     * 40007 essentially free — DJI Fly loses the aircraft when the port is held.
      */
     private fun captureAircraftSerialFromDuml(): Boolean {
         val prefs = getSharedPreferences("freefcc", Context.MODE_PRIVATE)
@@ -288,32 +288,64 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                     ?: return@thread
                 sessionLease = DumlPortSessionLock.tryBegin(DumlTransport.PORT_LED)
                     ?: return@thread
-                val serial = DumlTransport().probeSerial(
+                val observed = DumlTransport().probeAircraftLinkIdentity(
                     port = DumlTransport.PORT_LED,
                     attempts = 1
                 )
+                val serial = observed.serial
+                val observedAtMs = System.currentTimeMillis()
+                val acceptedSerial = serial.takeIf {
+                    it.isNotEmpty() &&
+                        !AIRCRAFT_MODEL_CODE_PATTERN.matches(it) &&
+                        it != stored &&
+                        AircraftSerialGuard.accepts(prefs, it, observedAtMs)
+                }
+                val update = AircraftIdentityPreferences.updateFromDuml(
+                    prefs = prefs,
+                    observedModel = observed.model,
+                    observedSerial = acceptedSerial,
+                    nowMs = observedAtMs
+                )
+                if (update.modelChanged) {
+                    FccViewModel.logServiceEvent(
+                        "Aircraft model read on link: " +
+                            "code=${update.currentModel.modelCode.ifEmpty { "unknown" }} " +
+                            "name=${update.currentModel.modelName.ifEmpty { "unknown" }} " +
+                            "source=${FccViewModel.AIRCRAFT_MODEL_SOURCE_DUML}"
+                    )
+                }
+                if (update.serialChanged && update.currentSerial.isEmpty()) {
+                    FccViewModel.logServiceEvent(
+                        "Aircraft S/N cleared after model-code change: ${update.previousSerial}"
+                    )
+                }
+                if (update.changed) {
+                    UsageStatistics.scheduleUpload(this, force = true)
+                }
                 // A model code is not a serial; the aircraft may also still be
                 // linking, so anything else just waits for the next beat.
                 if (serial.isEmpty() || AIRCRAFT_MODEL_CODE_PATTERN.matches(serial)) return@thread
-                if (serial == stored) {
-                    // Same aircraft — the screen name that opened this window
-                    // was one of DJI Fly's stray labels.
+                if (acceptedSerial == null) {
+                    if (serial == update.currentSerial) {
+                        // Same aircraft — the screen name that opened this
+                        // window was one of DJI Fly's stray labels.
+                        serialProbeWindowStartedAtMs = 0L
+                    }
+                    return@thread
+                }
+                if (!update.serialChanged) {
+                    // The UI may have stored the same S/N while this thread was
+                    // waiting for the port leases.
                     serialProbeWindowStartedAtMs = 0L
                     return@thread
                 }
-                // The bus still repeats the previous aircraft right after a
-                // swap, so its serial must not be claimed by the new one.
-                if (!AircraftSerialGuard.accepts(prefs, serial, System.currentTimeMillis())) {
-                    return@thread
-                }
-                prefs.edit().putString(AircraftSerialGuard.KEY_SERIAL, serial).apply()
                 serialProbeWindowStartedAtMs = 0L
-                UsageStatistics.scheduleUpload(this, force = true)
                 FccViewModel.logServiceEvent(
-                    if (stored.isEmpty()) {
-                        "Aircraft S/N read on link: $serial"
+                    if (update.previousSerial.isEmpty()) {
+                        "Aircraft S/N read on link: ${update.currentSerial}"
                     } else {
-                        "Aircraft S/N replaced from the bus: $stored -> $serial"
+                        "Aircraft S/N replaced from the bus: " +
+                            "${update.previousSerial} -> ${update.currentSerial}"
                     }
                 )
             } finally {

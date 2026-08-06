@@ -210,20 +210,21 @@ full FCC apply.
    LTE path.
 5. The aircraft-control card is split evenly: GPS on the left and LED on the right. Each side has its own manual refresh and explicit ON/OFF buttons, available without starting Auto FCC first. GPS ON/OFF sends four bounded command cycles of five idempotent writes 100 ms apart, with 250 ms between cycles, releases port `40007`, and after 250 ms automatically runs a three-attempt status Refresh. Every status attempt opens a new port lease instead of reusing a failed one. The 20-write bound includes the equivalent of a second manual press because live `rc331` logs showed that the first ten writes can leave the verified state unchanged. LED ON/OFF makes at most two complete reference-pattern command cycles. GPS/LED stay on the wrapped `40007` path because live RC Pro 2 tests found no matching readback on `40009` or `8901`. The last validated replies persist across app reopen with a `Last verified` timestamp, and a failed manual refresh does not erase them. A GPS write invalidates the older cached value until the fresh Refresh completes, so the UI never presents the pre-command OFF/ON as current. Neither side polls port `40007` in the background.
 6. The **Info** tab shows the controller code, aircraft model name/code and
-   factory S/N. Since 1.5.54 the model is read **off the DJI app screen** — DJI
-   Fly and Pilot 2 print both the product code and the commercial name, so a
-   match there opens no DUML port at all. Background port polling is gone: a
-   short passive DUML capture runs only when the screen named an aircraft
-   without its code, once per model, plus whenever you press **Refresh aircraft
-   identity** yourself. With the aircraft powered off nothing is opened, because
-   the ports have nobody to answer. Since 1.5.55 the name is taken **verbatim**
-   from the screen, so a model the app has never heard of is still named
-   correctly; DJI products that are not the aircraft (`DJI Fly`, `DJI Care`,
-   `DJI Goggles`, `DJI RC …`) are filtered out. The `00:82` parser accepts any
-   safe alphanumeric aircraft product code and rejects controller codes
-   beginning with `RC`, `RM`, or `GL`. The local table (`AircraftModelCatalog`)
-   is the fallback: it names a code seen without a name, and an unknown code is
-   displayed as-is instead of `Not detected`.
+   factory S/N. DJI Fly and Pilot 2 screen text remains the preferred model-name
+   source. While DJI Fly is visible, one bounded passive `40007` window runs
+   every ten seconds for at most one minute — opened when no aircraft S/N is
+   stored yet, or when a screen name suggests the aircraft changed. It reads
+   S/N and CRC-valid `00:82` / `03:34` model frames from the same received
+   bytes without sending anything or opening another socket. An aircraft that
+   links while the previous one's S/N is still stored, and whose name DJI Fly
+   never prints, opens no window: press **Refresh aircraft identity** on the
+   Info tab for that case.
+   A changed product code replaces the previous aircraft identity even if DJI
+   Fly never prints a model name on the FPV screen. A screen name still wins
+   when it belongs to the same code, while the local `AircraftModelCatalog`
+   names a code seen without a commercial name. Unknown safe alphanumeric
+   aircraft codes are displayed as-is; controller codes beginning with `RC`,
+   `RM`, or `GL` are rejected.
 7. The **Log** tab can start the LAN diagnostic API; since 1.5.51 it stays **off until you switch it on**. It uses unencrypted HTTP and a fixed shared password. A UDP beacon broadcasts only the controller IP and port across the current Wi-Fi subnet; it does not include the password, logs, or command payloads. Disable the bridge on untrusted Wi-Fi. See [LAN Control API](docs/LAN_CONTROL_API.md) and the evidence-based [RC2 port and stream map](docs/RC2_PORT_AND_STREAM_MAP.md).
 
 SkylabFCCfree also keeps a low-priority foreground notification visible while

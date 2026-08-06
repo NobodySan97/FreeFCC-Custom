@@ -90,6 +90,19 @@ class AircraftModelIdentityTest {
     }
 
     @Test
+    fun extractsSerialAndModelFromTheSamePassiveWindow() {
+        val serial = "1581FAKE000000000001"
+        val identity = DumlTransport.extractAircraftLinkIdentity(
+            buffer = "binary-prefix\u0000$serial\u0000binary-suffix",
+            frames = listOf(modelCodeFrame("WA530"))
+        )
+
+        assertEquals(serial, identity.serial)
+        assertEquals("WA530", identity.model?.modelCode)
+        assertEquals("DJI Avata 360", identity.model?.modelName)
+    }
+
+    @Test
     fun productCodeWinsOverNonAircraftUserString() {
         val identity = DumlTransport.extractAircraftModelIdentity(
             listOf(modelCodeFrame("WA530"), modelNameFrame("DJI Inc"))

@@ -53,6 +53,12 @@ internal data class UsageStatisticsPayload(
     val usageByAppVersion: Map<String, Map<String, Long>>
 )
 
+internal data class AircraftStatisticsIdentity(
+    val serial: String,
+    val modelCode: String,
+    val modelName: String
+)
+
 internal object UsageStatisticsJson {
     fun encode(payload: UsageStatisticsPayload): String = LanJson.objectOf(
         "schema_version" to 2,
@@ -437,6 +443,7 @@ internal object UsageStatistics {
         val appPrefs = context.getSharedPreferences("freefcc", Context.MODE_PRIVATE)
         val packageInfo = djiFlyPackageInfo(context)
         val selectedMode = AutoFccSelection.load(context)?.wireValue ?: "off"
+        val aircraftIdentity = aircraftIdentitySnapshot(appPrefs)
         val payload = UsageStatisticsPayload(
             installationId = installationId(statsPrefs),
             reportSequence = statsPrefs.getLong(PREF_REPORT_SEQUENCE, 0L) + 1L,
@@ -450,9 +457,9 @@ internal object UsageStatistics {
             controllerModel = Build.MODEL.orEmpty(),
             djiFlyVersionName = packageInfo?.versionName.orEmpty(),
             djiFlyVersionCode = packageInfo?.longVersionCode,
-            aircraftSerial = appPrefs.getString("aircraft_serial", "").orEmpty(),
-            aircraftModelCode = appPrefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, "").orEmpty(),
-            aircraftModelName = appPrefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, "").orEmpty(),
+            aircraftSerial = aircraftIdentity.serial,
+            aircraftModelCode = aircraftIdentity.modelCode,
+            aircraftModelName = aircraftIdentity.modelName,
             settings = linkedMapOf(
                 "auto_fcc_mode" to selectedMode,
                 "home_point_accessibility_enabled" to
@@ -463,6 +470,14 @@ internal object UsageStatistics {
         )
         return UsageStatisticsJson.encode(payload)
     }
+
+    internal fun aircraftIdentitySnapshot(
+        prefs: android.content.SharedPreferences
+    ): AircraftStatisticsIdentity = AircraftStatisticsIdentity(
+        serial = prefs.getString(AircraftSerialGuard.KEY_SERIAL, "").orEmpty(),
+        modelCode = prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, "").orEmpty(),
+        modelName = prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, "").orEmpty()
+    )
 
     private fun installationId(prefs: android.content.SharedPreferences): String {
         prefs.getString(PREF_INSTALLATION_ID, "")
