@@ -145,6 +145,48 @@ class UsageStatisticsTest {
     }
 
     @Test
+    fun serialGuardRefusesTheSerialOfTheAircraftJustUnplugged() {
+        val dropped = "1581F9DEC25AQ02998T5"
+
+        // Live case: a Lito X1 was plugged in and the bus still repeated the
+        // Mini 5 Pro serial six seconds later.
+        assertFalse(
+            AircraftSerialGuard.accepts(
+                dropped = dropped,
+                droppedAtMs = 1_000L,
+                serial = dropped,
+                nowMs = 7_000L
+            )
+        )
+        // Another aircraft's serial is never held back.
+        assertTrue(
+            AircraftSerialGuard.accepts(
+                dropped = dropped,
+                droppedAtMs = 1_000L,
+                serial = "1581FB34C25CF0032AAG",
+                nowMs = 7_000L
+            )
+        )
+        // The same aircraft coming back is read again once the window passes.
+        assertTrue(
+            AircraftSerialGuard.accepts(
+                dropped = dropped,
+                droppedAtMs = 1_000L,
+                serial = dropped,
+                nowMs = 1_000L + AircraftSerialGuard.GUARD_MS
+            )
+        )
+        assertTrue(
+            AircraftSerialGuard.accepts(
+                dropped = "",
+                droppedAtMs = 0L,
+                serial = dropped,
+                nowMs = 7_000L
+            )
+        )
+    }
+
+    @Test
     fun automaticSerialReaderSkipsAndroidPlaceholders() {
         assertEquals(
             ControllerSerialObservation("6UZBFAKE000001", "getprop_ro_serialno"),

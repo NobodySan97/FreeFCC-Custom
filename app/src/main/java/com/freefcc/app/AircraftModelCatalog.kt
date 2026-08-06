@@ -100,6 +100,15 @@ internal object AircraftModelCatalog {
         "COMPANY", "TECHNOLOGY"
     )
 
+    /**
+     * Families that never name an aircraft by themselves — every member
+     * carries a number. Models that really are two words, such as `DJI Neo`,
+     * `DJI Flip` and `DJI Avata`, are deliberately absent.
+     */
+    private val AIRCRAFT_FAMILY_WORDS = setOf(
+        "MAVIC", "AIR", "MINI", "PHANTOM", "INSPIRE", "MATRICE"
+    )
+
     fun nameForCode(code: String): String =
         NAME_BY_CODE[code.trim().uppercase(Locale.US)].orEmpty()
 
@@ -182,7 +191,13 @@ internal object AircraftModelCatalog {
     private fun isAircraftName(value: String): Boolean {
         if (value.length > 28 || !PRODUCT_NAME_REGEX.matches(value)) return false
         val words = value.split(' ')
-        return words.size >= 2 && words[1].uppercase(Locale.US) !in NON_AIRCRAFT_WORDS
+        if (words.size < 2) return false
+        val family = words[1].uppercase(Locale.US)
+        if (family in NON_AIRCRAFT_WORDS) return false
+        // A family on its own is not an aircraft. Live logs showed `DJI Mavic`
+        // and `DJI Air` picked off a screen while a Mini 5 Pro was connected;
+        // read as a model they replace the real one and look like a swap.
+        return !(words.size == 2 && family in AIRCRAFT_FAMILY_WORDS)
     }
 
     /** Collapses screen whitespace but keeps the text exactly as printed. */

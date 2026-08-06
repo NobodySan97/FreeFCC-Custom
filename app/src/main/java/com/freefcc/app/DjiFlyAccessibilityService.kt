@@ -114,6 +114,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
     @Volatile private var codeProbeDoneForName = ""
     private val serialCaptureBusy = AtomicBoolean(false)
     @Volatile private var lastSerialProbeAtMs = 0L
+    @Volatile private var pendingSwapName = ""
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -186,8 +187,12 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         val unchanged = code == storedCode && name == storedName
         // A confirmed swap to another aircraft invalidates the stored S/N: it
         // belongs to the previous one and would otherwise be reported next to
-        // the new model.
-        val aircraftSwapped = storedName.isNotEmpty() && name.isNotEmpty() && name != storedName
+        // the new model. One sighting is not enough — DJI Fly screens list
+        // other aircraft too, and a name flickering past would drop a serial
+        // that was read correctly. Require the new name twice in a row.
+        val nameChanged = storedName.isNotEmpty() && name.isNotEmpty() && name != storedName
+        val aircraftSwapped = nameChanged && name == pendingSwapName
+        pendingSwapName = if (nameChanged) name else ""
         val lastWriteAt = prefs.getLong(FccViewModel.PREF_AIRCRAFT_MODEL_AT, 0L)
         val needsPassiveIdentity = code.isEmpty() || name.isEmpty()
         if (unchanged && now - lastWriteAt < MODEL_UI_REWRITE_MS) {
@@ -206,7 +211,13 @@ class DjiFlyAccessibilityService : AccessibilityService() {
             } else {
                 putString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, name)
             }
-            if (aircraftSwapped) remove("aircraft_serial")
+            if (aircraftSwapped) {
+                AircraftSerialGuard.rememberDropped(
+                    this,
+                    prefs.getString(AircraftSerialGuard.KEY_SERIAL, "").orEmpty(),
+                    now
+                )
+            }
             putString(
                 FccViewModel.PREF_AIRCRAFT_MODEL_SOURCE,
                 FccViewModel.AIRCRAFT_MODEL_SOURCE_UI
@@ -265,7 +276,12 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                 // A model code is not a serial; the aircraft may also still be
                 // linking, so anything else just waits for the next beat.
                 if (serial.isEmpty() || AIRCRAFT_MODEL_CODE_PATTERN.matches(serial)) return@thread
-                prefs.edit().putString("aircraft_serial", serial).apply()
+                // The bus still repeats the previous aircraft right after a
+                // swap, so its serial must not be claimed by the new one.
+                if (!AircraftSerialGuard.accepts(prefs, serial, System.currentTimeMillis())) {
+                    return@thread
+                }
+                prefs.edit().putString(AircraftSerialGuard.KEY_SERIAL, serial).apply()
                 UsageStatistics.scheduleUpload(this, force = true)
                 FccViewModel.logServiceEvent("Aircraft S/N read on link: $serial")
             } finally {

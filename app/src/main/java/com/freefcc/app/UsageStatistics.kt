@@ -191,6 +191,50 @@ internal object DjiFlyAircraftSerialExtractor {
     }
 }
 
+/**
+ * Guards the stored aircraft S/N against the one just left behind.
+ *
+ * A swap of aircraft clears the serial, but the bus keeps repeating the
+ * previous aircraft's frames for a while — live, a Lito X1 was plugged in and
+ * the Mini 5 Pro serial was read back six seconds later. Refuse exactly that
+ * number for a short guard window; the same aircraft coming back is read again
+ * once the window passes.
+ */
+internal object AircraftSerialGuard {
+    const val KEY_SERIAL = "aircraft_serial"
+    private const val KEY_DROPPED = "aircraft_serial_dropped"
+    private const val KEY_DROPPED_AT = "aircraft_serial_dropped_at"
+    internal const val GUARD_MS = 60_000L
+
+    fun accepts(prefs: android.content.SharedPreferences, serial: String, nowMs: Long): Boolean =
+        accepts(
+            dropped = prefs.getString(KEY_DROPPED, "").orEmpty(),
+            droppedAtMs = prefs.getLong(KEY_DROPPED_AT, 0L),
+            serial = serial,
+            nowMs = nowMs
+        )
+
+    internal fun accepts(
+        dropped: String,
+        droppedAtMs: Long,
+        serial: String,
+        nowMs: Long
+    ): Boolean {
+        if (dropped.isEmpty() || dropped != serial) return true
+        return nowMs - droppedAtMs >= GUARD_MS
+    }
+
+    fun rememberDropped(
+        editor: android.content.SharedPreferences.Editor,
+        serial: String,
+        nowMs: Long
+    ) {
+        editor.putString(KEY_DROPPED, serial)
+            .putLong(KEY_DROPPED_AT, nowMs)
+            .remove(KEY_SERIAL)
+    }
+}
+
 internal data class ControllerSerialObservation(val serial: String, val source: String)
 
 /** Reads the controller's Android factory serial without opening or changing any UI. */
@@ -315,8 +359,10 @@ internal object UsageStatistics {
     fun captureAircraftSerialFromUi(context: Context, labels: Collection<String>): Boolean {
         val serial = DjiFlyAircraftSerialExtractor.find(labels) ?: return false
         val prefs = context.applicationContext.getSharedPreferences("freefcc", Context.MODE_PRIVATE)
-        if (prefs.getString("aircraft_serial", "").orEmpty() == serial) return true
-        prefs.edit().putString("aircraft_serial", serial).apply()
+        if (prefs.getString(AircraftSerialGuard.KEY_SERIAL, "").orEmpty() == serial) return true
+        // The screen names the aircraft in front of the user, so it outranks
+        // the guard against the previous aircraft's lingering bus frames.
+        prefs.edit().putString(AircraftSerialGuard.KEY_SERIAL, serial).apply()
         scheduleUpload(context, force = true)
         return true
     }

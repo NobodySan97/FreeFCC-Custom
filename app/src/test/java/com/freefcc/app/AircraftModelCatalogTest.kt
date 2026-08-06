@@ -27,6 +27,26 @@ class AircraftModelCatalogTest {
     }
 
     @Test
+    fun ignoresAFamilyNameWithoutItsModel() {
+        // Seen live: these were read off a screen while a Mini 5 Pro was
+        // connected, and replaced its name in statistics.
+        assertNull(AircraftModelCatalog.findOnScreen(listOf("DJI Mavic", "Battery 87%")))
+        assertNull(AircraftModelCatalog.findOnScreen(listOf("DJI Air", "Battery 87%")))
+        assertNull(AircraftModelCatalog.findOnScreen(listOf("DJI Mini")))
+    }
+
+    @Test
+    fun keepsTwoWordNamesThatAreRealModels() {
+        assertEquals("DJI Neo", AircraftModelCatalog.findOnScreen(listOf("DJI Neo"))?.name)
+        assertEquals("DJI Flip", AircraftModelCatalog.findOnScreen(listOf("DJI Flip"))?.name)
+        assertEquals("DJI Avata", AircraftModelCatalog.findOnScreen(listOf("DJI Avata"))?.name)
+        assertEquals(
+            "DJI Mini 5 Pro",
+            AircraftModelCatalog.findOnScreen(listOf("DJI Mini 5 Pro"))?.name
+        )
+    }
+
+    @Test
     fun readsCodeAndNameOffTheSameScreen() {
         val match = AircraftModelCatalog.findOnScreen(
             listOf("DJI Avata 360", "WA530", "Battery 87%")
