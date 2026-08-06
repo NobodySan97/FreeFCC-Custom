@@ -110,6 +110,10 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         val APP_VERSION: String = BuildConfig.VERSION_NAME
 
         private const val MAX_LOG_ENTRIES = 200
+        // One listen wins the serial about half the time regardless of its
+        // length, so the probe reopens the socket instead. Three short windows
+        // keep port 40007 held no longer than the previous single 2500ms try.
+        private const val SERIAL_PROBE_WINDOW_MS = 1_200
         private const val PREF_GPS_STATE = GpsControlStateStore.PREF_STATE
         private const val PREF_GPS_RAW = GpsControlStateStore.PREF_RAW
         private const val PREF_GPS_AT = GpsControlStateStore.PREF_AT
@@ -230,6 +234,11 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             PREF_AIRCRAFT_MODEL_CODE,
             PREF_AIRCRAFT_MODEL_NAME,
             PREF_AIRCRAFT_MODEL_AT -> refreshAircraftModelIdentity()
+            // The accessibility service may store a serial read off the DJI Fly
+            // screen while the Info tab is already open.
+            "aircraft_serial" -> update {
+                copy(aircraftSerial = prefs.getString("aircraft_serial", "").orEmpty())
+            }
         }
     }
     private var initialized = false
@@ -573,7 +582,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                     val serialSessionLease = DumlPortSessionLock.tryBegin(DumlTransport.PORT_LED)
                     val serial = if (serialSessionLease != null) {
                         try {
-                            transport.probeSerial(timeoutMs = 2_500, port = DumlTransport.PORT_LED)
+                            transport.probeSerial(timeoutMs = SERIAL_PROBE_WINDOW_MS, port = DumlTransport.PORT_LED)
                         } finally {
                             serialSessionLease.close()
                         }
@@ -1527,7 +1536,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                     log("Serial probe skipped — DUML port $effectivePort is busy")
                     return@runOnIO
                 }
-                val serial = transport.probeSerial(2_500, effectivePort)
+                val serial = transport.probeSerial(SERIAL_PROBE_WINDOW_MS, effectivePort)
                 if (serial.isNotEmpty()) {
                     aircraftIdentityVerified = true
                     verifiedAircraftIdentity = serial
@@ -1615,7 +1624,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                     if (portLease != null) {
                         sessionLease = DumlPortSessionLock.tryBegin(DumlTransport.PORT_LED)
                         val serial = if (sessionLease != null) {
-                            transport.probeSerial(2_500, DumlTransport.PORT_LED)
+                            transport.probeSerial(SERIAL_PROBE_WINDOW_MS, DumlTransport.PORT_LED)
                         } else {
                             ""
                         }
@@ -2456,7 +2465,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             return ""
         }
         val serial = try {
-            transport.probeSerial(2_500, effectivePort)
+            transport.probeSerial(SERIAL_PROBE_WINDOW_MS, effectivePort)
         } finally {
             sessionLease.close()
             Port40007Lock.releaseFromLed(portLease)

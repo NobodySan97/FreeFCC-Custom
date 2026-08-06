@@ -129,6 +129,68 @@ internal object DjiFlyControllerSerialExtractor {
     }
 }
 
+/**
+ * Extracts the aircraft factory S/N from ordered DJI Fly accessibility labels.
+ *
+ * The passive DUML probe cannot be relied on: the frame carrying the serial is
+ * pushed only while DJI Fly itself asks for it, so a probe run at any other
+ * moment listens to a bus that never mentions the aircraft. The Information
+ * screen always spells it out, which makes the screen the dependable source.
+ */
+internal object DjiFlyAircraftSerialExtractor {
+    private val whitespace = Regex("\\s+")
+    private val candidate = Regex("[A-Z0-9]{10,24}")
+    private val modelCode = Regex("^(?:WA|WM)[0-9]{3}[A-Z]?$")
+
+    fun find(labels: Collection<String>): String? {
+        val normalized = labels.map(::normalize).filter(String::isNotEmpty)
+        normalized.forEachIndexed { index, label ->
+            if (!isAircraftSerialLabel(label)) return@forEachIndexed
+
+            serialCandidates(label).firstOrNull(::isSerial)?.let { return it }
+            for (offset in 1..2) {
+                val nearby = normalized.getOrNull(index + offset) ?: break
+                // DJI Fly leaves a component serial blank when the aircraft
+                // does not publish it; the next label then belongs to another
+                // component and its value must not be claimed as the aircraft's.
+                if (isSerialLabel(nearby)) break
+                serialCandidates(nearby).firstOrNull(::isSerial)?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun normalize(value: String): String =
+        Normalizer.normalize(value, Normalizer.Form.NFKC)
+            .uppercase(Locale.ROOT)
+            .replace(whitespace, " ")
+            .trim()
+
+    private fun isAircraftSerialLabel(value: String): Boolean {
+        val otherComponent = listOf(
+            "FLIGHT CONTROLLER", "CAMERA", "GIMBAL", "BATTERY", "REMOTE CONTROL",
+            "ПОЛЕТН", "ПОЛЁТН", "КАМЕР", "СТАБИЛИЗАТОР", "БАТАРЕ", "ПУЛЬТ",
+            "飞控", "相机", "云台", "电池", "遥控器"
+        ).any(value::contains)
+        if (otherComponent) return false
+
+        val aircraft = listOf("AIRCRAFT", "DRONE", "ДРОН", "飞行器").any(value::contains)
+        return aircraft && isSerialLabel(value)
+    }
+
+    private fun isSerialLabel(value: String): Boolean = listOf(
+        "SERIAL", "S/N", " SN", "SN ", "СЕРИЙН", "С/Н", "序列号", "SN码"
+    ).any(value::contains)
+
+    private fun serialCandidates(value: String): Sequence<String> =
+        candidate.findAll(value).map { it.value }
+
+    private fun isSerial(value: String): Boolean {
+        if (modelCode.matches(value)) return false
+        return value.any(Char::isDigit) && value.any(Char::isLetter)
+    }
+}
+
 internal data class ControllerSerialObservation(val serial: String, val source: String)
 
 /** Reads the controller's Android factory serial without opening or changing any UI. */
@@ -241,6 +303,20 @@ internal object UsageStatistics {
             .putString(PREF_CONTROLLER_SERIAL, serial)
             .putString(PREF_CONTROLLER_SERIAL_SOURCE, "dji_fly_ui")
             .apply()
+        scheduleUpload(context, force = true)
+        return true
+    }
+
+    /**
+     * Stores the aircraft S/N read off the DJI Fly screen. Unlike the
+     * controller serial this must follow a swap of aircraft, so an existing
+     * value is replaced rather than kept.
+     */
+    fun captureAircraftSerialFromUi(context: Context, labels: Collection<String>): Boolean {
+        val serial = DjiFlyAircraftSerialExtractor.find(labels) ?: return false
+        val prefs = context.applicationContext.getSharedPreferences("freefcc", Context.MODE_PRIVATE)
+        if (prefs.getString("aircraft_serial", "").orEmpty() == serial) return true
+        prefs.edit().putString("aircraft_serial", serial).apply()
         scheduleUpload(context, force = true)
         return true
     }

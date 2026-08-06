@@ -568,12 +568,24 @@ class DumlTransport {
      * code. Callers that need the full 1581... serial should check the length
      * of the returned string.
      *
-     * @param timeoutMs how long to listen for broadcasts (default 1500ms)
+     * Live measurement on a Mini 5 Pro: with the serial present in every 3s
+     * capture window, a single listen succeeded 3 times out of 6, and a longer
+     * window did not help — 2500ms scored no better than 1000ms. The proxy
+     * appears to split the stream across connected clients, so the outcome is
+     * decided when the socket is opened. Hence short retries that reopen the
+     * socket rather than one long window; the port is also released in between.
+     *
+     * @param timeoutMs how long a single listen waits for broadcasts
      * @param port exact controller port when already known; null keeps discovery
+     * @param attempts how many times to reopen the socket before giving up
      * @return the serial string (empty if nothing matched within the window)
      */
-    fun probeSerial(timeoutMs: Int = 1500, port: Int? = null): String {
-        return listenForSerial(timeoutMs, port)
+    fun probeSerial(timeoutMs: Int = 1500, port: Int? = null, attempts: Int = 3): String {
+        repeat(attempts) {
+            val serial = listenForSerial(timeoutMs, port)
+            if (serial.isNotEmpty()) return serial
+        }
+        return ""
     }
 
     /**

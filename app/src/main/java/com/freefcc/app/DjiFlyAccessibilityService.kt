@@ -180,6 +180,10 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         val code = AircraftModelCatalog.codeFor(match.name, match.code, storedName, storedCode)
         val name = match.name.ifEmpty { storedName.takeIf { code == storedCode }.orEmpty() }
         val unchanged = code == storedCode && name == storedName
+        // A confirmed swap to another aircraft invalidates the stored S/N: it
+        // belongs to the previous one and would otherwise be reported next to
+        // the new model.
+        val aircraftSwapped = storedName.isNotEmpty() && name.isNotEmpty() && name != storedName
         val lastWriteAt = prefs.getLong(FccViewModel.PREF_AIRCRAFT_MODEL_AT, 0L)
         val needsPassiveIdentity = code.isEmpty() || name.isEmpty()
         if (unchanged && now - lastWriteAt < MODEL_UI_REWRITE_MS) {
@@ -198,6 +202,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
             } else {
                 putString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, name)
             }
+            if (aircraftSwapped) remove("aircraft_serial")
             putString(
                 FccViewModel.PREF_AIRCRAFT_MODEL_SOURCE,
                 FccViewModel.AIRCRAFT_MODEL_SOURCE_UI
@@ -323,6 +328,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         val labels = collectVisibleLabels(root)
         if (labels.isEmpty()) return
         UsageStatistics.captureControllerSerialFromUi(this, labels)
+        UsageStatistics.captureAircraftSerialFromUi(this, labels)
         captureAircraftModelFromUi("visible_ui", labels)
         val homePointText = labels.firstOrNull { value ->
             DjiFlyHomePointMatcher.matches(value, homePointPhrases)

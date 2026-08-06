@@ -74,6 +74,77 @@ class UsageStatisticsTest {
     }
 
     @Test
+    fun extractsAircraftSerialFromObservedLitoX1InformationLayout() {
+        val labels = listOf(
+            "Проверить наличие обновлений",
+            "SN",
+            "Серийный номер дрона",
+            "1581FB34C25CF0032AAG",
+            "Серийный номер полетного контроллера",
+            "Серийный номер камеры",
+            "AVYFN9T0M11CY2",
+            "Серийный номер батареи",
+            "B38PNCDAA001PE",
+            "Серийный номер пульта",
+            "6UZBL7302102G9"
+        )
+
+        assertEquals("1581FB34C25CF0032AAG", DjiFlyAircraftSerialExtractor.find(labels))
+    }
+
+    @Test
+    fun extractsAircraftSerialFromEnglishInformationLayout() {
+        val labels = listOf(
+            "Model",
+            "DJI Lito X1",
+            "Aircraft Serial Number",
+            "1581FB34C25CF0032AAG",
+            "Flight Controller Serial Number",
+            "Camera Serial Number",
+            "AVYFN9T0M11CY2",
+            "Remote Controller S/N",
+            "6UZBL7302102G9"
+        )
+
+        assertEquals("1581FB34C25CF0032AAG", DjiFlyAircraftSerialExtractor.find(labels))
+    }
+
+    @Test
+    fun aircraftSerialIsNotTakenFromAnotherComponentWithABlankValue() {
+        val labels = listOf(
+            "Серийный номер дрона",
+            "Серийный номер камеры",
+            "AVYFN9T0M11CY2"
+        )
+
+        assertNull(DjiFlyAircraftSerialExtractor.find(labels))
+    }
+
+    @Test
+    fun aircraftSerialIgnoresControllerAndModelCodeLabels() {
+        assertNull(
+            DjiFlyAircraftSerialExtractor.find(
+                listOf("Серийный номер пульта", "6UZBL7302102G9")
+            )
+        )
+        assertNull(
+            DjiFlyAircraftSerialExtractor.find(
+                listOf("Aircraft Serial Number", "WA341")
+            )
+        )
+    }
+
+    @Test
+    fun extractsAircraftSerialFromInlineLabel() {
+        assertEquals(
+            "1581FB34C25CF0032AAG",
+            DjiFlyAircraftSerialExtractor.find(
+                listOf("Серийный номер дрона: 1581FB34C25CF0032AAG")
+            )
+        )
+    }
+
+    @Test
     fun automaticSerialReaderSkipsAndroidPlaceholders() {
         assertEquals(
             ControllerSerialObservation("6UZBFAKE000001", "getprop_ro_serialno"),
