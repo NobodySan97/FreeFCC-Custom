@@ -195,6 +195,11 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         val nameChanged = storedName.isNotEmpty() && name.isNotEmpty() && name != storedName
         val aircraftSwapped = nameChanged && name == pendingSwapName
         pendingSwapName = if (nameChanged) name else ""
+        // A changed name is only a hint: DJI Fly screens produce strays like
+        // `DJI Lito X1 2021` and `DJI Lito`, and they alternate, so no name
+        // ever repeats. The bus settles it — one serial, and it names the
+        // aircraft outright. Let a single hint open the window that reads it.
+        if (nameChanged) serialProbeWindowStartedAtMs = System.currentTimeMillis()
         val lastWriteAt = prefs.getLong(FccViewModel.PREF_AIRCRAFT_MODEL_AT, 0L)
         val needsPassiveIdentity = code.isEmpty() || name.isEmpty()
         if (unchanged && now - lastWriteAt < MODEL_UI_REWRITE_MS) {
@@ -257,9 +262,14 @@ class DjiFlyAccessibilityService : AccessibilityService() {
      */
     private fun captureAircraftSerialFromDuml(): Boolean {
         val prefs = getSharedPreferences("freefcc", Context.MODE_PRIVATE)
-        if (prefs.getString(AircraftSerialGuard.KEY_SERIAL, "").orEmpty().isNotEmpty()) return false
+        val stored = prefs.getString(AircraftSerialGuard.KEY_SERIAL, "").orEmpty()
         val now = System.currentTimeMillis()
-        if (serialProbeWindowStartedAtMs == 0L) serialProbeWindowStartedAtMs = now
+        if (stored.isEmpty() && serialProbeWindowStartedAtMs == 0L) {
+            serialProbeWindowStartedAtMs = now
+        }
+        // With a serial already known there is nothing to look for until a
+        // screen name suggests the aircraft may have changed.
+        if (serialProbeWindowStartedAtMs == 0L) return false
         // An aircraft that does not put its serial on the bus never will —
         // Lito X1 only pushes it while the Information screen is open. Give up
         // after a minute instead of polling the port for the whole session;
@@ -285,14 +295,27 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                 // A model code is not a serial; the aircraft may also still be
                 // linking, so anything else just waits for the next beat.
                 if (serial.isEmpty() || AIRCRAFT_MODEL_CODE_PATTERN.matches(serial)) return@thread
+                if (serial == stored) {
+                    // Same aircraft — the screen name that opened this window
+                    // was one of DJI Fly's stray labels.
+                    serialProbeWindowStartedAtMs = 0L
+                    return@thread
+                }
                 // The bus still repeats the previous aircraft right after a
                 // swap, so its serial must not be claimed by the new one.
                 if (!AircraftSerialGuard.accepts(prefs, serial, System.currentTimeMillis())) {
                     return@thread
                 }
                 prefs.edit().putString(AircraftSerialGuard.KEY_SERIAL, serial).apply()
+                serialProbeWindowStartedAtMs = 0L
                 UsageStatistics.scheduleUpload(this, force = true)
-                FccViewModel.logServiceEvent("Aircraft S/N read on link: $serial")
+                FccViewModel.logServiceEvent(
+                    if (stored.isEmpty()) {
+                        "Aircraft S/N read on link: $serial"
+                    } else {
+                        "Aircraft S/N replaced from the bus: $stored -> $serial"
+                    }
+                )
             } finally {
                 sessionLease?.close()
                 port40007Lease?.close()
