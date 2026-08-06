@@ -226,7 +226,9 @@ internal object AircraftSerialGuard {
         serial: String,
         nowMs: Long
     ): Boolean {
-        if (dropped.isEmpty() || dropped != serial) return true
+        // The bus spells one serial two ways, so the guard has to recognise the
+        // dropped aircraft in either of them.
+        if (dropped.isEmpty() || !AircraftSerialForms.sameAircraft(dropped, serial)) return true
         return nowMs - droppedAtMs >= GUARD_MS
     }
 

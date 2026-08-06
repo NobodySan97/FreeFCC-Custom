@@ -184,6 +184,74 @@ class AircraftIdentityPreferencesTest {
     }
 
     @Test
+    fun theShortSpellingOfTheStoredSerialIsNotASwap() {
+        val full = "1581FA8JC264600B31QZ"
+        val prefs = inMemoryPreferences(
+            mapOf(
+                FccViewModel.PREF_AIRCRAFT_MODEL_CODE to "WA530",
+                FccViewModel.PREF_AIRCRAFT_MODEL_NAME to "DJI Avata 360",
+                FccViewModel.PREF_AIRCRAFT_MODEL_SOURCE to
+                    FccViewModel.AIRCRAFT_MODEL_SOURCE_DUML,
+                AircraftSerialGuard.KEY_SERIAL to full
+            )
+        )
+
+        val update = AircraftIdentityPreferences.updateFromDuml(
+            prefs = prefs,
+            observedModel = null,
+            observedSerial = "FA8JC264600B31QZ",
+            nowMs = 10_000L
+        )
+
+        assertFalse(update.serialChanged)
+        assertEquals(full, update.currentSerial)
+        assertEquals(full, prefs.getString(AircraftSerialGuard.KEY_SERIAL, ""))
+    }
+
+    @Test
+    fun aProvenSwapDropsThePreviousSerialInEitherSpelling() {
+        val prefs = inMemoryPreferences(
+            mapOf(
+                FccViewModel.PREF_AIRCRAFT_MODEL_CODE to "WA341",
+                FccViewModel.PREF_AIRCRAFT_MODEL_NAME to "DJI Mavic 4 Pro",
+                FccViewModel.PREF_AIRCRAFT_MODEL_SOURCE to
+                    FccViewModel.AIRCRAFT_MODEL_SOURCE_DUML,
+                AircraftSerialGuard.KEY_SERIAL to "1581FA8JC264600B31QZ"
+            )
+        )
+
+        // The bus repeats the aircraft that just left, this time as the tail.
+        val update = AircraftIdentityPreferences.updateFromDuml(
+            prefs = prefs,
+            observedModel = AircraftModelIdentity("WA530", "DJI Avata 360"),
+            observedSerial = "FA8JC264600B31QZ",
+            nowMs = 10_000L
+        )
+
+        assertEquals("", update.currentSerial)
+        assertEquals("", prefs.getString(AircraftSerialGuard.KEY_SERIAL, ""))
+        assertEquals(AircraftModelIdentity("WA530", "DJI Avata 360"), update.currentModel)
+    }
+
+    @Test
+    fun theFullSpellingReplacesAStoredTail() {
+        val full = "1581FA8JC264600B31QZ"
+        val prefs = inMemoryPreferences(
+            mapOf(AircraftSerialGuard.KEY_SERIAL to "FA8JC264600B31QZ")
+        )
+
+        val update = AircraftIdentityPreferences.updateFromDuml(
+            prefs = prefs,
+            observedModel = null,
+            observedSerial = full,
+            nowMs = 10_000L
+        )
+
+        assertTrue(update.serialChanged)
+        assertEquals(full, prefs.getString(AircraftSerialGuard.KEY_SERIAL, ""))
+    }
+
+    @Test
     fun scheduledStatisticsSnapshotSeesThePersistedDumlIdentity() {
         val prefs = inMemoryPreferences(
             mapOf(

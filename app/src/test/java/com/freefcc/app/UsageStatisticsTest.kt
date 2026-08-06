@@ -184,6 +184,16 @@ class UsageStatisticsTest {
                 nowMs = 7_000L
             )
         )
+        // The dropped aircraft also comes back spelled without its `1581`
+        // prefix — `03:44` publishes only the tail — and is still refused.
+        assertFalse(
+            AircraftSerialGuard.accepts(
+                dropped = dropped,
+                droppedAtMs = 1_000L,
+                serial = dropped.removePrefix("1581"),
+                nowMs = 7_000L
+            )
+        )
     }
 
     @Test

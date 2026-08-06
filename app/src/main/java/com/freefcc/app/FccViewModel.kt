@@ -124,6 +124,8 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         internal const val PREF_AIRCRAFT_MODEL_NAME = "aircraft_model_name"
         internal const val PREF_AIRCRAFT_MODEL_AT = "aircraft_model_verified_at"
         internal const val PREF_AIRCRAFT_MODEL_SOURCE = "aircraft_model_source"
+        /** When the bus last answered an identity window, successfully or not. */
+        internal const val PREF_AIRCRAFT_BUS_READ_AT = "aircraft_bus_read_at"
         internal const val AIRCRAFT_MODEL_SOURCE_UI = "dji_app_screen"
         internal const val AIRCRAFT_MODEL_SOURCE_DUML = "duml_passive"
         internal const val AIRCRAFT_MODEL_FRESH_MS = 5 * 60_000L
@@ -181,7 +183,10 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         )
 
         private val FULL_SERIAL_PATTERN = Regex("^1581[0-9A-Z]{12,18}$")
-        private val MODEL_CODE_PATTERN = Regex("^W[AM][0-9]{3}[A-Z]?$")
+        // The trailing character may be a digit: DJI Fly's own resources carry
+        // WM1615, WM1617 and WM2605 next to WM161, WM162 and WM260. Reading the
+        // last digit as part of a serial would store a model code as the S/N.
+        private val MODEL_CODE_PATTERN = Regex("^W[AM][0-9]{3}[0-9A-Z]?$")
         private val FOUR_G_MODEL_PREFIX_PATTERN = Regex("^W[AM][0-9]{3}")
 
         /**
@@ -2433,9 +2438,17 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             update { copy(aircraftModelCode = modelCode) }
             prefs.edit().putString(PREF_AIRCRAFT_MODEL_CODE, modelCode).apply()
         } else {
-            update { copy(aircraftSerial = normalized) }
-            val changed = prefs.getString("aircraft_serial", "").orEmpty() != normalized
-            prefs.edit().putString("aircraft_serial", normalized).apply()
+            val stored = prefs.getString("aircraft_serial", "").orEmpty()
+            // `51:14` and `03:44` spell one aircraft's S/N differently; the
+            // shorter reading must not overwrite the full factory number.
+            val serial = if (AircraftSerialForms.sameAircraft(normalized, stored)) {
+                AircraftSerialForms.preferred(stored, normalized)
+            } else {
+                normalized
+            }
+            update { copy(aircraftSerial = serial) }
+            val changed = stored != serial
+            prefs.edit().putString("aircraft_serial", serial).apply()
             if (changed) UsageStatistics.scheduleUpload(app, force = true)
         }
     }

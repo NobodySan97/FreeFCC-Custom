@@ -212,13 +212,20 @@ full FCC apply.
 6. The **Info** tab shows the controller code, aircraft model name/code and
    factory S/N. DJI Fly and Pilot 2 screen text remains the preferred model-name
    source. While DJI Fly is visible, one bounded passive `40007` window runs
-   every ten seconds for at most one minute — opened when no aircraft S/N is
-   stored yet, or when a screen name suggests the aircraft changed. It reads
+   every ten seconds for at most one minute. It opens when no aircraft S/N is
+   stored yet (then no more often than every five minutes), when a screen name
+   suggests the aircraft changed (at most one window a minute), and thirty
+   seconds after a Home Point — the FPV screen never prints a model name, so
+   without that last trigger a swapped aircraft would stay unnoticed, and the
+   Home Point is what proves an aircraft is really on the link. Identity always
+   yields to the FCC write the same Home Point starts. The window reads
    S/N and CRC-valid `00:82` / `03:34` model frames from the same received
-   bytes without sending anything or opening another socket. An aircraft that
-   links while the previous one's S/N is still stored, and whose name DJI Fly
-   never prints, opens no window: press **Refresh aircraft identity** on the
-   Info tab for that case.
+   bytes without sending anything or opening another socket. The bus spells one
+   S/N two ways — `51:14` carries the full factory number, `03:44` only its
+   last sixteen characters — and both are recognised as the same aircraft, with
+   the full form kept. How DJI Fly itself obtains the S/N and the model, read
+   out of its own APK, is documented in the
+   [DJI Fly identity map](docs/DJI_FLY_APK_IDENTITY_MAP.md).
    A changed product code replaces the previous aircraft identity even if DJI
    Fly never prints a model name on the FPV screen. A screen name still wins
    when it belongs to the same code, while the local `AircraftModelCatalog`

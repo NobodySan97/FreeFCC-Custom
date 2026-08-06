@@ -93,7 +93,16 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         private const val MODEL_HARDWARE_IDLE_WAIT_MS = 15_000L
         private const val SERIAL_PROBE_INTERVAL_MS = 10_000L
         private const val SERIAL_PROBE_WINDOW_MS = 60_000L
-        private val AIRCRAFT_MODEL_CODE_PATTERN = Regex("^W[AM][0-9]{3}[A-Z]?$")
+        /** How long identity reads stand aside after a Home Point triggers FCC. */
+        private const val IDENTITY_PROBE_FCC_GUARD_MS =
+            AircraftIdentityProbePolicy.HOME_POINT_GUARD_MS
+        /** Shortest gap between two windows opened by an alternating screen name. */
+        private const val NAME_HINT_COOLDOWN_MS = 60_000L
+        /** How long a `RUNNING` FCC attempt is believed before it is treated as stale. */
+        private const val APPLY_RUNNING_TRUST_MS = 60_000L
+        // Codes such as WM1615 and WM2605 end in a digit; without it here they
+        // would pass for a serial instead of being rejected as a model code.
+        private val AIRCRAFT_MODEL_CODE_PATTERN = Regex("^W[AM][0-9]{3}[0-9A-Z]?$")
         private val HOME_POINT_RESOURCE_NAMES = listOf(
             "fpv_tips_smart_rth_homepoint_update",
             "fpv_setting_shortcut_update_return_point_succeed_toast",
@@ -117,6 +126,8 @@ class DjiFlyAccessibilityService : AccessibilityService() {
     @Volatile private var lastSerialProbeAtMs = 0L
     @Volatile private var pendingSwapName = ""
     @Volatile private var serialProbeWindowStartedAtMs = 0L
+    @Volatile private var identityProbeBlockedUntilMs = 0L
+    @Volatile private var homePointObservedAtMs = 0L
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -142,11 +153,16 @@ class DjiFlyAccessibilityService : AccessibilityService() {
             event.contentDescription?.takeIf { it.isNotBlank() }?.let { add(it.toString()) }
         }
 
-        // The DJI app prints both the product code and the commercial name, so
-        // its screen is the only trigger. Nothing is read from a port until the
-        // screen proves an aircraft is linked.
-        captureAircraftModelFromUi("event", values)
-        if (sourcePackage != DJI_FLY_PACKAGE) return
+        // Home Point first, always. An event can carry the Home Point text and a
+        // model name at once, and reading identity from a port before the FCC
+        // write would put diagnostics ahead of the one job that matters.
+        if (sourcePackage != DJI_FLY_PACKAGE) {
+            // The DJI app prints both the product code and the commercial name,
+            // so its screen is the only trigger. Nothing is read from a port
+            // until the screen proves an aircraft is linked.
+            captureAircraftModelFromUi("event", values)
+            return
+        }
         logVisibleUiSnapshot()
 
         values.forEach { value ->
@@ -169,6 +185,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                 handleHomePointMatch("event", value)
             }
         }
+        captureAircraftModelFromUi("event", values)
     }
 
     /**
@@ -198,8 +215,16 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         // A changed name is only a hint: DJI Fly screens produce strays like
         // `DJI Lito X1 2021` and `DJI Lito`, and they alternate, so no name
         // ever repeats. The bus settles it — one serial, and it names the
-        // aircraft outright. Let a single hint open the window that reads it.
-        if (nameChanged) serialProbeWindowStartedAtMs = System.currentTimeMillis()
+        // aircraft outright. Let a single hint open the window that reads it,
+        // but only one window per cooldown: alternating strays would otherwise
+        // re-arm the window forever and turn it into a continuous port poll.
+        if (
+            nameChanged &&
+            serialProbeWindowStartedAtMs == 0L &&
+            now - prefs.getLong(FccViewModel.PREF_AIRCRAFT_BUS_READ_AT, 0L) >= NAME_HINT_COOLDOWN_MS
+        ) {
+            serialProbeWindowStartedAtMs = now
+        }
         val lastWriteAt = prefs.getLong(FccViewModel.PREF_AIRCRAFT_MODEL_AT, 0L)
         val needsPassiveIdentity = code.isEmpty() || name.isEmpty()
         if (unchanged && now - lastWriteAt < MODEL_UI_REWRITE_MS) {
@@ -264,17 +289,38 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         val prefs = getSharedPreferences("freefcc", Context.MODE_PRIVATE)
         val stored = prefs.getString(AircraftSerialGuard.KEY_SERIAL, "").orEmpty()
         val now = System.currentTimeMillis()
-        if (stored.isEmpty() && serialProbeWindowStartedAtMs == 0L) {
+        if (!identityReadMayRun(now)) {
+            // An open window must not burn down while it is being held back for
+            // FCC: it would expire unread, and the Home Point that opened it
+            // would be marked spent without the bus ever being asked.
+            if (serialProbeWindowStartedAtMs != 0L) serialProbeWindowStartedAtMs = now
+            return false
+        }
+        val lastBusReadAt = prefs.getLong(FccViewModel.PREF_AIRCRAFT_BUS_READ_AT, 0L)
+        if (
+            serialProbeWindowStartedAtMs == 0L &&
+            AircraftIdentityProbePolicy.shouldOpenWindow(
+                storedSerial = stored,
+                homePointAtMs = homePointObservedAtMs,
+                lastBusReadAtMs = lastBusReadAt,
+                nowMs = now
+            )
+        ) {
             serialProbeWindowStartedAtMs = now
         }
-        // With a serial already known there is nothing to look for until a
-        // screen name suggests the aircraft may have changed.
+        // Outside a window nothing is read: the screen hint, a missing S/N and
+        // the slow re-check beat are the only things that open one.
         if (serialProbeWindowStartedAtMs == 0L) return false
         // An aircraft that does not put its serial on the bus never will —
         // Lito X1 only pushes it while the Information screen is open. Give up
-        // after a minute instead of polling the port for the whole session;
-        // the next aircraft opens a fresh window.
-        if (now - serialProbeWindowStartedAtMs > SERIAL_PROBE_WINDOW_MS) return false
+        // after a minute instead of polling the port for the whole session,
+        // and record the attempt so the beat restarts from here rather than
+        // reopening a window on the next screen scan.
+        if (now - serialProbeWindowStartedAtMs > SERIAL_PROBE_WINDOW_MS) {
+            serialProbeWindowStartedAtMs = 0L
+            prefs.edit().putLong(FccViewModel.PREF_AIRCRAFT_BUS_READ_AT, now).apply()
+            return false
+        }
         if (now - lastSerialProbeAtMs < SERIAL_PROBE_INTERVAL_MS) return false
         if (!serialCaptureBusy.compareAndSet(false, true)) return false
         lastSerialProbeAtMs = now
@@ -294,6 +340,13 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                 )
                 val serial = observed.serial
                 val observedAtMs = System.currentTimeMillis()
+                if (serial.isNotEmpty() || observed.model != null) {
+                    // The bus answered, so the identity is as fresh as it gets;
+                    // the re-check beat starts over from this read.
+                    prefs.edit()
+                        .putLong(FccViewModel.PREF_AIRCRAFT_BUS_READ_AT, observedAtMs)
+                        .apply()
+                }
                 val acceptedSerial = serial.takeIf {
                     it.isNotEmpty() &&
                         !AIRCRAFT_MODEL_CODE_PATTERN.matches(it) &&
@@ -379,6 +432,19 @@ class DjiFlyAccessibilityService : AccessibilityService() {
             try {
                 if (delayBeforeProbeMs > 0L) Thread.sleep(delayBeforeProbeMs)
                 val idleDeadline = System.currentTimeMillis() + MODEL_HARDWARE_IDLE_WAIT_MS
+                while (
+                    !identityReadMayRun(System.currentTimeMillis()) &&
+                    System.currentTimeMillis() < idleDeadline
+                ) {
+                    Thread.sleep(250L)
+                }
+                if (!identityReadMayRun(System.currentTimeMillis())) {
+                    codeProbeDoneForName = ""
+                    FccViewModel.logServiceEvent(
+                        "Aircraft code lookup deferred: FCC has the hardware"
+                    )
+                    return@thread
+                }
                 while (HardwareLock.busy.value && System.currentTimeMillis() < idleDeadline) {
                     Thread.sleep(250L)
                 }
@@ -458,23 +524,23 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         val root = rootInActiveWindow ?: return
         val labels = collectVisibleLabels(root)
         if (labels.isEmpty()) return
-        UsageStatistics.captureControllerSerialFromUi(this, labels)
-        // The Information screen is the sure source, the bus the opportunistic
-        // one; whichever names the aircraft first wins.
-        if (!UsageStatistics.captureAircraftSerialFromUi(this, labels)) {
-            captureAircraftSerialFromDuml()
-        }
-        captureAircraftModelFromUi("visible_ui", labels)
+
         val homePointText = labels.firstOrNull { value ->
             DjiFlyHomePointMatcher.matches(value, homePointPhrases)
         }
         val snapshot = labels.joinToString(" | ").take(1_500)
-        if (snapshot == lastUiSnapshot) return
-        lastUiSnapshot = snapshot
-        FccViewModel.logServiceEvent(
-            "DJI FLY ACCESSIBILITY UI: home_point_match=${homePointText != null} text=$snapshot"
-        )
-        if (homePointText != null) {
+        val snapshotChanged = snapshot != lastUiSnapshot
+        if (snapshotChanged) {
+            lastUiSnapshot = snapshot
+            FccViewModel.logServiceEvent(
+                "DJI FLY ACCESSIBILITY UI: home_point_match=${homePointText != null} text=$snapshot"
+            )
+        }
+        // Home Point is handled before anything else in the scan. It is what
+        // triggers the FCC write, and the write needs port 40007: an identity
+        // read started earlier in the same scan would hold that port and make
+        // the write wait at the one moment the app exists for.
+        if (snapshotChanged && homePointText != null) {
             val normalized = DjiFlyHomePointMatcher.normalize(homePointText)
             if (normalized != lastUiHomePointMatch || now - lastUiHomePointMatchAtMs >= 10_000L) {
                 lastUiHomePointMatch = normalized
@@ -482,9 +548,38 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                 handleHomePointMatch("visible_ui", homePointText)
             }
         }
+
+        UsageStatistics.captureControllerSerialFromUi(this, labels)
+        // The Information screen is the sure source, the bus the opportunistic
+        // one; whichever names the aircraft first wins.
+        if (!UsageStatistics.captureAircraftSerialFromUi(this, labels)) {
+            captureAircraftSerialFromDuml()
+        }
+        captureAircraftModelFromUi("visible_ui", labels)
+    }
+
+    /**
+     * Identity is the lowest-priority thing this service does. It stands aside
+     * for the guard after a Home Point, and for as long as an FCC attempt is
+     * actually running — connect retries can outlast the guard, and the write
+     * needs port 40007 for all of it.
+     */
+    private fun identityReadMayRun(nowMs: Long): Boolean {
+        if (nowMs < identityProbeBlockedUntilMs) return false
+        val attempt = FccRuntime.tracker.state.value.lastApplyAttempt ?: return true
+        if (attempt.outcome != FccApplyOutcome.RUNNING) return true
+        // A cancelled apply throws before it records a finish, so `RUNNING` can
+        // outlive the attempt. Believing it forever would silence identity for
+        // the rest of the session, so it is only believed while an apply could
+        // plausibly still be running.
+        return nowMs - attempt.startedAtMs > APPLY_RUNNING_TRUST_MS
     }
 
     private fun handleHomePointMatch(source: String, value: CharSequence) {
+        // The FCC write starts now and runs on another thread.
+        val matchedAtMs = System.currentTimeMillis()
+        homePointObservedAtMs = matchedAtMs
+        identityProbeBlockedUntilMs = matchedAtMs + IDENTITY_PROBE_FCC_GUARD_MS
         val accepted = FccKeepaliveService.notifyHomePointDetected()
         FccViewModel.logServiceEvent(
             "DJI FLY ACCESSIBILITY TEST: HOME POINT MATCH source=$source " +

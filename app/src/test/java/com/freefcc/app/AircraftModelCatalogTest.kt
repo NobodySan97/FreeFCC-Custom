@@ -19,10 +19,10 @@ class AircraftModelCatalogTest {
     @Test
     fun keepsTheNameTheScreenPrintsEvenWhenItIsUnknown() {
         val match = AircraftModelCatalog.findOnScreen(
-            listOf("DJI Lito X1", "Battery 87%", "Home Point updated")
+            listOf("DJI Zephyr 9", "Battery 87%", "Home Point updated")
         )
 
-        assertEquals("DJI Lito X1", match?.name)
+        assertEquals("DJI Zephyr 9", match?.name)
         assertEquals("", match?.code)
     }
 
@@ -123,11 +123,28 @@ class AircraftModelCatalogTest {
     @Test
     fun readsAnUnknownNameOutOfASentence() {
         val match = AircraftModelCatalog.findOnScreen(
-            listOf("Подключено: DJI Lito X1", "Battery 87%")
+            listOf("Подключено: DJI Zephyr 9", "Battery 87%")
         )
 
-        assertEquals("DJI Lito X1", match?.name)
+        assertEquals("DJI Zephyr 9", match?.name)
         assertEquals("", match?.code)
+    }
+
+    @Test
+    fun namesTheModelsReadOutOfTheDjiFlyResources() {
+        // DJI Fly pairs the two namespaces in its font assets: `fly_uav165_wa151`
+        // with `product_official_name_UAV165` = `DJI Lito X1`.
+        assertEquals("DJI Lito X1", AircraftModelCatalog.nameForCode("WA151"))
+        assertEquals("DJI Lito 1", AircraftModelCatalog.nameForCode("WA152"))
+        assertEquals("DJI Neo 2", AircraftModelCatalog.nameForCode("WA020"))
+        assertEquals("DJI Mini 2 SE", AircraftModelCatalog.nameForCode("WM1615"))
+        assertEquals("DJI Mini 4K", AircraftModelCatalog.nameForCode("WM1617"))
+        assertEquals("Mavic Mini", AircraftModelCatalog.nameForCode("WM160"))
+
+        // A code ending in a digit must survive the screen parser whole.
+        val match = AircraftModelCatalog.findOnScreen(listOf("WM1615", "Battery 87%"))
+        assertEquals("WM1615", match?.code)
+        assertEquals("DJI Mini 2 SE", match?.name)
     }
 
     @Test

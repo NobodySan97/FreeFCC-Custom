@@ -22,19 +22,37 @@ internal object AircraftModelCatalog {
      * WM240/245/246/247 are the Mavic 2 platform. The exact variant is not
      * distinguishable from the code alone here, so all four share one name and
      * the reverse lookup deliberately refuses to guess a code from it.
+     *
+     * Codes and names below come from DJI Fly's own resources — its font assets
+     * pair the two namespaces (`fly_uav165_wa151`) and `product_official_name_*`
+     * gives the wording. See `docs/DJI_FLY_APK_IDENTITY_MAP.md`. The Cine
+     * variants WM260C and WM261C are deliberately absent: DJI Fly gives them the
+     * same names as WM260 and WM261, which would make those names ambiguous and
+     * cost the reverse lookup two of the most common models.
      */
     private val NAME_BY_CODE = mapOf(
+        "WA020" to "DJI Neo 2",
+        "WA140" to "DJI Mini 4 Pro",
+        "WA141" to "DJI Flip",
+        "WA150" to "DJI Mini 5 Pro",
+        "WA151" to "DJI Lito X1",
+        "WA152" to "DJI Lito 1",
         "WA233" to "DJI Air 3",
         "WA234" to "DJI Air 3S",
         "WA341" to "DJI Mavic 4 Pro",
-        "WA140" to "DJI Mini 4 Pro",
-        "WA150" to "DJI Mini 5 Pro",
-        "WA141" to "DJI Flip",
         "WA520" to "DJI Avata 2",
         "WA521" to "DJI Neo",
         "WA530" to "DJI Avata 360",
+        "WM160" to "Mavic Mini",
+        "WM161" to "DJI Mini 2",
+        "WM1615" to "DJI Mini 2 SE",
+        "WM1617" to "DJI Mini 4K",
         "WM162" to "DJI Mini 3 Pro",
+        "WM163" to "DJI Mini 3",
         "WM169" to "DJI Avata",
+        "WM170" to "DJI FPV",
+        "WM231" to "Mavic Air 2",
+        "WM232" to "DJI Air 2S",
         "WM260" to "DJI Mavic 3",
         "WM2605" to "DJI Mavic 3 Classic",
         "WM261" to "DJI Mavic 3 Pro",

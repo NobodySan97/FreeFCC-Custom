@@ -15,6 +15,40 @@ internal data class AircraftIdentityPreferenceUpdate(
         get() = modelChanged || serialChanged
 }
 
+/**
+ * Decides when the passive `40007` window may be opened.
+ *
+ * An aircraft can be swapped while DJI Fly shows nothing but the FPV screen,
+ * and that screen never prints a model name, so no screen hint ever arrives.
+ * The Home Point text is read off that screen, and it is the one event that
+ * proves an aircraft is really flying — it appears one to three minutes into a
+ * session, by which time the bus is live and does carry the S/N. One window per
+ * Home Point re-reads the identity, and it waits out the guard first: the same
+ * text starts the FCC write, and that write owns port `40007`.
+ *
+ * When nothing is known yet the window opens at once, then backs off. Holding
+ * `40007` in a loop costs the DJI Fly link, so an aircraft that never publishes
+ * its S/N must not be asked again and again.
+ */
+internal object AircraftIdentityProbePolicy {
+    const val HOME_POINT_GUARD_MS = 30_000L
+    const val UNKNOWN_RETRY_INTERVAL_MS = 5 * 60_000L
+
+    fun shouldOpenWindow(
+        storedSerial: String,
+        homePointAtMs: Long,
+        lastBusReadAtMs: Long,
+        nowMs: Long
+    ): Boolean {
+        val homePointUnread = homePointAtMs > lastBusReadAtMs &&
+            nowMs >= homePointAtMs + HOME_POINT_GUARD_MS
+        if (homePointUnread) return true
+        if (storedSerial.isNotEmpty()) return false
+        if (lastBusReadAtMs == 0L) return true
+        return nowMs - lastBusReadAtMs >= UNKNOWN_RETRY_INTERVAL_MS
+    }
+}
+
 /** Applies one passive-link identity observation before statistics are scheduled. */
 internal object AircraftIdentityPreferences {
     /**
@@ -92,10 +126,19 @@ internal object AircraftIdentityPreferences {
         }
 
         val acceptedSerial = observedSerial.orEmpty()
+        val serialIsPreviousAircraft =
+            AircraftSerialForms.sameAircraft(acceptedSerial, previousSerial)
         val currentSerial = when {
-            acceptedSerial.isNotEmpty() -> acceptedSerial
-            confirmedModelSwap -> ""
-            else -> previousSerial
+            // A code that proves a swap, next to the number of the aircraft
+            // that just left — in either spelling — is the bus still repeating
+            // the previous drone. Neither spelling may survive the swap.
+            confirmedModelSwap && (acceptedSerial.isEmpty() || serialIsPreviousAircraft) -> ""
+            acceptedSerial.isEmpty() -> previousSerial
+            // The same aircraft spelled two ways is not a new aircraft: keep
+            // the fuller spelling and leave everything else alone.
+            serialIsPreviousAircraft ->
+                AircraftSerialForms.preferred(previousSerial, acceptedSerial)
+            else -> acceptedSerial
         }
         val serialChanged = currentSerial != previousSerial
 
@@ -121,8 +164,8 @@ internal object AircraftIdentityPreferences {
                 if (confirmedModelSwap && previousSerial.isNotEmpty()) {
                     AircraftSerialGuard.rememberDropped(this, previousSerial, nowMs)
                 }
-                if (acceptedSerial.isNotEmpty()) {
-                    putString(AircraftSerialGuard.KEY_SERIAL, acceptedSerial)
+                if (currentSerial.isNotEmpty()) {
+                    putString(AircraftSerialGuard.KEY_SERIAL, currentSerial)
                 }
             }.apply()
         }
