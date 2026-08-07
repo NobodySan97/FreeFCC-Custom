@@ -175,5 +175,22 @@ FREEFCC_STATISTICS_ENDPOINT='https://<private-statistics-endpoint>' \
   ./gradlew assembleRelease
 ```
 
+Приёмников может быть два. Второй адрес задаётся Gradle property
+`statisticsEndpointSecondary` или переменной
+`FREEFCC_STATISTICS_ENDPOINT_SECONDARY` и необязателен:
+
+```bash
+FREEFCC_STATISTICS_ENDPOINT='https://<primary>' \
+FREEFCC_STATISTICS_ENDPOINT_SECONDARY='https://<secondary>' \
+  ./gradlew assembleRelease
+```
+
+Один и тот же отчёт с одним `report_sequence` уходит на оба адреса в одном
+цикле, поэтому базы приёмников содержат одно и то же. Недоступность одного из
+них не отменяет отправку на другой и не откладывает следующий цикл: счётчики
+абсолютные, и пропущенный отчёт догоняется следующим. Совпадающие адреса
+считаются одним приёмником и отчёт дважды туда не уходит. Отчёт считается
+доставленным, если его принял хотя бы один адрес.
+
 Перед merge/release обязательны live-проверки HTTPS, повторной отправки, смены
 S/N, суточного rate limit и точного соответствия README фактическому payload.

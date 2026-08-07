@@ -56,6 +56,7 @@ jobs:
       SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
       SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
       FREEFCC_STATISTICS_ENDPOINT: ${{ secrets.FREEFCC_STATISTICS_ENDPOINT }}
+      FREEFCC_STATISTICS_ENDPOINT_SECONDARY: ${{ secrets.FREEFCC_STATISTICS_ENDPOINT_SECONDARY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -77,6 +78,9 @@ jobs:
             echo "Warning: signing or statistics endpoint secret not configured — skipping signed build." >&2
           else
             echo "have_secrets=true" >> "$GITHUB_OUTPUT"
+            if [ -z "$FREEFCC_STATISTICS_ENDPOINT_SECONDARY" ]; then
+              echo "Warning: secondary statistics endpoint not configured — reports go to one host only." >&2
+            fi
           fi
 
       - name: Decode keystore

@@ -376,8 +376,11 @@ internal object UsageStatistics {
     }
 
     fun scheduleUpload(context: Context, force: Boolean = false) {
-        val endpoint = BuildConfig.STATISTICS_ENDPOINT.trim()
-        if (!endpoint.startsWith("https://")) return
+        val endpoints = endpoints(
+            BuildConfig.STATISTICS_ENDPOINT,
+            BuildConfig.STATISTICS_ENDPOINT_SECONDARY
+        )
+        if (endpoints.isEmpty()) return
         if (force) forcedUploadPending.set(true)
         if (!uploadBusy.compareAndSet(false, true)) return
 
@@ -387,7 +390,7 @@ internal object UsageStatistics {
                 val automaticIdentityChanged = captureAutomaticControllerSerial(appContext)
                 val shouldForce = forcedUploadPending.getAndSet(false) || automaticIdentityChanged
                 try {
-                    uploadIfDue(appContext, endpoint, shouldForce)
+                    uploadIfDue(appContext, endpoints, shouldForce)
                 } catch (_: Exception) {
                     // Statistics must never affect application behavior.
                 }
@@ -398,7 +401,18 @@ internal object UsageStatistics {
         }
     }
 
-    private fun uploadIfDue(context: Context, endpoint: String, force: Boolean) {
+    /**
+     * Собранные адреса приёмников статистики в порядке отправки. Пустой и
+     * не-HTTPS адрес отбрасывается, повтор одного адреса дважды — тоже: тогда
+     * один и тот же отчёт ушёл бы на один сервер два раза.
+     */
+    internal fun endpoints(primary: String, secondary: String): List<String> =
+        listOf(primary, secondary)
+            .map { it.trim() }
+            .filter { it.startsWith("https://") }
+            .distinct()
+
+    private fun uploadIfDue(context: Context, endpoints: List<String>, force: Boolean) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         if (!shouldUpload(
@@ -412,16 +426,35 @@ internal object UsageStatistics {
 
         val payload = buildPayload(context)
         val payloadBytes = payload.toByteArray(Charsets.UTF_8)
-        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            connectTimeout = CONNECT_TIMEOUT_MS
-            readTimeout = READ_TIMEOUT_MS
-            doOutput = true
-            setFixedLengthStreamingMode(payloadBytes.size)
-            setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            setRequestProperty("Accept", "application/json")
+        // Один и тот же отчёт с одним report_sequence уходит на все адреса,
+        // чтобы базы приёмников содержали одно и то же. Недоступность одного из
+        // них не отменяет отправку на остальные: счётчики абсолютные, поэтому
+        // пропущенный отчёт догоняется следующим.
+        var accepted = false
+        for (endpoint in endpoints) {
+            accepted = post(endpoint, payloadBytes) || accepted
         }
+        if (accepted) {
+            prefs.edit()
+                .putLong(PREF_LAST_SUCCESS_AT, now)
+                .putLong(PREF_REPORT_SEQUENCE, prefs.getLong(PREF_REPORT_SEQUENCE, 0L) + 1L)
+                .apply()
+        }
+    }
+
+    /** Отправляет отчёт на один адрес. `true` — сервер его принял. */
+    private fun post(endpoint: String, payloadBytes: ByteArray): Boolean {
+        var connection: HttpURLConnection? = null
         try {
+            connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                doOutput = true
+                setFixedLengthStreamingMode(payloadBytes.size)
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                setRequestProperty("Accept", "application/json")
+            }
             connection.outputStream.use { it.write(payloadBytes) }
             val status = connection.responseCode
             val response = if (status in 200..299) connection.inputStream else connection.errorStream
@@ -429,14 +462,12 @@ internal object UsageStatistics {
                 val buffer = ByteArray(MAX_RESPONSE_BYTES)
                 stream.read(buffer)
             }
-            if (status in 200..299) {
-                prefs.edit()
-                    .putLong(PREF_LAST_SUCCESS_AT, now)
-                    .putLong(PREF_REPORT_SEQUENCE, prefs.getLong(PREF_REPORT_SEQUENCE, 0L) + 1L)
-                    .apply()
-            }
+            return status in 200..299
+        } catch (_: Exception) {
+            // Недоступность одного приёмника не должна мешать остальным.
+            return false
         } finally {
-            connection.disconnect()
+            connection?.disconnect()
         }
     }
 

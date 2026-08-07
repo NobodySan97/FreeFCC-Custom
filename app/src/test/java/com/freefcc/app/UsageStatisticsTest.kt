@@ -276,6 +276,36 @@ class UsageStatisticsTest {
     }
 
     @Test
+    fun bothEndpointsReceiveTheSameReportAndOnlyValidOnesAreKept() {
+        assertEquals(
+            listOf("https://one.example/api/v1/statistics", "https://two.example/api/v1/statistics"),
+            UsageStatistics.endpoints(
+                " https://one.example/api/v1/statistics ",
+                "https://two.example/api/v1/statistics"
+            )
+        )
+        // Одинаковые адреса — один сервер, отчёт не должен уйти туда дважды.
+        assertEquals(
+            listOf("https://one.example/api/v1/statistics"),
+            UsageStatistics.endpoints(
+                "https://one.example/api/v1/statistics",
+                "https://one.example/api/v1/statistics"
+            )
+        )
+        // Незаданный резерв оставляет ровно один приёмник.
+        assertEquals(
+            listOf("https://one.example/api/v1/statistics"),
+            UsageStatistics.endpoints("https://one.example/api/v1/statistics", "")
+        )
+        // Без HTTPS отправки нет вовсе.
+        assertEquals(emptyList<String>(), UsageStatistics.endpoints("", ""))
+        assertEquals(
+            emptyList<String>(),
+            UsageStatistics.endpoints("http://one.example/api/v1/statistics", "  ")
+        )
+    }
+
+    @Test
     fun payloadContainsDeclaredStatisticsOnly() {
         val json = UsageStatisticsJson.encode(
             UsageStatisticsPayload(

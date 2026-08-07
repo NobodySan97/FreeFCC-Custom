@@ -14,14 +14,27 @@ android {
         applicationId = "com.freefcc.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 89
-        versionName = "1.5.72"
-        val statisticsEndpoint = providers.gradleProperty("statisticsEndpoint")
-            .orElse(providers.environmentVariable("FREEFCC_STATISTICS_ENDPOINT"))
-            .getOrElse("")
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-        buildConfigField("String", "STATISTICS_ENDPOINT", "\"$statisticsEndpoint\"")
+        versionCode = 90
+        versionName = "1.5.73"
+        fun statisticsEndpoint(property: String, variable: String): String =
+            providers.gradleProperty(property)
+                .orElse(providers.environmentVariable(variable))
+                .getOrElse("")
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+        buildConfigField(
+            "String",
+            "STATISTICS_ENDPOINT",
+            "\"${statisticsEndpoint("statisticsEndpoint", "FREEFCC_STATISTICS_ENDPOINT")}\""
+        )
+        buildConfigField(
+            "String",
+            "STATISTICS_ENDPOINT_SECONDARY",
+            "\"${statisticsEndpoint(
+                "statisticsEndpointSecondary",
+                "FREEFCC_STATISTICS_ENDPOINT_SECONDARY"
+            )}\""
+        )
     }
 
     val keystorePropsFile = rootProject.file("keystore.properties")
