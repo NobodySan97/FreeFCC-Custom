@@ -1288,15 +1288,20 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         attempts: Int = 3
     ): LedReadback? {
         repeat(attempts) { attempt ->
-            val request = LedReadbackProtocol.buildRequest()
-            val exchange = ledTransport.sendAndReceiveRaw(
-                frame = request,
-                wireFrame = Profiles.wrapFrame(request),
-                readWindowMs = 2_500,
-                port = DumlTransport.PORT_LED,
-                autoDetectPort = false
-            )
-            LedReadbackProtocol.parse(exchange.validatedPayload)?.let { return it }
+            // Firmwares disagree on what this parameter is called — Lito X1
+            // dropped the `g_config.*` spelling — and the hash follows the
+            // name, so ask under each known name until one answers.
+            for (parameterHash in LedReadbackProtocol.address.candidates) {
+                val request = LedReadbackProtocol.buildRequest(parameterHash)
+                val exchange = ledTransport.sendAndReceiveRaw(
+                    frame = request,
+                    wireFrame = Profiles.wrapFrame(request),
+                    readWindowMs = 2_500,
+                    port = DumlTransport.PORT_LED,
+                    autoDetectPort = false
+                )
+                LedReadbackProtocol.parse(exchange.validatedPayload)?.let { return it }
+            }
             if (attempt < attempts - 1) {
                 log("LED readback missing; retrying")
                 Thread.sleep(150)
@@ -1376,7 +1381,15 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                     return@runOnIO
                 }
                 val fileName = if (on) "led_on.json" else "led_off.json"
-                val profile = Profiles.load(app, fileName)
+                val loadedProfile = Profiles.load(app, fileName)
+                // The profile carries the canonical hash literally. When a
+                // readback proved this aircraft answers to the other spelling,
+                // write to that one instead — otherwise the write addresses a
+                // parameter the firmware does not have and quietly does nothing.
+                val profile = LedProfileHash.retargeted(
+                    loadedProfile,
+                    LedReadbackProtocol.address
+                )
                 log("Loaded LED profile: ${profile.frames.size} frames (port ${profile.port})")
 
                 // Separate transport instance — the LED command on port 40007

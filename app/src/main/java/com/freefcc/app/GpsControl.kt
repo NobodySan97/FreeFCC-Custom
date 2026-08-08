@@ -96,15 +96,20 @@ internal object GpsCommandRunner {
     }
 
     private fun readOnce(): GpsReadback? {
-        val request = GpsControlProtocol.buildReadRequest()
-        val exchange = DumlTransport().sendAndReceiveRaw(
-            frame = request,
-            wireFrame = Profiles.wrapFrame(request),
-            readWindowMs = 2_500,
-            port = DumlTransport.PORT_LED,
-            autoDetectPort = false
-        )
-        return GpsControlProtocol.parse(exchange.validatedPayload)
+        // Ask under each known name for the parameter; the hash follows the
+        // name, and firmwares disagree on which name they carry.
+        for (parameterHash in GpsControlProtocol.address.candidates) {
+            val request = GpsControlProtocol.buildReadRequest(parameterHash)
+            val exchange = DumlTransport().sendAndReceiveRaw(
+                frame = request,
+                wireFrame = Profiles.wrapFrame(request),
+                readWindowMs = 2_500,
+                port = DumlTransport.PORT_LED,
+                autoDetectPort = false
+            )
+            GpsControlProtocol.parse(exchange.validatedPayload)?.let { return it }
+        }
+        return null
     }
 }
 
@@ -144,24 +149,30 @@ internal object GpsControlStateStore {
 
 /** Hash-based access to the aircraft master `g_config.gps_cfg.gps_enable` parameter. */
 internal object GpsControlProtocol {
-    // Stable DJI parameter hash 0xC5429582, encoded little-endian on the wire.
     // Read-only 03:F8 was verified live through the RC2 port-40007 proxy.
-    private val parameterHash = byteArrayOf(
-        0x82.toByte(),
-        0x95.toByte(),
-        0x42,
-        0xC5.toByte()
-    )
+    // Which spelling of the name a firmware carries decides the hash, so the
+    // parameter is addressed by candidate rather than by one constant.
+    val address: ParameterAddress = ParameterAddress.GPS_ENABLE
 
-    fun buildReadRequest(builder: DumlBuilder = DumlBuilder()): ByteArray =
-        buildRequest(builder, commandId = 0xF8, value = null)
+    fun buildReadRequest(
+        parameterHash: ByteArray = address.preferred(),
+        builder: DumlBuilder = DumlBuilder()
+    ): ByteArray = buildRequest(builder, commandId = 0xF8, value = null, parameterHash = parameterHash)
 
     fun buildWriteRequest(enabled: Boolean, builder: DumlBuilder = DumlBuilder()): ByteArray =
-        buildRequest(builder, commandId = 0xF9, value = if (enabled) 1 else 0)
+        buildRequest(
+            builder,
+            commandId = 0xF9,
+            value = if (enabled) 1 else 0,
+            // Write to the name a readback proved this aircraft answers to.
+            parameterHash = address.preferred()
+        )
 
     fun parse(payload: ByteArray?): GpsReadback? {
         if (payload == null || payload.size != 6 || payload[0] != 0.toByte()) return null
-        if (!payload.copyOfRange(1, 5).contentEquals(parameterHash)) return null
+        val echoed = payload.copyOfRange(1, 5)
+        if (!address.matches(echoed)) return null
+        address.confirm(echoed)
 
         val value = payload[5].toInt() and 0xFF
         val state = when (value) {
@@ -172,7 +183,12 @@ internal object GpsControlProtocol {
         return GpsReadback(state, value)
     }
 
-    private fun buildRequest(builder: DumlBuilder, commandId: Int, value: Int?): ByteArray {
+    private fun buildRequest(
+        builder: DumlBuilder,
+        commandId: Int,
+        value: Int?,
+        parameterHash: ByteArray
+    ): ByteArray {
         val payload = if (value == null) {
             parameterHash.copyOf()
         } else {
