@@ -313,7 +313,8 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                 nowMs = now,
                 storedModelCode = prefs
                     .getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, "")
-                    .orEmpty()
+                    .orEmpty(),
+                lastVerifyAttemptAtMs = prefs.getLong(FccViewModel.PREF_AIRCRAFT_VERIFY_AT, 0L)
             )
         ) {
             serialProbeWindowStartedAtMs = now
@@ -373,7 +374,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                 } else {
                     null
                 }
-                val observed = AircraftIdentitySources.merge(queriedSerial, listened)
+                val observed = AircraftIdentitySources.merge(queriedSerial, listened, stored)
                 if (
                     AircraftIdentitySources.verificationSettled(
                         queriedSerial,
@@ -383,7 +384,12 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                 ) {
                     // Verification asked and got nothing back. There is nothing
                     // to discover, so the window closes instead of retrying
-                    // every ten seconds until it times out.
+                    // every ten seconds until it times out — and the check is
+                    // stamped as attempted, or the next scan would reopen it at
+                    // once and ask again on the ten-second beat forever.
+                    prefs.edit()
+                        .putLong(FccViewModel.PREF_AIRCRAFT_VERIFY_AT, System.currentTimeMillis())
+                        .apply()
                     serialProbeWindowStartedAtMs = 0L
                     return@thread
                 }

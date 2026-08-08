@@ -167,4 +167,53 @@ class AircraftIdentityProbePolicyTest {
             )
         )
     }
+
+    @Test
+    fun anUnansweredCheckMovesTheBeatWithoutClaimingTheBusWasHeard() {
+        val readAt = 1_000L
+        val attemptAt = readAt + AircraftIdentityProbePolicy.VERIFY_INTERVAL_MS
+
+        // Straight after a check that got no answer, the next one waits its
+        // turn. Measuring only from the last successful read reopened the
+        // window on the very next scan, so a silent aircraft was asked every
+        // ten seconds for as long as it stayed silent.
+        assertFalse(
+            AircraftIdentityProbePolicy.shouldOpenWindow(
+                storedSerial = serial,
+                storedModelCode = "WA530",
+                homePointAtMs = 0L,
+                lastBusReadAtMs = readAt,
+                nowMs = attemptAt + 1_000L,
+                lastVerifyAttemptAtMs = attemptAt
+            )
+        )
+        assertTrue(
+            AircraftIdentityProbePolicy.shouldOpenWindow(
+                storedSerial = serial,
+                storedModelCode = "WA530",
+                homePointAtMs = 0L,
+                lastBusReadAtMs = readAt,
+                nowMs = attemptAt + AircraftIdentityProbePolicy.VERIFY_INTERVAL_MS,
+                lastVerifyAttemptAtMs = attemptAt
+            )
+        )
+    }
+
+    @Test
+    fun aCheckAttemptNeverSpendsAnUnreadHomePoint() {
+        val readAt = 1_000L
+        val homePointAt = readAt + 5_000L
+        // The attempt stamp is younger than the Home Point, and must not be
+        // mistaken for having read the bus for it.
+        assertTrue(
+            AircraftIdentityProbePolicy.shouldOpenWindow(
+                storedSerial = serial,
+                storedModelCode = "WA530",
+                homePointAtMs = homePointAt,
+                lastBusReadAtMs = readAt,
+                nowMs = homePointAt + AircraftIdentityProbePolicy.HOME_POINT_GUARD_MS,
+                lastVerifyAttemptAtMs = homePointAt + 1_000L
+            )
+        )
+    }
 }

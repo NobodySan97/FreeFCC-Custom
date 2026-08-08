@@ -126,6 +126,12 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         internal const val PREF_AIRCRAFT_MODEL_SOURCE = "aircraft_model_source"
         /** When the bus last answered an identity window, successfully or not. */
         internal const val PREF_AIRCRAFT_BUS_READ_AT = "aircraft_bus_read_at"
+
+        /**
+         * When identity was last checked, answered or not. Separate from the
+         * bus-read stamp so an unanswered check cannot pass for a read.
+         */
+        internal const val PREF_AIRCRAFT_VERIFY_AT = "aircraft_identity_verify_at"
         internal const val AIRCRAFT_MODEL_SOURCE_UI = "dji_app_screen"
         internal const val AIRCRAFT_MODEL_SOURCE_DUML = "duml_passive"
         internal const val AIRCRAFT_MODEL_FRESH_MS = 5 * 60_000L

@@ -5,7 +5,7 @@ package com.freefcc.app
  *
  * Extracted from `compute_hash_value_by_name` in DJI firmware and recorded in
  * `docs/FLYC_PARAM_TABLE.md`: fold `name + "_0"` with
- * `h = ((h << 8) | byte) mod 0xffffffb`, send little-endian. It reproduces
+ * `h = ((h << 8) | byte) mod 0xfffffffb`, send little-endian. It reproduces
  * every hash we have seen on the wire — see the test.
  *
  * The hash is a function of the name and nothing else, so the same name gives

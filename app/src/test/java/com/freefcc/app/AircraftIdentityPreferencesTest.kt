@@ -413,4 +413,55 @@ class AircraftIdentityPreferencesTest {
         assertFalse(update.modelChanged)
         assertEquals("WA530", update.currentModel.modelCode)
     }
+
+    @Test
+    fun aSwapDoesNotInheritACodeForAModelThatOnlyGaveItsName() {
+        val prefs = inMemoryPreferences(
+            mapOf(
+                FccViewModel.PREF_AIRCRAFT_MODEL_CODE to "WA151",
+                FccViewModel.PREF_AIRCRAFT_MODEL_NAME to "DJI Lito X1",
+                FccViewModel.PREF_AIRCRAFT_MODEL_SOURCE to
+                    FccViewModel.AIRCRAFT_MODEL_SOURCE_DUML,
+                AircraftSerialGuard.KEY_SERIAL to "1581FB34C25CF0032AAG"
+            )
+        )
+
+        val update = AircraftIdentityPreferences.updateFromDuml(
+            prefs = prefs,
+            observedModel = AircraftModelIdentity("", "DJI Avata 360"),
+            observedSerial = "1581FA8JC264600B31QZ",
+            nowMs = 10_000L
+        )
+
+        // The new aircraft named itself but gave no code; keeping WA151 would
+        // pair the new name with the previous aircraft's code.
+        assertEquals("", update.currentModel.modelCode)
+        assertEquals("DJI Avata 360", update.currentModel.modelName)
+    }
+
+    @Test
+    fun aSwapBetweenTwoOfTheSameModelDropsTheScreenNameOfTheFirst() {
+        val prefs = inMemoryPreferences(
+            mapOf(
+                FccViewModel.PREF_AIRCRAFT_MODEL_CODE to "WA530",
+                FccViewModel.PREF_AIRCRAFT_MODEL_NAME to
+                    "DJI Avata 360 Enhanced Transmission edition",
+                FccViewModel.PREF_AIRCRAFT_MODEL_SOURCE to
+                    FccViewModel.AIRCRAFT_MODEL_SOURCE_UI,
+                AircraftSerialGuard.KEY_SERIAL to "1581FB34C25CF0032AAG"
+            )
+        )
+
+        val update = AircraftIdentityPreferences.updateFromDuml(
+            prefs = prefs,
+            observedModel = AircraftModelIdentity("WA530", ""),
+            observedSerial = "1581FA8JC264600B31QZ",
+            nowMs = 10_000L
+        )
+
+        // Same model, different aircraft: the edition name belonged to the one
+        // that left.
+        assertEquals("WA530", update.currentModel.modelCode)
+        assertEquals("DJI Avata 360", update.currentModel.modelName)
+    }
 }

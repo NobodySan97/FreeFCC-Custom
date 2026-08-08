@@ -69,7 +69,8 @@ internal object AircraftIdentityProbePolicy {
         homePointAtMs: Long,
         lastBusReadAtMs: Long,
         nowMs: Long,
-        storedModelCode: String = ""
+        storedModelCode: String = "",
+        lastVerifyAttemptAtMs: Long = 0L
     ): Boolean {
         val homePointUnread = homePointAtMs > lastBusReadAtMs &&
             nowMs >= homePointAtMs + HOME_POINT_GUARD_MS
@@ -82,8 +83,14 @@ internal object AircraftIdentityProbePolicy {
         // arrives on the first window, but the model still has to be
         // overheard, so a missed model must not stay missing all session.
         val identityComplete = storedSerial.isNotEmpty() && storedModelCode.isNotEmpty()
-        val interval = if (identityComplete) VERIFY_INTERVAL_MS else UNKNOWN_RETRY_INTERVAL_MS
-        return nowMs - lastBusReadAtMs >= interval
+        if (!identityComplete) return nowMs - lastBusReadAtMs >= UNKNOWN_RETRY_INTERVAL_MS
+        // Checking runs off its own clock, stamped whether or not the aircraft
+        // answered. Measuring it from the last successful read let an
+        // unanswered check reopen a window immediately — the beat only moved
+        // when the bus replied, so a silent aircraft was asked every ten
+        // seconds forever. A miss must not be recorded as a read either: that
+        // would pass a silent bus off as heard and spend the Home Point.
+        return nowMs - maxOf(lastBusReadAtMs, lastVerifyAttemptAtMs) >= VERIFY_INTERVAL_MS
     }
 }
 
@@ -157,20 +164,22 @@ internal object AircraftIdentityPreferences {
         val confirmedSerialSwap = acceptedSerialForSwap.isNotEmpty() &&
             previousSerial.isNotEmpty() &&
             !AircraftSerialForms.sameAircraft(acceptedSerialForSwap, previousSerial)
-        val modelOutlivedItsAircraft = confirmedSerialSwap && !hasModelObservation
-
+        // Across a proven swap nothing about the model is inherited. Filling a
+        // missing half from the previous aircraft is how the mixed identities
+        // appear: a name with no code keeps the old code, and a second
+        // aircraft of the same model keeps the first one's screen name.
         val currentCode = when {
-            modelOutlivedItsAircraft -> ""
+            confirmedSerialSwap -> observedCode
             else -> observedCode.ifEmpty { previousCode }
         }
         val currentName = when {
-            modelOutlivedItsAircraft -> ""
+            confirmedSerialSwap -> observedName
             screenNameIsCurrent -> previousName
             observedName.isNotEmpty() -> observedName
             observedCode.isNotEmpty() && observedCode != previousCode -> ""
             else -> previousName
         }
-        val modelChanged = (hasModelObservation || modelOutlivedItsAircraft) &&
+        val modelChanged = (hasModelObservation || confirmedSerialSwap) &&
             (currentCode != previousCode || currentName != previousName)
         val confirmedModelSwap = observedCode.isNotEmpty() && when {
             previousCode.isNotEmpty() -> observedCode != previousCode

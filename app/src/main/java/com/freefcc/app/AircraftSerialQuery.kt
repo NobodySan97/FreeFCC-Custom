@@ -123,14 +123,30 @@ internal object AircraftIdentitySources {
      * unplugged, and pairing those with the serial we asked for is how a
      * mismatched identity gets stored and reported.
      */
-    fun merge(queriedSerial: String, listened: AircraftLinkIdentity?): AircraftLinkIdentity {
+    fun merge(
+        queriedSerial: String,
+        listened: AircraftLinkIdentity?,
+        storedSerial: String = ""
+    ): AircraftLinkIdentity {
         val listenedSerial = listened?.serial.orEmpty()
-        val listenedIsSameAircraft = queriedSerial.isEmpty() ||
-            listenedSerial.isEmpty() ||
-            AircraftSerialForms.sameAircraft(queriedSerial, listenedSerial)
+        val swapped = queriedSerial.isNotEmpty() &&
+            storedSerial.isNotEmpty() &&
+            !AircraftSerialForms.sameAircraft(queriedSerial, storedSerial)
+        val modelNamesThisAircraft = when {
+            // The listen said whose model it is, so take it at its word.
+            listenedSerial.isNotEmpty() && queriedSerial.isNotEmpty() ->
+                AircraftSerialForms.sameAircraft(queriedSerial, listenedSerial)
+            listenedSerial.isNotEmpty() -> true
+            // Nothing attributed it. Right after a swap the bus is still
+            // repeating the aircraft that left, and pairing its model with the
+            // serial we asked for is what makes a mixed identity stick. Any
+            // other time there is nothing to contradict, and the model is read
+            // again on the next discovery beat anyway.
+            else -> !swapped
+        }
         return AircraftLinkIdentity(
             serial = queriedSerial.ifEmpty { listenedSerial },
-            model = listened?.model.takeIf { listenedIsSameAircraft }
+            model = listened?.model.takeIf { modelNamesThisAircraft }
         )
     }
 }
