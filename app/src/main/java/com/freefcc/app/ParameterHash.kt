@@ -69,12 +69,47 @@ internal class ParameterAddress(vararg names: String) {
     /** Candidate to write with: the proven one, else the canonical name. */
     fun preferred(): ByteArray = confirmed ?: candidates.first()
 
+    /** True once a read has proven which name this aircraft answers to. */
+    val isConfirmed: Boolean
+        get() = confirmed != null
+
     /** Test seam — forgets what an aircraft proved. */
     fun forgetConfirmed() {
         confirmed = null
     }
 
     companion object {
+        /**
+         * Reads a hash-addressed parameter, asking under each name it may go
+         * by until one answers, and leaves the answering name confirmed for
+         * the write that follows.
+         *
+         * Every readback path has to go through here. A path that asks only
+         * under the canonical name can never confirm the other one, so on a
+         * firmware that carries the short name the parameter stays unreadable
+         * and every write keeps addressing a name that does not exist.
+         */
+        fun <T> read(
+            transport: DumlTransport,
+            address: ParameterAddress,
+            readWindowMs: Int,
+            buildRequest: (ByteArray) -> ByteArray,
+            parse: (ByteArray?) -> T?
+        ): T? {
+            for (parameterHash in address.candidates) {
+                val request = buildRequest(parameterHash)
+                val exchange = transport.sendAndReceiveRaw(
+                    frame = request,
+                    wireFrame = Profiles.wrapFrame(request),
+                    readWindowMs = readWindowMs,
+                    port = DumlTransport.PORT_LED,
+                    autoDetectPort = false
+                )
+                parse(exchange.validatedPayload)?.let { return it }
+            }
+            return null
+        }
+
         /** Front arm LEDs. Short form confirmed present on Lito X1 firmware 03.07. */
         val FOREARM_LED = ParameterAddress(
             "g_config.misc_cfg.forearm_lamp_ctrl",

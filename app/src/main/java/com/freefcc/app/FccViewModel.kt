@@ -1085,15 +1085,13 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         attempts: Int = 3
     ): GpsReadback? {
         repeat(attempts) { attempt ->
-            val request = GpsControlProtocol.buildReadRequest()
-            val exchange = gpsTransport.sendAndReceiveRaw(
-                frame = request,
-                wireFrame = Profiles.wrapFrame(request),
+            ParameterAddress.read(
+                transport = gpsTransport,
+                address = GpsControlProtocol.address,
                 readWindowMs = 2_500,
-                port = DumlTransport.PORT_LED,
-                autoDetectPort = false
-            )
-            GpsControlProtocol.parse(exchange.validatedPayload)?.let { return it }
+                buildRequest = { hash -> GpsControlProtocol.buildReadRequest(hash) },
+                parse = GpsControlProtocol::parse
+            )?.let { return it }
             if (attempt < attempts - 1) {
                 log("GPS readback missing; retrying")
                 Thread.sleep(150)
@@ -1288,20 +1286,13 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         attempts: Int = 3
     ): LedReadback? {
         repeat(attempts) { attempt ->
-            // Firmwares disagree on what this parameter is called — Lito X1
-            // dropped the `g_config.*` spelling — and the hash follows the
-            // name, so ask under each known name until one answers.
-            for (parameterHash in LedReadbackProtocol.address.candidates) {
-                val request = LedReadbackProtocol.buildRequest(parameterHash)
-                val exchange = ledTransport.sendAndReceiveRaw(
-                    frame = request,
-                    wireFrame = Profiles.wrapFrame(request),
-                    readWindowMs = 2_500,
-                    port = DumlTransport.PORT_LED,
-                    autoDetectPort = false
-                )
-                LedReadbackProtocol.parse(exchange.validatedPayload)?.let { return it }
-            }
+            ParameterAddress.read(
+                transport = ledTransport,
+                address = LedReadbackProtocol.address,
+                readWindowMs = 2_500,
+                buildRequest = { hash -> LedReadbackProtocol.buildRequest(hash) },
+                parse = LedReadbackProtocol::parse
+            )?.let { return it }
             if (attempt < attempts - 1) {
                 log("LED readback missing; retrying")
                 Thread.sleep(150)
@@ -1382,6 +1373,18 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 }
                 val fileName = if (on) "led_on.json" else "led_off.json"
                 val loadedProfile = Profiles.load(app, fileName)
+
+                // Separate transport instance — the LED command on port 40007
+                // must not share state with the FCC transport on port 40009.
+                val ledTransport = DumlTransport()
+
+                // Find out what this aircraft calls the parameter before
+                // writing to it, so the very first press works rather than
+                // waiting for some later readback to discover the name.
+                if (!LedReadbackProtocol.address.isConfirmed) {
+                    readLedState(ledTransport, attempts = 1)
+                }
+
                 // The profile carries the canonical hash literally. When a
                 // readback proved this aircraft answers to the other spelling,
                 // write to that one instead — otherwise the write addresses a
@@ -1391,10 +1394,6 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                     LedReadbackProtocol.address
                 )
                 log("Loaded LED profile: ${profile.frames.size} frames (port ${profile.port})")
-
-                // Separate transport instance — the LED command on port 40007
-                // must not share state with the FCC transport on port 40009.
-                val ledTransport = DumlTransport()
 
                 val expectedState = if (on) LedState.ON else LedState.OFF
                 val requestedLabel = if (on) "ON" else "OFF"

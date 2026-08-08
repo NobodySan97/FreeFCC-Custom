@@ -41,6 +41,12 @@ internal object GpsCommandRunner {
     ): GpsCommandSendResult {
         val portLease = Port40007Lock.acquireForLed() ?: return GpsCommandSendResult.PORT_BUSY
         return try {
+            // Find out what this aircraft calls the parameter before writing to
+            // it. Without this the first command of a session always addresses
+            // the canonical name, so on a firmware that only knows the short
+            // one every write in the burst lands nowhere and the switch looks
+            // dead until something else happens to read it.
+            if (!GpsControlProtocol.address.isConfirmed) readOnce()
             var anyWriteSucceeded = false
             for (cycle in 1..COMMAND_CYCLES) {
                 for (write in 1..WRITES_PER_CYCLE) {
@@ -95,22 +101,13 @@ internal object GpsCommandRunner {
         return GpsFreshReadResult(null, attemptedRead)
     }
 
-    private fun readOnce(): GpsReadback? {
-        // Ask under each known name for the parameter; the hash follows the
-        // name, and firmwares disagree on which name they carry.
-        for (parameterHash in GpsControlProtocol.address.candidates) {
-            val request = GpsControlProtocol.buildReadRequest(parameterHash)
-            val exchange = DumlTransport().sendAndReceiveRaw(
-                frame = request,
-                wireFrame = Profiles.wrapFrame(request),
-                readWindowMs = 2_500,
-                port = DumlTransport.PORT_LED,
-                autoDetectPort = false
-            )
-            GpsControlProtocol.parse(exchange.validatedPayload)?.let { return it }
-        }
-        return null
-    }
+    private fun readOnce(): GpsReadback? = ParameterAddress.read(
+        transport = DumlTransport(),
+        address = GpsControlProtocol.address,
+        readWindowMs = 2_500,
+        buildRequest = { hash -> GpsControlProtocol.buildReadRequest(hash) },
+        parse = GpsControlProtocol::parse
+    )
 }
 
 internal object GpsControlStateStore {
