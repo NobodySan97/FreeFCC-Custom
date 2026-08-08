@@ -34,6 +34,23 @@ internal object AircraftIdentityProbePolicy {
     const val HOME_POINT_GUARD_MS = 30_000L
     const val UNKNOWN_RETRY_INTERVAL_MS = 5 * 60_000L
 
+    /**
+     * How often a complete identity is re-asked.
+     *
+     * Swapping to an aircraft of a *different* model is caught by the model
+     * code changing, and a Home Point re-opens a window on its own. Neither
+     * fires when the aircraft is replaced by another of the same model on a
+     * session with no Home Point — indoors, or a flight that never got a fix —
+     * and the previous aircraft's serial then stands in for it all session and
+     * goes out in the statistics under the wrong aircraft.
+     *
+     * Verifying is cheap now that the serial can be asked for: one short
+     * request, and no listening at all unless the answer differs from what we
+     * hold. Discovery stays on the slower beat because it still needs the
+     * listen that holds the port.
+     */
+    const val VERIFY_INTERVAL_MS = 2 * 60_000L
+
     fun shouldOpenWindow(
         storedSerial: String,
         homePointAtMs: Long,
@@ -44,15 +61,16 @@ internal object AircraftIdentityProbePolicy {
         val homePointUnread = homePointAtMs > lastBusReadAtMs &&
             nowMs >= homePointAtMs + HOME_POINT_GUARD_MS
         if (homePointUnread) return true
-        // A serial no longer settles it. The serial can now be asked for
-        // directly and arrives on the first window, while the model only comes
-        // from listening and can be missed — and once the serial was stored,
-        // this used to stop opening windows for good, leaving the aircraft
-        // permanently unnamed on a session with no Home Point and no name on
-        // the DJI Fly screen. Either half still missing keeps the slow beat.
-        if (storedSerial.isNotEmpty() && storedModelCode.isNotEmpty()) return false
         if (lastBusReadAtMs == 0L) return true
-        return nowMs - lastBusReadAtMs >= UNKNOWN_RETRY_INTERVAL_MS
+        // A stored identity no longer ends the beat. It used to, back when
+        // reading meant listening and a known serial was worth keeping the
+        // port free for. Now a complete identity is re-asked to catch a swap,
+        // and an incomplete one keeps the slower discovery beat: the serial
+        // arrives on the first window, but the model still has to be
+        // overheard, so a missed model must not stay missing all session.
+        val identityComplete = storedSerial.isNotEmpty() && storedModelCode.isNotEmpty()
+        val interval = if (identityComplete) VERIFY_INTERVAL_MS else UNKNOWN_RETRY_INTERVAL_MS
+        return nowMs - lastBusReadAtMs >= interval
     }
 }
 

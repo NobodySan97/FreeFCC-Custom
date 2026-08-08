@@ -73,9 +73,13 @@ class AircraftIdentityProbePolicyTest {
     @Test
     fun aKnownSerialIsRereadOncePerHomePointAndOnlyAfterTheFccGuard() {
         val readAt = 1_000_000L
-        val homePointAt = readAt + 120_000L
+        // Close behind the read, so the verify beat is not due and the Home
+        // Point is the only thing that could open a window here. Holding the
+        // port back while FCC owns it is not this policy's job — the service
+        // gates that separately in identityReadMayRun.
+        val homePointAt = readAt + 1_000L
 
-        // While the FCC write owns the port, identity waits.
+        // The Home Point is not ripe yet.
         assertFalse(
             AircraftIdentityProbePolicy.shouldOpenWindow(
                 storedSerial = serial,
@@ -94,27 +98,45 @@ class AircraftIdentityProbePolicyTest {
                 nowMs = homePointAt + AircraftIdentityProbePolicy.HOME_POINT_GUARD_MS
             )
         )
-        // That Home Point is spent once the window has read the bus.
+        // That Home Point is spent once the window has read the bus — checked
+        // before the verify beat comes round, so this is the Home Point being
+        // spent rather than a fresh verification.
+        val spentAt = homePointAt + AircraftIdentityProbePolicy.HOME_POINT_GUARD_MS
         assertFalse(
             AircraftIdentityProbePolicy.shouldOpenWindow(
                 storedSerial = serial,
                 storedModelCode = "WA530",
                 homePointAtMs = homePointAt,
-                lastBusReadAtMs = homePointAt + AircraftIdentityProbePolicy.HOME_POINT_GUARD_MS,
-                nowMs = homePointAt + 10 * 60_000L
+                lastBusReadAtMs = spentAt,
+                nowMs = spentAt + AircraftIdentityProbePolicy.VERIFY_INTERVAL_MS - 1
             )
         )
     }
 
     @Test
-    fun aKnownSerialWithoutAHomePointNeverOpensAWindow() {
+    fun aCompleteIdentityIsStillReAskedInCaseTheAircraftWasSwapped() {
+        // Swapping to another aircraft of the same model raises no model
+        // change, and a session with no fix raises no Home Point, so without
+        // this the previous aircraft's serial stands in for the new one all
+        // session. Asking is cheap; only a differing answer costs a listen.
+        val readAt = 1_000L
+
         assertFalse(
             AircraftIdentityProbePolicy.shouldOpenWindow(
                 storedSerial = serial,
                 storedModelCode = "WA530",
                 homePointAtMs = 0L,
-                lastBusReadAtMs = 1_000L,
-                nowMs = 1_000L + 60 * 60_000L
+                lastBusReadAtMs = readAt,
+                nowMs = readAt + AircraftIdentityProbePolicy.VERIFY_INTERVAL_MS - 1
+            )
+        )
+        assertTrue(
+            AircraftIdentityProbePolicy.shouldOpenWindow(
+                storedSerial = serial,
+                storedModelCode = "WA530",
+                homePointAtMs = 0L,
+                lastBusReadAtMs = readAt,
+                nowMs = readAt + AircraftIdentityProbePolicy.VERIFY_INTERVAL_MS
             )
         )
     }
