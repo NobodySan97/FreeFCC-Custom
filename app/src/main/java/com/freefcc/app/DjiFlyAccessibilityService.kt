@@ -303,7 +303,10 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                 storedSerial = stored,
                 homePointAtMs = homePointObservedAtMs,
                 lastBusReadAtMs = lastBusReadAt,
-                nowMs = now
+                nowMs = now,
+                storedModelCode = prefs
+                    .getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, "")
+                    .orEmpty()
             )
         ) {
             serialProbeWindowStartedAtMs = now
@@ -342,16 +345,20 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                 // the serial on the bus by themselves — Lito X1 only pushes it
                 // while its Information screen is open, so a listening window
                 // there burned a full minute for nothing.
-                val queriedSerial = AircraftSerialQueryRunner.read(transport)
+                val queriedSerial = AircraftSerialQueryRunner.read(
+                    transport,
+                    attempts = AircraftSerialQueryRunner.BACKGROUND_ATTEMPTS
+                )
                 // The listen is still the only place a model arrives over the
                 // bus, so it runs when the model is missing even if the serial
                 // is already in hand. With both known there is nothing left to
                 // listen for and the port stays free.
-                val modelKnown = prefs
+                val storedModelCode = prefs
                     .getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, "")
                     .orEmpty()
-                    .isNotEmpty()
-                val listened = if (AircraftIdentitySources.needsListen(queriedSerial, modelKnown)) {
+                val listened = if (
+                    AircraftIdentitySources.needsListen(queriedSerial, stored, storedModelCode)
+                ) {
                     transport.probeAircraftLinkIdentity(
                         port = DumlTransport.PORT_LED,
                         attempts = 1

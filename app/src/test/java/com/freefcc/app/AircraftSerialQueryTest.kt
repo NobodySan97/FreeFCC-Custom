@@ -61,29 +61,79 @@ class AircraftSerialQueryTest {
         assertEquals(serial, AircraftSerialProtocol.parse(payload))
     }
 
+    private val aircraftA = "1581FA8JC264600B31QZ"
+    private val aircraftB = "1581FB34C25CF0032AAG"
+
     @Test
     fun listeningIsSkippedOnlyWhenNothingIsLeftToLearn() {
-        // Both known: the listen would hold 40007 to re-read what we have.
-        assertEquals(false, AircraftIdentitySources.needsListen("1581FA8JC264600B31QZ", true))
+        // Same aircraft, model already read: the listen would hold 40007 to
+        // re-read what we have.
+        assertEquals(
+            false,
+            AircraftIdentitySources.needsListen(aircraftA, aircraftA, "WA530")
+        )
         // The model only ever arrives by listening.
-        assertEquals(true, AircraftIdentitySources.needsListen("1581FA8JC264600B31QZ", false))
+        assertEquals(true, AircraftIdentitySources.needsListen(aircraftA, aircraftA, ""))
         // No serial: the listen is the fallback the query did not replace.
-        assertEquals(true, AircraftIdentitySources.needsListen("", true))
-        assertEquals(true, AircraftIdentitySources.needsListen("", false))
+        assertEquals(true, AircraftIdentitySources.needsListen("", aircraftA, "WA530"))
+    }
+
+    @Test
+    fun aDifferentAircraftIsListenedToEvenThoughSomeModelIsStored() {
+        // The stored model belongs to the aircraft that was just unplugged.
+        // Counting it as known would file the new serial under the old model.
+        assertEquals(
+            true,
+            AircraftIdentitySources.needsListen(aircraftB, aircraftA, "WA341")
+        )
+    }
+
+    @Test
+    fun theShortAndLongFormsOfOneSerialAreNotTreatedAsTwoAircraft() {
+        val shortForm = aircraftA.removePrefix("1581")
+
+        assertEquals(
+            false,
+            AircraftIdentitySources.needsListen(shortForm, aircraftA, "WA530")
+        )
     }
 
     @Test
     fun theQueriedSerialOutranksTheListenedOneAndTheModelSurvives() {
-        val queried = "1581FA8JC264600B31QZ"
         val listened = AircraftLinkIdentity(
-            serial = "1581OLDOLDOLDOLDOLD1",
+            serial = aircraftA,
             model = AircraftModelIdentity("WA530", "DJI Avata 360")
         )
 
-        val merged = AircraftIdentitySources.merge(queried, listened)
+        val merged = AircraftIdentitySources.merge(aircraftA, listened)
 
-        assertEquals(queried, merged.serial)
+        assertEquals(aircraftA, merged.serial)
         assertEquals("WA530", merged.model?.modelCode)
+    }
+
+    @Test
+    fun aModelHeardFromAnotherAircraftIsNotPinnedToTheOneWeAsked() {
+        // 40007 still carries frames from the aircraft that was unplugged.
+        val listened = AircraftLinkIdentity(
+            serial = aircraftA,
+            model = AircraftModelIdentity("WA530", "DJI Avata 360")
+        )
+
+        val merged = AircraftIdentitySources.merge(aircraftB, listened)
+
+        assertEquals(aircraftB, merged.serial)
+        assertEquals(null, merged.model)
+    }
+
+    @Test
+    fun anUnattributedModelStillCountsForTheAircraftWeAsked() {
+        // The listen saw a model frame but no serial to argue with.
+        val listened = AircraftLinkIdentity(
+            serial = "",
+            model = AircraftModelIdentity("WA530", "DJI Avata 360")
+        )
+
+        assertEquals("WA530", AircraftIdentitySources.merge(aircraftB, listened).model?.modelCode)
     }
 
     @Test

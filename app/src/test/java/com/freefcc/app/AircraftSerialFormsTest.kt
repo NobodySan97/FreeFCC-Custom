@@ -79,6 +79,7 @@ class AircraftIdentityProbePolicyTest {
         assertFalse(
             AircraftIdentityProbePolicy.shouldOpenWindow(
                 storedSerial = serial,
+                storedModelCode = "WA530",
                 homePointAtMs = homePointAt,
                 lastBusReadAtMs = readAt,
                 nowMs = homePointAt + AircraftIdentityProbePolicy.HOME_POINT_GUARD_MS - 1
@@ -87,6 +88,7 @@ class AircraftIdentityProbePolicyTest {
         assertTrue(
             AircraftIdentityProbePolicy.shouldOpenWindow(
                 storedSerial = serial,
+                storedModelCode = "WA530",
                 homePointAtMs = homePointAt,
                 lastBusReadAtMs = readAt,
                 nowMs = homePointAt + AircraftIdentityProbePolicy.HOME_POINT_GUARD_MS
@@ -96,6 +98,7 @@ class AircraftIdentityProbePolicyTest {
         assertFalse(
             AircraftIdentityProbePolicy.shouldOpenWindow(
                 storedSerial = serial,
+                storedModelCode = "WA530",
                 homePointAtMs = homePointAt,
                 lastBusReadAtMs = homePointAt + AircraftIdentityProbePolicy.HOME_POINT_GUARD_MS,
                 nowMs = homePointAt + 10 * 60_000L
@@ -108,9 +111,37 @@ class AircraftIdentityProbePolicyTest {
         assertFalse(
             AircraftIdentityProbePolicy.shouldOpenWindow(
                 storedSerial = serial,
+                storedModelCode = "WA530",
                 homePointAtMs = 0L,
                 lastBusReadAtMs = 1_000L,
                 nowMs = 1_000L + 60 * 60_000L
+            )
+        )
+    }
+
+    @Test
+    fun aKnownSerialWithNoModelKeepsTryingOnTheSlowBeat() {
+        // The serial can now be asked for and lands on the first window, while
+        // the model still has to be overheard. Stopping at the serial left an
+        // aircraft unnamed for the whole session.
+        val readAt = 1_000L
+        assertTrue(
+            AircraftIdentityProbePolicy.shouldOpenWindow(
+                storedSerial = serial,
+                storedModelCode = "",
+                homePointAtMs = 0L,
+                lastBusReadAtMs = readAt,
+                nowMs = readAt + AircraftIdentityProbePolicy.UNKNOWN_RETRY_INTERVAL_MS
+            )
+        )
+        // But it stays a slow beat, not a poll of port 40007.
+        assertFalse(
+            AircraftIdentityProbePolicy.shouldOpenWindow(
+                storedSerial = serial,
+                storedModelCode = "",
+                homePointAtMs = 0L,
+                lastBusReadAtMs = readAt,
+                nowMs = readAt + 1_000L
             )
         )
     }

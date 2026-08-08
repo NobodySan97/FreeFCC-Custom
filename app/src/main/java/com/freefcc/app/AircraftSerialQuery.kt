@@ -77,16 +77,43 @@ internal object AircraftSerialProtocol {
  */
 internal object AircraftIdentitySources {
 
-    /** True when listening can still add something the query did not answer. */
-    fun needsListen(queriedSerial: String, modelKnown: Boolean): Boolean =
-        queriedSerial.isEmpty() || !modelKnown
+    /**
+     * True when listening can still add something the query did not answer.
+     *
+     * A stored model counts only while it belongs to the aircraft that just
+     * answered. Treating any stored model as known would pair a newly read
+     * serial with the previous aircraft's model — the swap leaves the model
+     * behind, the query returns the new serial, and nothing ever listens to
+     * correct it.
+     */
+    fun needsListen(
+        queriedSerial: String,
+        storedSerial: String,
+        storedModelCode: String
+    ): Boolean {
+        if (queriedSerial.isEmpty()) return true
+        if (storedModelCode.isEmpty()) return true
+        return !AircraftSerialForms.sameAircraft(queriedSerial, storedSerial)
+    }
 
-    /** The query's serial wins; the model can only come from the listen. */
-    fun merge(queriedSerial: String, listened: AircraftLinkIdentity?): AircraftLinkIdentity =
-        AircraftLinkIdentity(
-            serial = queriedSerial.ifEmpty { listened?.serial.orEmpty() },
-            model = listened?.model
+    /**
+     * The query's serial wins; the model can only come from the listen.
+     *
+     * A model is taken only when the listen did not name a different aircraft.
+     * Port 40007 still carries frames from the aircraft that was just
+     * unplugged, and pairing those with the serial we asked for is how a
+     * mismatched identity gets stored and reported.
+     */
+    fun merge(queriedSerial: String, listened: AircraftLinkIdentity?): AircraftLinkIdentity {
+        val listenedSerial = listened?.serial.orEmpty()
+        val listenedIsSameAircraft = queriedSerial.isEmpty() ||
+            listenedSerial.isEmpty() ||
+            AircraftSerialForms.sameAircraft(queriedSerial, listenedSerial)
+        return AircraftLinkIdentity(
+            serial = queriedSerial.ifEmpty { listenedSerial },
+            model = listened?.model.takeIf { listenedIsSameAircraft }
         )
+    }
 }
 
 /** Runs the `00:51` serial query over the LED port with bounded retries. */
@@ -96,11 +123,22 @@ internal object AircraftSerialQueryRunner {
     // a live run answered four times out of six. Retries are cheap because a
     // successful exchange returns as soon as the reply is matched, unlike the
     // passive probe which always waits out its whole window.
-    private const val ATTEMPTS = 3
+    const val DEFAULT_ATTEMPTS = 3
+
+    /**
+     * One attempt is enough where the caller already retries on its own beat.
+     * The background window pays for every millisecond it holds 40007, and a
+     * miss there costs a ten-second wait rather than a failed operation.
+     */
+    const val BACKGROUND_ATTEMPTS = 1
+
     private const val READ_WINDOW_MS = 600
 
-    fun read(transport: DumlTransport = DumlTransport()): String {
-        repeat(ATTEMPTS) {
+    fun read(
+        transport: DumlTransport = DumlTransport(),
+        attempts: Int = DEFAULT_ATTEMPTS
+    ): String {
+        repeat(attempts) {
             val request = AircraftSerialProtocol.buildRequest()
             val exchange = transport.sendAndReceiveRaw(
                 frame = request,

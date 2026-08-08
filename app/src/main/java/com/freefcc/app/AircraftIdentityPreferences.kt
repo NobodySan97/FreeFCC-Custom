@@ -38,12 +38,19 @@ internal object AircraftIdentityProbePolicy {
         storedSerial: String,
         homePointAtMs: Long,
         lastBusReadAtMs: Long,
-        nowMs: Long
+        nowMs: Long,
+        storedModelCode: String = ""
     ): Boolean {
         val homePointUnread = homePointAtMs > lastBusReadAtMs &&
             nowMs >= homePointAtMs + HOME_POINT_GUARD_MS
         if (homePointUnread) return true
-        if (storedSerial.isNotEmpty()) return false
+        // A serial no longer settles it. The serial can now be asked for
+        // directly and arrives on the first window, while the model only comes
+        // from listening and can be missed — and once the serial was stored,
+        // this used to stop opening windows for good, leaving the aircraft
+        // permanently unnamed on a session with no Home Point and no name on
+        // the DJI Fly screen. Either half still missing keeps the slow beat.
+        if (storedSerial.isNotEmpty() && storedModelCode.isNotEmpty()) return false
         if (lastBusReadAtMs == 0L) return true
         return nowMs - lastBusReadAtMs >= UNKNOWN_RETRY_INTERVAL_MS
     }
