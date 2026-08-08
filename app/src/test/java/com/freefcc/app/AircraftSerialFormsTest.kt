@@ -200,19 +200,60 @@ class AircraftIdentityProbePolicyTest {
     }
 
     @Test
-    fun aCheckAttemptNeverSpendsAnUnreadHomePoint() {
+    fun aHomePointThatWentUnansweredWaitsForTheBeatInsteadOfBeingRetriedAtOnce() {
         val readAt = 1_000L
         val homePointAt = readAt + 5_000L
-        // The attempt stamp is younger than the Home Point, and must not be
-        // mistaken for having read the bus for it.
+        val attemptAt = homePointAt + AircraftIdentityProbePolicy.HOME_POINT_GUARD_MS
+
+        // The check this Home Point opened got no answer. Retrying it on the
+        // ten-second screen beat is what turned a silent aircraft into a
+        // permanent poll of port 40007.
+        assertFalse(
+            AircraftIdentityProbePolicy.shouldOpenWindow(
+                storedSerial = serial,
+                storedModelCode = "WA530",
+                homePointAtMs = homePointAt,
+                lastBusReadAtMs = readAt,
+                nowMs = attemptAt + 1_000L,
+                lastVerifyAttemptAtMs = attemptAt
+            )
+        )
+        // It is not dropped either — the check comes round again on its beat.
         assertTrue(
             AircraftIdentityProbePolicy.shouldOpenWindow(
                 storedSerial = serial,
                 storedModelCode = "WA530",
                 homePointAtMs = homePointAt,
                 lastBusReadAtMs = readAt,
-                nowMs = homePointAt + AircraftIdentityProbePolicy.HOME_POINT_GUARD_MS,
-                lastVerifyAttemptAtMs = homePointAt + 1_000L
+                nowMs = attemptAt + AircraftIdentityProbePolicy.VERIFY_INTERVAL_MS,
+                lastVerifyAttemptAtMs = attemptAt
+            )
+        )
+    }
+
+    @Test
+    fun aFirstRunThatNeverHeardTheBusStillBacksOffAfterItsFirstCheck() {
+        // Identity can be complete from the screen while the bus has never
+        // answered. The first window opens; after that miss the check waits
+        // its turn rather than repeating on every screen scan.
+        assertTrue(
+            AircraftIdentityProbePolicy.shouldOpenWindow(
+                storedSerial = serial,
+                storedModelCode = "WA530",
+                homePointAtMs = 0L,
+                lastBusReadAtMs = 0L,
+                nowMs = 60_000L,
+                lastVerifyAttemptAtMs = 0L
+            )
+        )
+        assertFalse(
+            AircraftIdentityProbePolicy.shouldOpenWindow(
+                storedSerial = serial,
+                storedModelCode = "WA530",
+                homePointAtMs = 0L,
+                lastBusReadAtMs = 0L,
+                nowMs = 61_000L,
+                lastVerifyAttemptAtMs = 60_000L
             )
         )
     }

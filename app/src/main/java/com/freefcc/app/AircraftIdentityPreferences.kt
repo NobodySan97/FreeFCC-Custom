@@ -72,25 +72,31 @@ internal object AircraftIdentityProbePolicy {
         storedModelCode: String = "",
         lastVerifyAttemptAtMs: Long = 0L
     ): Boolean {
-        val homePointUnread = homePointAtMs > lastBusReadAtMs &&
+        val identityComplete = storedSerial.isNotEmpty() && storedModelCode.isNotEmpty()
+        // For a complete identity an unanswered check still counts as having
+        // attended to the bus. Only the last branch used to know that, so a
+        // first run that had never read the bus, and a Home Point that went
+        // unanswered, both fell through to an unconditional `true` and asked
+        // again on the ten-second beat for as long as the aircraft stayed
+        // silent. The stamp is kept out of the read stamp, so a miss is still
+        // not passed off as a successful read anywhere else.
+        val lastAttendedAtMs = if (identityComplete) {
+            maxOf(lastBusReadAtMs, lastVerifyAttemptAtMs)
+        } else {
+            lastBusReadAtMs
+        }
+        val homePointUnread = homePointAtMs > lastAttendedAtMs &&
             nowMs >= homePointAtMs + HOME_POINT_GUARD_MS
         if (homePointUnread) return true
-        if (lastBusReadAtMs == 0L) return true
+        if (lastAttendedAtMs == 0L) return true
         // A stored identity no longer ends the beat. It used to, back when
         // reading meant listening and a known serial was worth keeping the
         // port free for. Now a complete identity is re-asked to catch a swap,
         // and an incomplete one keeps the slower discovery beat: the serial
         // arrives on the first window, but the model still has to be
         // overheard, so a missed model must not stay missing all session.
-        val identityComplete = storedSerial.isNotEmpty() && storedModelCode.isNotEmpty()
-        if (!identityComplete) return nowMs - lastBusReadAtMs >= UNKNOWN_RETRY_INTERVAL_MS
-        // Checking runs off its own clock, stamped whether or not the aircraft
-        // answered. Measuring it from the last successful read let an
-        // unanswered check reopen a window immediately — the beat only moved
-        // when the bus replied, so a silent aircraft was asked every ten
-        // seconds forever. A miss must not be recorded as a read either: that
-        // would pass a silent bus off as heard and spend the Home Point.
-        return nowMs - maxOf(lastBusReadAtMs, lastVerifyAttemptAtMs) >= VERIFY_INTERVAL_MS
+        if (!identityComplete) return nowMs - lastAttendedAtMs >= UNKNOWN_RETRY_INTERVAL_MS
+        return nowMs - lastAttendedAtMs >= VERIFY_INTERVAL_MS
     }
 }
 

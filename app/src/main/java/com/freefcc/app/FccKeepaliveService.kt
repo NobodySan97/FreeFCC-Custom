@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.os.SystemClock
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import android.content.Intent
 import android.os.IBinder
 import android.provider.Settings
@@ -51,6 +52,12 @@ internal object BootstrapRetryPolicy {
         result == BootstrapApplyResult.PRE_WRITE_CONNECT_FAILED
 }
 
+/** One accepted Home Point on its way to the worker. */
+private data class HomePointRequest(val generation: Long, val token: Long)
+
+/** The Home Point that currently owns port 40007 for its write. */
+private data class ApplyClaim(val token: Long, val claimedAtElapsed: Long)
+
 internal object HomePointSignalPolicy {
     fun shouldAccept(
         lastGeneration: Long?,
@@ -85,7 +92,7 @@ class FccKeepaliveService : Service() {
         private const val PREFS_NAME = "freefcc"
         private const val PREF_KEEPALIVE = "keepalive_running"
         private val requestGate = AutoFccRequestGate()
-        private val homePointDetections = Channel<Long>(Channel.CONFLATED)
+        private val homePointDetections = Channel<HomePointRequest>(Channel.CONFLATED)
         private var lastSignaledGeneration: Long? = null
         private var lastHomePointSignalAtMs = 0L
         private var activeMode = AutoFccMode.HOME_POINT_TEXT
@@ -172,12 +179,15 @@ class FccKeepaliveService : Service() {
             // not registered as running for a long time yet — it still has to
             // find the controller port and settle the country region, neither
             // of which is bounded.
-            val token = homePointTokenSeq.incrementAndGet()
-            homePointApplyToken.set(token)
-            homePointApplyClaimedAt = SystemClock.elapsedRealtime()
-            if (!homePointDetections.trySend(generation).isSuccess) {
+            val claim = ApplyClaim(
+                token = homePointTokenSeq.incrementAndGet(),
+                claimedAtElapsed = SystemClock.elapsedRealtime()
+            )
+            homePointApplyClaim.set(claim)
+            val request = HomePointRequest(generation, claim.token)
+            if (!homePointDetections.trySend(request).isSuccess) {
                 // Withdraw this claim only — a newer one must survive.
-                homePointApplyToken.compareAndSet(token, NO_CLAIM)
+                homePointApplyClaim.compareAndSet(claim, null)
                 return false
             }
             lastSignaledGeneration = generation
@@ -188,14 +198,11 @@ class FccKeepaliveService : Service() {
         private const val NO_CLAIM = 0L
         private val homePointTokenSeq = AtomicLong(NO_CLAIM)
 
-        /** Which accepted Home Point owns the port right now, or [NO_CLAIM]. */
-        private val homePointApplyToken = AtomicLong(NO_CLAIM)
-
-        @Volatile
-        private var homePointApplyClaimedAt = 0L
-
-        /** The claim the caller is about to service, so it can release its own. */
-        internal fun currentHomePointApplyToken(): Long = homePointApplyToken.get()
+        /**
+         * The accepted Home Point that owns the port, published as one value so
+         * a reader cannot see a new token beside the previous timestamp.
+         */
+        private val homePointApplyClaim = AtomicReference<ApplyClaim?>(null)
 
         /**
          * A Home Point write is queued or under way, counting the preparation
@@ -208,19 +215,20 @@ class FccKeepaliveService : Service() {
         internal fun isHomePointApplyPending(
             nowMs: Long = SystemClock.elapsedRealtime()
         ): Boolean {
-            if (homePointApplyToken.get() == NO_CLAIM) return false
-            return nowMs - homePointApplyClaimedAt <= PENDING_TRUST_MS
+            val claim = homePointApplyClaim.get() ?: return false
+            return nowMs - claim.claimedAtElapsed <= PENDING_TRUST_MS
         }
 
         /** Releases [token] only while it is still the current claim. */
         internal fun releaseHomePointApplyClaim(token: Long) {
             if (token == NO_CLAIM) return
-            homePointApplyToken.compareAndSet(token, NO_CLAIM)
+            val claim = homePointApplyClaim.get() ?: return
+            if (claim.token == token) homePointApplyClaim.compareAndSet(claim, null)
         }
 
         /** Drops any claim: the work it was holding the port for is gone. */
         internal fun clearHomePointApplyClaim() {
-            homePointApplyToken.set(NO_CLAIM)
+            homePointApplyClaim.set(null)
         }
 
         private const val PENDING_TRUST_MS = 10 * 60_000L
@@ -420,10 +428,15 @@ class FccKeepaliveService : Service() {
                 )
                 while (requestGate.isCurrent(generation)) {
                     var homePointObservedAtMs: Long? = null
+                    // The token travels with the signal, so this write releases
+                    // the claim it is actually servicing and cannot release one
+                    // that a later Home Point took while it was working.
+                    var applyClaim = NO_CLAIM
                     while (requestGate.isCurrent(generation) && homePointObservedAtMs == null) {
-                        val detectedGeneration = homePointDetections.receive()
-                        if (detectedGeneration == generation) {
+                        val request = homePointDetections.receive()
+                        if (request.generation == generation) {
                             homePointObservedAtMs = System.currentTimeMillis()
+                            applyClaim = request.token
                         }
                     }
                     if (!requestGate.isCurrent(generation)) return@launch
@@ -431,9 +444,6 @@ class FccKeepaliveService : Service() {
                     // The port belongs to this write until it is finished with
                     // it — through discovery, the country region and every
                     // retry pause, not just the moments it counts as running.
-                    // The claim is taken by token so a slow write cannot
-                    // release the claim of a Home Point that arrived after it.
-                    val applyClaim = currentHomePointApplyToken()
                     try {
                         val pinnedPort = awaitControllerPort(generation) ?: return@launch
                         FccViewModel.logServiceEvent(
@@ -781,7 +791,11 @@ class FccKeepaliveService : Service() {
         destroyed = true
         keepaliveJob?.cancel()
         scope.cancel()
-        // The worker is gone, so no `finally` will release its claim.
+        // The worker is gone, so no `finally` will release its claim — and
+        // nothing may accept a new one either: Android can destroy a foreground
+        // service without stop(), leaving the accessibility service alive to
+        // signal a Home Point that no worker will ever service.
+        requestGate.cancel()
         clearHomePointApplyClaim()
         if (FccRuntime.tracker.state.value.keepaliveStatus != KeepaliveRuntimeStatus.FAILED) {
             FccRuntime.tracker.serviceStopped()
