@@ -949,6 +949,15 @@ class DumlTransport {
             PORT_ALT_4
         )
 
+        /**
+         * True when the text is exactly a full factory aircraft serial. The
+         * passive scan searches for this shape inside a telemetry window; a
+         * direct `00:51` reply carries the field on its own, so it is matched
+         * whole rather than searched for.
+         */
+        internal fun isFullAircraftSerial(text: String): Boolean =
+            FULL_SERIAL_REGEX.matches(text)
+
         /** Extracts the safest known identity forms from a binary telemetry window. */
         internal fun extractAircraftIdentity(buffer: CharSequence): String? {
             val text = buffer.toString()

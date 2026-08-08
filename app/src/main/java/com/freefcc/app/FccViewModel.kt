@@ -1541,7 +1541,17 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                     log("Serial probe skipped — DUML port $effectivePort is busy")
                     return@runOnIO
                 }
-                val serial = transport.probeSerial(SERIAL_PROBE_WINDOW_MS, effectivePort)
+                // Ask first, listen only if asking fails. The query returns as
+                // soon as the aircraft answers, while the passive probe holds
+                // 40007 for its whole window every time — and that window is
+                // shared with the FPV mirror, so holding it costs the DJI Fly
+                // link. The listen stays as a fallback because the query is
+                // confirmed on Avata 360 only; other aircraft may not serve it.
+                val queried = AircraftSerialQueryRunner.read(transport)
+                if (queried.isEmpty()) log("Serial query returned nothing — listening instead")
+                val serial = queried.ifEmpty {
+                    transport.probeSerial(SERIAL_PROBE_WINDOW_MS, effectivePort)
+                }
                 if (serial.isNotEmpty()) {
                     aircraftIdentityVerified = true
                     verifiedAircraftIdentity = serial
