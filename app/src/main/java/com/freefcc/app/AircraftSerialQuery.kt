@@ -68,6 +68,27 @@ internal object AircraftSerialProtocol {
     }
 }
 
+/**
+ * Combines what the aircraft answered with what listening on the bus adds.
+ *
+ * The query returns a serial and nothing else, while the passive listen is the
+ * only place a model arrives over the bus. Keeping the two apart lets the
+ * listen — and the port it holds — be skipped once neither is missing.
+ */
+internal object AircraftIdentitySources {
+
+    /** True when listening can still add something the query did not answer. */
+    fun needsListen(queriedSerial: String, modelKnown: Boolean): Boolean =
+        queriedSerial.isEmpty() || !modelKnown
+
+    /** The query's serial wins; the model can only come from the listen. */
+    fun merge(queriedSerial: String, listened: AircraftLinkIdentity?): AircraftLinkIdentity =
+        AircraftLinkIdentity(
+            serial = queriedSerial.ifEmpty { listened?.serial.orEmpty() },
+            model = listened?.model
+        )
+}
+
 /** Runs the `00:51` serial query over the LED port with bounded retries. */
 internal object AircraftSerialQueryRunner {
 

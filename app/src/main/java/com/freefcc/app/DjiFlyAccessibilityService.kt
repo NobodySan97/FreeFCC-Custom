@@ -334,10 +334,32 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                     ?: return@thread
                 sessionLease = DumlPortSessionLock.tryBegin(DumlTransport.PORT_LED)
                     ?: return@thread
-                val observed = DumlTransport().probeAircraftLinkIdentity(
-                    port = DumlTransport.PORT_LED,
-                    attempts = 1
-                )
+                val transport = DumlTransport()
+                // Ask for the serial rather than wait for one to be broadcast.
+                // Listening holds 40007 for the whole window and DJI Fly loses
+                // the aircraft while it is held; the query returns as soon as
+                // the aircraft answers. It also reaches aircraft that never put
+                // the serial on the bus by themselves — Lito X1 only pushes it
+                // while its Information screen is open, so a listening window
+                // there burned a full minute for nothing.
+                val queriedSerial = AircraftSerialQueryRunner.read(transport)
+                // The listen is still the only place a model arrives over the
+                // bus, so it runs when the model is missing even if the serial
+                // is already in hand. With both known there is nothing left to
+                // listen for and the port stays free.
+                val modelKnown = prefs
+                    .getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, "")
+                    .orEmpty()
+                    .isNotEmpty()
+                val listened = if (AircraftIdentitySources.needsListen(queriedSerial, modelKnown)) {
+                    transport.probeAircraftLinkIdentity(
+                        port = DumlTransport.PORT_LED,
+                        attempts = 1
+                    )
+                } else {
+                    null
+                }
+                val observed = AircraftIdentitySources.merge(queriedSerial, listened)
                 val serial = observed.serial
                 val observedAtMs = System.currentTimeMillis()
                 if (serial.isNotEmpty() || observed.model != null) {

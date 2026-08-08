@@ -62,6 +62,54 @@ class AircraftSerialQueryTest {
     }
 
     @Test
+    fun listeningIsSkippedOnlyWhenNothingIsLeftToLearn() {
+        // Both known: the listen would hold 40007 to re-read what we have.
+        assertEquals(false, AircraftIdentitySources.needsListen("1581FA8JC264600B31QZ", true))
+        // The model only ever arrives by listening.
+        assertEquals(true, AircraftIdentitySources.needsListen("1581FA8JC264600B31QZ", false))
+        // No serial: the listen is the fallback the query did not replace.
+        assertEquals(true, AircraftIdentitySources.needsListen("", true))
+        assertEquals(true, AircraftIdentitySources.needsListen("", false))
+    }
+
+    @Test
+    fun theQueriedSerialOutranksTheListenedOneAndTheModelSurvives() {
+        val queried = "1581FA8JC264600B31QZ"
+        val listened = AircraftLinkIdentity(
+            serial = "1581OLDOLDOLDOLDOLD1",
+            model = AircraftModelIdentity("WA530", "DJI Avata 360")
+        )
+
+        val merged = AircraftIdentitySources.merge(queried, listened)
+
+        assertEquals(queried, merged.serial)
+        assertEquals("WA530", merged.model?.modelCode)
+    }
+
+    @Test
+    fun withoutAnAnswerTheListenedIdentityIsUsedWhole() {
+        val listened = AircraftLinkIdentity(
+            serial = "1581FA8JC264600B31QZ",
+            model = AircraftModelIdentity("WA530", "DJI Avata 360")
+        )
+
+        val merged = AircraftIdentitySources.merge("", listened)
+
+        assertEquals(listened.serial, merged.serial)
+        assertEquals("WA530", merged.model?.modelCode)
+    }
+
+    @Test
+    fun skippingTheListenLeavesNoModelRatherThanAStaleOne() {
+        val merged = AircraftIdentitySources.merge("1581FA8JC264600B31QZ", null)
+
+        assertEquals("1581FA8JC264600B31QZ", merged.serial)
+        assertEquals(null, merged.model)
+        // Nothing observed at all still means nothing claimed.
+        assertEquals("", AircraftIdentitySources.merge("", null).serial)
+    }
+
+    @Test
     fun selectorIsCarriedVerbatimSoOtherIdentityFieldsStayReachable() {
         val frame = AircraftSerialProtocol.buildRequest(field = 0x0C)
 
