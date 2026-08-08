@@ -23,15 +23,28 @@ internal data class AircraftIdentityPreferenceUpdate(
  * The Home Point text is read off that screen, and it is the one event that
  * proves an aircraft is really flying — it appears one to three minutes into a
  * session, by which time the bus is live and does carry the S/N. One window per
- * Home Point re-reads the identity, and it waits out the guard first: the same
- * text starts the FCC write, and that write owns port `40007`.
+ * Home Point re-reads the identity, and it waits out a short guard first: the
+ * same text starts the FCC write, and that write owns port `40007`.
  *
  * When nothing is known yet the window opens at once, then backs off. Holding
  * `40007` in a loop costs the DJI Fly link, so an aircraft that never publishes
  * its S/N must not be asked again and again.
  */
 internal object AircraftIdentityProbePolicy {
-    const val HOME_POINT_GUARD_MS = 30_000L
+    /**
+     * How long identity stands aside after a Home Point so the FCC write it
+     * triggers gets port `40007` first.
+     *
+     * The write finishes in a couple of seconds on real hardware, so this only
+     * has to cover the gap between the Home Point being seen and the attempt
+     * becoming visible as running: the Home Point is delivered through a
+     * channel and the write starts on another thread, so it is not yet
+     * registered at the instant identity checks. A write that takes longer, or
+     * retries past this, is covered by the running-apply check in the service
+     * rather than by making everyone wait here — thirty seconds of silence was
+     * paid on every Home Point, and Home Point is a main identity trigger.
+     */
+    const val HOME_POINT_GUARD_MS = 5_000L
     const val UNKNOWN_RETRY_INTERVAL_MS = 5 * 60_000L
 
     /**
