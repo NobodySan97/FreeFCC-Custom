@@ -29,3 +29,6 @@ keystore.properties
 # Local firmware/APK unpacking scratch, never committed
 extracted/
 freefcc-helpers.zip
+
+# Локальные инструменты/дампы под конкретное железо, не для публикации
+local/
