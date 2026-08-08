@@ -333,4 +333,84 @@ class AircraftIdentityPreferencesTest {
             }
         } as SharedPreferences
     }
+
+    @Test
+    fun aSerialThatNamesAnotherAircraftDropsTheModelItLeftBehind() {
+        // The serial is asked for now, so it arrives even when nothing named
+        // the model. Keeping the old model beside it filed the new aircraft
+        // under the old one — and a stored model stops the next window from
+        // listening, so the pairing then never got corrected.
+        val prefs = inMemoryPreferences(
+            mapOf(
+                FccViewModel.PREF_AIRCRAFT_MODEL_CODE to "WA151",
+                FccViewModel.PREF_AIRCRAFT_MODEL_NAME to "DJI Lito X1",
+                FccViewModel.PREF_AIRCRAFT_MODEL_SOURCE to
+                    FccViewModel.AIRCRAFT_MODEL_SOURCE_DUML,
+                AircraftSerialGuard.KEY_SERIAL to "1581FB34C25CF0032AAG"
+            )
+        )
+
+        val update = AircraftIdentityPreferences.updateFromDuml(
+            prefs = prefs,
+            observedModel = null,
+            observedSerial = "1581FA8JC264600B31QZ",
+            nowMs = 10_000L
+        )
+
+        assertTrue(update.serialChanged)
+        assertEquals("1581FA8JC264600B31QZ", update.currentSerial)
+        // Model gone, so the identity is incomplete and the discovery beat
+        // will listen for the new aircraft's model.
+        assertTrue(update.modelChanged)
+        assertEquals("", update.currentModel.modelCode)
+        assertEquals("", update.currentModel.modelName)
+        assertEquals("", prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_CODE, ""))
+    }
+
+    @Test
+    fun aModelNamedForTheNewAircraftIsKeptWithIt() {
+        val prefs = inMemoryPreferences(
+            mapOf(
+                FccViewModel.PREF_AIRCRAFT_MODEL_CODE to "WA151",
+                FccViewModel.PREF_AIRCRAFT_MODEL_NAME to "DJI Lito X1",
+                FccViewModel.PREF_AIRCRAFT_MODEL_SOURCE to
+                    FccViewModel.AIRCRAFT_MODEL_SOURCE_DUML,
+                AircraftSerialGuard.KEY_SERIAL to "1581FB34C25CF0032AAG"
+            )
+        )
+
+        val update = AircraftIdentityPreferences.updateFromDuml(
+            prefs = prefs,
+            observedModel = AircraftModelIdentity("WA530", "DJI Avata 360"),
+            observedSerial = "1581FA8JC264600B31QZ",
+            nowMs = 10_000L
+        )
+
+        assertEquals("1581FA8JC264600B31QZ", update.currentSerial)
+        assertEquals("WA530", update.currentModel.modelCode)
+    }
+
+    @Test
+    fun theSameAircraftSpelledTwoWaysKeepsItsModel() {
+        val full = "1581FA8JC264600B31QZ"
+        val prefs = inMemoryPreferences(
+            mapOf(
+                FccViewModel.PREF_AIRCRAFT_MODEL_CODE to "WA530",
+                FccViewModel.PREF_AIRCRAFT_MODEL_NAME to "DJI Avata 360",
+                FccViewModel.PREF_AIRCRAFT_MODEL_SOURCE to
+                    FccViewModel.AIRCRAFT_MODEL_SOURCE_DUML,
+                AircraftSerialGuard.KEY_SERIAL to full
+            )
+        )
+
+        val update = AircraftIdentityPreferences.updateFromDuml(
+            prefs = prefs,
+            observedModel = null,
+            observedSerial = full.removePrefix("1581"),
+            nowMs = 10_000L
+        )
+
+        assertFalse(update.modelChanged)
+        assertEquals("WA530", update.currentModel.modelCode)
+    }
 }

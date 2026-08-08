@@ -91,10 +91,29 @@ internal object AircraftIdentitySources {
         storedSerial: String,
         storedModelCode: String
     ): Boolean {
-        if (queriedSerial.isEmpty()) return true
+        val identityComplete = storedSerial.isNotEmpty() && storedModelCode.isNotEmpty()
+        // An unanswered query is not a reason to listen when there is nothing
+        // left to discover. Listening on every missed answer turned the
+        // two-minute verification into a burst: the window stays open, retries
+        // every ten seconds for a minute, and each retry holds the port for the
+        // whole listen. One request that went unanswered just means asking
+        // again on the next beat.
+        if (queriedSerial.isEmpty()) return !identityComplete
         if (storedModelCode.isEmpty()) return true
         return !AircraftSerialForms.sameAircraft(queriedSerial, storedSerial)
     }
+
+    /**
+     * True when the window has done all it can and should close rather than
+     * retry on the ten-second beat.
+     */
+    fun verificationSettled(
+        queriedSerial: String,
+        storedSerial: String,
+        storedModelCode: String
+    ): Boolean = queriedSerial.isEmpty() &&
+        storedSerial.isNotEmpty() &&
+        storedModelCode.isNotEmpty()
 
     /**
      * The query's serial wins; the model can only come from the listen.

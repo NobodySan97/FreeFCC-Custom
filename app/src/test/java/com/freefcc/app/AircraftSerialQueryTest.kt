@@ -74,8 +74,38 @@ class AircraftSerialQueryTest {
         )
         // The model only ever arrives by listening.
         assertEquals(true, AircraftIdentitySources.needsListen(aircraftA, aircraftA, ""))
-        // No serial: the listen is the fallback the query did not replace.
-        assertEquals(true, AircraftIdentitySources.needsListen("", aircraftA, "WA530"))
+        // Nothing known: the listen is the fallback the query did not replace.
+        assertEquals(true, AircraftIdentitySources.needsListen("", "", ""))
+    }
+
+    @Test
+    fun anUnansweredCheckDoesNotFallBackToListeningWhenNothingIsMissing() {
+        // Listening on every missed answer turned the two-minute check into a
+        // minute-long burst: the window stayed open and retried every ten
+        // seconds, holding the port through a full listen each time.
+        assertEquals(false, AircraftIdentitySources.needsListen("", aircraftA, "WA530"))
+        assertEquals(
+            true,
+            AircraftIdentitySources.verificationSettled("", aircraftA, "WA530")
+        )
+    }
+
+    @Test
+    fun anUnansweredCheckStillListensWhileSomethingIsMissing() {
+        // Half an identity is still discovery, and discovery needs the listen.
+        assertEquals(true, AircraftIdentitySources.needsListen("", aircraftA, ""))
+        assertEquals(false, AircraftIdentitySources.verificationSettled("", aircraftA, ""))
+        assertEquals(true, AircraftIdentitySources.needsListen("", "", "WA530"))
+        assertEquals(false, AircraftIdentitySources.verificationSettled("", "", "WA530"))
+    }
+
+    @Test
+    fun anAnsweredCheckIsNeverSettledByThisRule() {
+        // A serial in hand is handled by the swap path, not by giving up.
+        assertEquals(
+            false,
+            AircraftIdentitySources.verificationSettled(aircraftA, aircraftA, "WA530")
+        )
     }
 
     @Test

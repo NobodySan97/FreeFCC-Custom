@@ -168,8 +168,38 @@ class FccKeepaliveService : Service() {
             if (!homePointDetections.trySend(generation).isSuccess) return false
             lastSignaledGeneration = generation
             lastHomePointSignalAtMs = now
+            // Claim the port for the write before returning, so an identity
+            // read cannot start in the gap that follows. The write is not
+            // registered as running for a while yet: this only queues it, and
+            // the worker still has to find the controller port and settle the
+            // country region first, neither of which is bounded.
+            homePointApplyPendingSinceMs = now
             return true
         }
+
+        /** Set the moment a Home Point is accepted, cleared when its write is done. */
+        @Volatile
+        private var homePointApplyPendingSinceMs = 0L
+
+        /**
+         * A Home Point write is queued or under way, counting the preparation
+         * that precedes it and the pauses between its retries.
+         *
+         * [PENDING_TRUST_MS] is a backstop, not a schedule: a worker that dies
+         * without clearing this must not silence identity for the session.
+         */
+        internal fun isHomePointApplyPending(nowMs: Long = System.currentTimeMillis()): Boolean {
+            val since = homePointApplyPendingSinceMs
+            if (since == 0L) return false
+            if (nowMs - since > PENDING_TRUST_MS) return false
+            return true
+        }
+
+        internal fun clearHomePointApplyPending() {
+            homePointApplyPendingSinceMs = 0L
+        }
+
+        private const val PENDING_TRUST_MS = 120_000L
 
         @Synchronized
         fun stop(context: Context, clearSelection: Boolean = true) {
@@ -370,28 +400,37 @@ class FccKeepaliveService : Service() {
                     }
                     if (!requestGate.isCurrent(generation)) return@launch
 
-                    val pinnedPort = awaitControllerPort(generation) ?: return@launch
-                    FccViewModel.logServiceEvent(
-                        "DJI FLY TEXT FCC: Home Point detected; applying full profile"
-                    )
-                    ensureCountryRegion(generation, pinnedPort)?.let { result ->
-                        logCountryRegionResult("DJI FLY TEXT FCC", result)
-                    }
-                    val report = applyWithPreWriteRetry(
-                        profile = bootstrapProfile,
-                        generation = generation,
-                        pinnedPort = pinnedPort,
-                        label = "DJI FLY TEXT FCC",
-                        homePointObservedAtMs = homePointObservedAtMs
-                    ) ?: return@launch
-                    when (report.result) {
-                        BootstrapApplyResult.SUCCESS -> FccViewModel.logServiceEvent(
-                            "DJI FLY TEXT FCC: apply complete; re-armed for the next flight session"
+                    // The port belongs to this write until it is finished with
+                    // it — through discovery, the country region and every
+                    // retry pause, not just the moments it counts as running.
+                    try {
+                        val pinnedPort = awaitControllerPort(generation) ?: return@launch
+                        FccViewModel.logServiceEvent(
+                            "DJI FLY TEXT FCC: Home Point detected; applying full profile"
                         )
-                        BootstrapApplyResult.CANCELLED -> return@launch
-                        else -> FccViewModel.logServiceEvent(
-                            "DJI FLY TEXT FCC: apply failed; waiting for the next Home Point event"
-                        )
+                        ensureCountryRegion(generation, pinnedPort)?.let { result ->
+                            logCountryRegionResult("DJI FLY TEXT FCC", result)
+                        }
+                        val report = applyWithPreWriteRetry(
+                            profile = bootstrapProfile,
+                            generation = generation,
+                            pinnedPort = pinnedPort,
+                            label = "DJI FLY TEXT FCC",
+                            homePointObservedAtMs = homePointObservedAtMs
+                        ) ?: return@launch
+                        when (report.result) {
+                            BootstrapApplyResult.SUCCESS -> FccViewModel.logServiceEvent(
+                                "DJI FLY TEXT FCC: apply complete; " +
+                                    "re-armed for the next flight session"
+                            )
+                            BootstrapApplyResult.CANCELLED -> return@launch
+                            else -> FccViewModel.logServiceEvent(
+                                "DJI FLY TEXT FCC: apply failed; " +
+                                    "waiting for the next Home Point event"
+                            )
+                        }
+                    } finally {
+                        clearHomePointApplyPending()
                     }
                 }
                 return@launch

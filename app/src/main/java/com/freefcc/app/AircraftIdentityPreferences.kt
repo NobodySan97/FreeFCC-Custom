@@ -146,14 +146,31 @@ internal object AircraftIdentityPreferences {
             previousSource == FccViewModel.AIRCRAFT_MODEL_SOURCE_UI &&
                 previousName.isNotEmpty() &&
                 screenNameFitsObservedCode
-        val currentCode = observedCode.ifEmpty { previousCode }
+        // A serial that names a different aircraft proves the swap by itself.
+        // The serial can now be asked for, so it arrives even when nothing
+        // named the model: keeping the previous model beside it would file the
+        // new aircraft under the old one, and — because a stored model stops
+        // the next window from listening — that pairing would then never be
+        // corrected. Dropping the model leaves the identity incomplete, which
+        // is what puts the model back on the discovery beat.
+        val acceptedSerialForSwap = observedSerial.orEmpty().trim()
+        val confirmedSerialSwap = acceptedSerialForSwap.isNotEmpty() &&
+            previousSerial.isNotEmpty() &&
+            !AircraftSerialForms.sameAircraft(acceptedSerialForSwap, previousSerial)
+        val modelOutlivedItsAircraft = confirmedSerialSwap && !hasModelObservation
+
+        val currentCode = when {
+            modelOutlivedItsAircraft -> ""
+            else -> observedCode.ifEmpty { previousCode }
+        }
         val currentName = when {
+            modelOutlivedItsAircraft -> ""
             screenNameIsCurrent -> previousName
             observedName.isNotEmpty() -> observedName
             observedCode.isNotEmpty() && observedCode != previousCode -> ""
             else -> previousName
         }
-        val modelChanged = hasModelObservation &&
+        val modelChanged = (hasModelObservation || modelOutlivedItsAircraft) &&
             (currentCode != previousCode || currentName != previousName)
         val confirmedModelSwap = observedCode.isNotEmpty() && when {
             previousCode.isNotEmpty() -> observedCode != previousCode
@@ -199,7 +216,10 @@ internal object AircraftIdentityPreferences {
                     )
                     putLong(FccViewModel.PREF_AIRCRAFT_MODEL_AT, nowMs)
                 }
-                if (confirmedModelSwap && previousSerial.isNotEmpty()) {
+                // A swap proven by the serial drops the previous one too, so
+                // the frames the aircraft that just left keeps putting on the
+                // bus cannot put it back.
+                if ((confirmedModelSwap || confirmedSerialSwap) && previousSerial.isNotEmpty()) {
                     AircraftSerialGuard.rememberDropped(this, previousSerial, nowMs)
                 }
                 if (currentSerial.isNotEmpty()) {

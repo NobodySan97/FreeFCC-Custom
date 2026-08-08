@@ -163,6 +163,15 @@ class DjiFlyAccessibilityService : AccessibilityService() {
             captureAircraftModelFromUi("event", values)
             return
         }
+        // A Home Point in this event claims the port for the write it starts,
+        // and that claim has to be made before anything here can begin an
+        // identity read. The snapshot below can begin one, and no guard set
+        // afterwards stops a read that is already running — the snapshot only
+        // handles the Home Point itself when the text is in the root view and
+        // the snapshot changed, so an event-only Home Point arrived too late.
+        values.firstOrNull { DjiFlyHomePointMatcher.matches(it, homePointPhrases) }
+            ?.let { handleHomePointMatch("event", it) }
+
         logVisibleUiSnapshot()
 
         values.forEach { value ->
@@ -181,9 +190,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                     "type=${AccessibilityEvent.eventTypeToString(event.eventType)} " +
                     "home_point_match=$matched text=$safeText"
             )
-            if (matched) {
-                handleHomePointMatch("event", value)
-            }
+            // Already handled above, before anything could take the port.
         }
         captureAircraftModelFromUi("event", values)
     }
@@ -367,6 +374,19 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                     null
                 }
                 val observed = AircraftIdentitySources.merge(queriedSerial, listened)
+                if (
+                    AircraftIdentitySources.verificationSettled(
+                        queriedSerial,
+                        stored,
+                        storedModelCode
+                    )
+                ) {
+                    // Verification asked and got nothing back. There is nothing
+                    // to discover, so the window closes instead of retrying
+                    // every ten seconds until it times out.
+                    serialProbeWindowStartedAtMs = 0L
+                    return@thread
+                }
                 val serial = observed.serial
                 val observedAtMs = System.currentTimeMillis()
                 if (serial.isNotEmpty() || observed.model != null) {
@@ -595,6 +615,13 @@ class DjiFlyAccessibilityService : AccessibilityService() {
      */
     private fun identityReadMayRun(nowMs: Long): Boolean {
         if (nowMs < identityProbeBlockedUntilMs) return false
+        // The short guard above only covers the instant after a Home Point.
+        // What actually owns the port is the write it queued, and that write
+        // spends most of its life not yet counting as running: finding the
+        // controller port has no upper bound, the country region goes first,
+        // and a failed pre-write attempt leaves `RUNNING` for five seconds
+        // before the next one starts.
+        if (FccKeepaliveService.isHomePointApplyPending(nowMs)) return false
         val attempt = FccRuntime.tracker.state.value.lastApplyAttempt ?: return true
         if (attempt.outcome != FccApplyOutcome.RUNNING) return true
         // A cancelled apply throws before it records a finish, so `RUNNING` can
