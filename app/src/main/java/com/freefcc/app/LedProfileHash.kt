@@ -16,9 +16,19 @@ package com.freefcc.app
  */
 internal object LedProfileHash {
 
-    private const val HEADER_SIZE = 11
+    private const val DUML_HEADER_SIZE = 11
     private const val CRC16_SIZE = 2
     private const val HASH_SIZE = 4
+
+    /**
+     * Profiles marked `"wrapper": true` — which both LED profiles are — reach
+     * us already wrapped by [Profiles.load], so the DUML frame does not start
+     * at offset zero and its CRC16 must not be computed from there.
+     */
+    private val WRAPPER_MAGIC = byteArrayOf(0x55, 0xCC.toByte(), 0x30, 0x75)
+
+    /** Magic plus the 4-byte little-endian length of the frame it carries. */
+    private const val WRAPPER_SIZE = 8
 
     fun retargeted(profile: Profiles.Profile, address: ParameterAddress): Profiles.Profile {
         val canonical = address.candidates.first()
@@ -31,7 +41,8 @@ internal object LedProfileHash {
     }
 
     private fun retarget(frame: ByteArray, canonical: ByteArray, preferred: ByteArray): ByteArray {
-        val payloadStart = HEADER_SIZE
+        val innerStart = if (isWrapped(frame)) WRAPPER_SIZE else 0
+        val payloadStart = innerStart + DUML_HEADER_SIZE
         val payloadEnd = frame.size - CRC16_SIZE
         if (payloadEnd - payloadStart < HASH_SIZE) return frame
 
@@ -43,11 +54,21 @@ internal object LedProfileHash {
         val rewritten = frame.copyOf()
         preferred.copyInto(rewritten, payloadStart, 0, HASH_SIZE)
 
-        // Only the payload changed, so the length byte and its CRC8 still hold;
-        // the trailing CRC16 covers the payload and must be recomputed.
-        val crc = DumlBuilder.crc16(rewritten, 0, rewritten.size - CRC16_SIZE)
+        // Only the payload changed, so the length byte and its CRC8 still hold.
+        // The trailing CRC16 covers the DUML frame, which starts after the
+        // wrapper when there is one — computing it from offset zero would
+        // checksum the wrapper too and the aircraft would drop the frame.
+        val crc = DumlBuilder.crc16(
+            rewritten,
+            innerStart,
+            rewritten.size - CRC16_SIZE - innerStart
+        )
         rewritten[rewritten.size - 2] = crc.toByte()
         rewritten[rewritten.size - 1] = (crc shr 8).toByte()
         return rewritten
     }
+
+    private fun isWrapped(frame: ByteArray): Boolean =
+        frame.size > WRAPPER_SIZE + DUML_HEADER_SIZE &&
+            WRAPPER_MAGIC.indices.all { frame[it] == WRAPPER_MAGIC[it] }
 }

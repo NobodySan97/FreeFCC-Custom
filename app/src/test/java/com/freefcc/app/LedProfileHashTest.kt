@@ -36,8 +36,8 @@ class LedProfileHashTest {
         frames = frames.toList()
     )
 
-    private fun crcIsValid(frame: ByteArray): Boolean {
-        val expected = DumlBuilder.crc16(frame, 0, frame.size - 2)
+    private fun crcIsValid(frame: ByteArray, innerStart: Int = 0): Boolean {
+        val expected = DumlBuilder.crc16(frame, innerStart, frame.size - 2 - innerStart)
         val actual = (frame[frame.size - 2].toInt() and 0xFF) or
             ((frame[frame.size - 1].toInt() and 0xFF) shl 8)
         return expected == actual
@@ -92,6 +92,27 @@ class LedProfileHashTest {
         // A stale CRC would be dropped by the aircraft, which looks exactly
         // like a switch that does nothing.
         assertTrue(crcIsValid(rewritten))
+    }
+
+    @Test
+    fun retargetsInsideTheWrapperTheLedProfilesActuallyUse() {
+        // led_on.json and led_off.json set "wrapper": true, so Profiles.load
+        // hands us frames that already carry the 8-byte 55 CC 30 75 header.
+        // Treating offset 0 as the DUML header would edit the wrong bytes and
+        // checksum the wrapper — the switch would silently stop working.
+        ParameterAddress.FOREARM_LED.confirm(short)
+        val wrapped = Profiles.wrapFrame(ledOnFrame())
+
+        val rewritten = LedProfileHash
+            .retargeted(profileOf(wrapped), ParameterAddress.FOREARM_LED)
+            .frames
+            .first()
+
+        assertEquals(wrapped.size, rewritten.size)
+        assertArrayEquals(wrapped.copyOfRange(0, 8), rewritten.copyOfRange(0, 8))
+        assertArrayEquals(short, rewritten.copyOfRange(8 + 11, 8 + 15))
+        assertEquals(0xEF.toByte(), rewritten[8 + 15])
+        assertTrue(crcIsValid(rewritten, innerStart = 8))
     }
 
     @Test
