@@ -68,8 +68,16 @@ class AppForegroundService : Service() {
      * one thing it usually is not.
      */
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) {
-            UsageStatistics.onNetworkAvailable(this@AppForegroundService)
+        override fun onCapabilitiesChanged(
+            network: Network,
+            capabilities: NetworkCapabilities
+        ) {
+            // Validated, not merely available: a link is up well before it can
+            // carry anything, and retrying on `onAvailable` would spend the
+            // retry before there was anywhere to send.
+            if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                UsageStatistics.onNetworkAvailable(this@AppForegroundService)
+            }
         }
     }
 
@@ -80,6 +88,7 @@ class AppForegroundService : Service() {
             getSystemService(ConnectivityManager::class.java)?.registerNetworkCallback(
                 NetworkRequest.Builder()
                     .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                     .build(),
                 networkCallback
             )

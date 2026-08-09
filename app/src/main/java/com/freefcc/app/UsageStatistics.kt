@@ -326,13 +326,6 @@ internal object UsageStatistics {
     private const val UPLOAD_INTERVAL_MS = 24 * 60 * 60 * 1000L
     private const val RETRY_INTERVAL_MS = 60 * 60 * 1000L
 
-    /**
-     * How soon an unsent report is offered again. Short enough that a
-     * controller which is only on for one flight still reports, long enough
-     * that a dead network is not retried in a tight loop.
-     */
-    private const val PENDING_RETRY_INTERVAL_MS = 2 * 60 * 1000L
-    private const val PREF_PENDING = "report_pending"
     private const val CONNECT_TIMEOUT_MS = 5_000
     private const val READ_TIMEOUT_MS = 5_000
     private const val MAX_RESPONSE_BYTES = 4_096
@@ -383,35 +376,25 @@ internal object UsageStatistics {
         return true
     }
 
-    private fun markPending(context: Context) {
-        context.applicationContext
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean(PREF_PENDING, true)
-            .apply()
-    }
-
     /**
-     * The network came back. Sends only what is already owed — a link coming up
-     * is not itself news, and reporting on it would turn every reconnect into a
-     * report.
+     * The link came back. Retries a report that is due and whose last attempt
+     * failed; a report that is not due stays not due, so reconnecting cannot
+     * turn into a stream of reports.
      */
     fun onNetworkAvailable(context: Context) {
-        val prefs = context.applicationContext
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(PREF_PENDING, false)) return
-        scheduleUpload(context)
+        scheduleUpload(context, networkRestored = true)
     }
 
-    fun scheduleUpload(context: Context, force: Boolean = false) {
+    fun scheduleUpload(
+        context: Context,
+        force: Boolean = false,
+        networkRestored: Boolean = false
+    ) {
         val endpoints = endpoints(
             BuildConfig.STATISTICS_ENDPOINT,
             BuildConfig.STATISTICS_ENDPOINT_SECONDARY
         )
         if (endpoints.isEmpty()) return
-        // Every caller of this is something that changed the report, so from
-        // here on there is a report owed until one is accepted.
-        markPending(context)
         if (force) forcedUploadPending.set(true)
         if (!uploadBusy.compareAndSet(false, true)) return
 
@@ -421,7 +404,7 @@ internal object UsageStatistics {
                 val automaticIdentityChanged = captureAutomaticControllerSerial(appContext)
                 val shouldForce = forcedUploadPending.getAndSet(false) || automaticIdentityChanged
                 try {
-                    uploadIfDue(appContext, endpoints, shouldForce)
+                    uploadIfDue(appContext, endpoints, shouldForce, networkRestored)
                 } catch (_: Exception) {
                     // Statistics must never affect application behavior.
                 }
@@ -443,7 +426,12 @@ internal object UsageStatistics {
             .filter { it.startsWith("https://") }
             .distinct()
 
-    private fun uploadIfDue(context: Context, endpoints: List<String>, force: Boolean) {
+    private fun uploadIfDue(
+        context: Context,
+        endpoints: List<String>,
+        force: Boolean,
+        networkRestored: Boolean = false
+    ) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         if (!shouldUpload(
@@ -451,7 +439,7 @@ internal object UsageStatistics {
                 lastSuccessAt = prefs.getLong(PREF_LAST_SUCCESS_AT, 0L),
                 lastAttemptAt = prefs.getLong(PREF_LAST_ATTEMPT_AT, 0L),
                 force = force,
-                pending = prefs.getBoolean(PREF_PENDING, false)
+                networkRestored = networkRestored
             )
         ) return
         prefs.edit().putLong(PREF_LAST_ATTEMPT_AT, now).apply()
@@ -470,7 +458,6 @@ internal object UsageStatistics {
             prefs.edit()
                 .putLong(PREF_LAST_SUCCESS_AT, now)
                 .putLong(PREF_REPORT_SEQUENCE, prefs.getLong(PREF_REPORT_SEQUENCE, 0L) + 1L)
-                .putBoolean(PREF_PENDING, false)
                 .apply()
         }
     }
@@ -584,17 +571,19 @@ internal object UsageStatistics {
         lastSuccessAt: Long,
         lastAttemptAt: Long,
         force: Boolean,
-        pending: Boolean = false
+        networkRestored: Boolean = false
     ): Boolean {
         if (force) return true
-        // Something happened that has not been reported yet. Waiting out the
-        // daily cadence for it assumes the controller will still be on and
-        // online when the day turns over, and it usually is not: it is powered
-        // for a flight and put away. So anything unsent is offered again on a
-        // short beat, which is also what makes a report go out as soon as the
-        // network comes back.
-        if (pending) return !isWithin(now, lastAttemptAt, PENDING_RETRY_INTERVAL_MS)
+        // One report a day, unchanged. This is the cadence the app documents
+        // and the only thing that bounds how often anything is sent.
         if (isWithin(now, lastSuccessAt, UPLOAD_INTERVAL_MS)) return false
+        // An attempt newer than the last success is an attempt that failed.
+        // A link coming back is a new chance at it, and waiting out the hourly
+        // backoff would waste that chance: the controller is powered for one
+        // flight, and by the time the hour is up it is usually switched off.
+        // This cannot make anything send more than once a day — the cadence
+        // above is checked first.
+        if (networkRestored && lastAttemptAt > lastSuccessAt) return true
         if (isWithin(now, lastAttemptAt, RETRY_INTERVAL_MS)) return false
         return true
     }

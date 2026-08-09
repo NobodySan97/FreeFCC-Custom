@@ -337,39 +337,53 @@ class UsageStatisticsTest {
     }
 
     @Test
-    fun anUnsentReportIsOfferedAgainOnAShortBeatRatherThanWaitingADay() {
+    fun aLinkComingBackRetriesAFailedReportWithoutBreakingTheDailyCadence() {
         val minute = 60_000L
         val now = 10 * 24 * 60 * minute
+        val dueSince = now - 25 * 60 * minute
 
-        // The controller is switched on for one flight. Holding the report for
-        // its daily turn assumes it will still be on when the day turns over.
+        // Due, attempted, failed, and the link is back. Waiting out the hourly
+        // backoff assumes the controller will still be on in an hour; it is
+        // powered for one flight and put away.
         assertTrue(
             UsageStatistics.shouldUpload(
                 now = now,
-                lastSuccessAt = now - 60 * minute,
-                lastAttemptAt = now - 3 * minute,
+                lastSuccessAt = dueSince,
+                lastAttemptAt = now - minute,
                 force = false,
-                pending = true
+                networkRestored = true
             )
         )
-        // But a dead network is not retried in a tight loop.
+        // The daily cadence still comes first: a link coming back cannot make
+        // a report that is not due go out.
         assertFalse(
             UsageStatistics.shouldUpload(
                 now = now,
                 lastSuccessAt = now - 60 * minute,
-                lastAttemptAt = now - 30_000L,
+                lastAttemptAt = now - minute,
                 force = false,
-                pending = true
+                networkRestored = true
             )
         )
-        // With nothing owed the daily cadence is unchanged.
+        // Nothing failed since the last success, but the report is a day
+        // overdue and nothing is holding it back, so it goes.
+        assertTrue(
+            UsageStatistics.shouldUpload(
+                now = now,
+                lastSuccessAt = dueSince,
+                lastAttemptAt = dueSince - minute,
+                force = false,
+                networkRestored = true
+            )
+        )
+        // Without a link event the hourly backoff is unchanged.
         assertFalse(
             UsageStatistics.shouldUpload(
                 now = now,
-                lastSuccessAt = now - 60 * minute,
-                lastAttemptAt = 0L,
+                lastSuccessAt = dueSince,
+                lastAttemptAt = now - minute,
                 force = false,
-                pending = false
+                networkRestored = false
             )
         )
     }
