@@ -906,10 +906,9 @@ class DumlTransport {
 
         /** Extracts the safest known identity forms from a binary telemetry window. */
         internal fun extractAircraftIdentity(buffer: CharSequence): String? {
-            val text = buffer.toString()
-            return FULL_SERIAL_REGEX.find(text)?.value
-                ?: RC2_SERIAL_SUFFIX_REGEX.find(text)?.value
-                ?: MODEL_CODE_REGEX.find(text)?.value
+            return FULL_SERIAL_REGEX.find(buffer)?.value
+                ?: RC2_SERIAL_SUFFIX_REGEX.find(buffer)?.value
+                ?: MODEL_CODE_REGEX.find(buffer)?.value
         }
 
         /**
