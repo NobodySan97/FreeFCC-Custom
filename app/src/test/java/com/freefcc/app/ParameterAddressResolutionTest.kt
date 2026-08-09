@@ -104,4 +104,36 @@ class ParameterAddressResolutionTest {
         // A resolved LED name must not drag GPS along with it.
         assertArrayEquals(canonicalGps, ParameterAddress.GPS_ENABLE.preferred())
     }
+
+    @Test
+    fun anUnknownAircraftTriesEverySpellingOnEveryAttempt() {
+        // On a bus that answers about one request in three, giving the name
+        // that works a single try at the end left it a one-in-three chance of
+        // ever being found. Both are asked on every attempt until one answers.
+        assertEquals(2, ParameterAddress.GPS_ENABLE.spellingsToTry().size)
+    }
+
+    @Test
+    fun aKnownNameIsAskedAloneSoTheOtherStopsCostingTime() {
+        ParameterAddress.GPS_ENABLE.confirm(shortGps)
+
+        val spellings = ParameterAddress.GPS_ENABLE.spellingsToTry()
+
+        assertEquals(1, spellings.size)
+        assertArrayEquals(shortGps, spellings.first())
+    }
+
+    @Test
+    fun aSwapForgetsTheNameSoTheNextWriteResolvesItAgain() {
+        ParameterAddress.GPS_ENABLE.confirm(shortGps)
+        ParameterAddress.FOREARM_LED.confirm(ParameterHash.of("forearm_led_ctrl"))
+
+        ParameterAddress.forgetAllConfirmed()
+
+        // Back to asking under every name, and writing with the canonical one
+        // until an aircraft proves otherwise.
+        assertEquals(2, ParameterAddress.GPS_ENABLE.spellingsToTry().size)
+        assertArrayEquals(canonicalGps, ParameterAddress.GPS_ENABLE.preferred())
+        assertEquals(2, ParameterAddress.FOREARM_LED.spellingsToTry().size)
+    }
 }

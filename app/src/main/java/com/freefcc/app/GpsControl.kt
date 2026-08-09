@@ -101,19 +101,13 @@ internal object GpsCommandRunner {
         return GpsFreshReadResult(null, attemptedRead)
     }
 
-    private fun readOnce(): GpsReadback? {
-        val transport = DumlTransport()
-        fun ask(hashes: List<ByteArray>) = ParameterAddress.read(
-            transport = transport,
-            address = GpsControlProtocol.address,
-            readWindowMs = 2_500,
-            buildRequest = { hash -> GpsControlProtocol.buildReadRequest(hash) },
-            parse = GpsControlProtocol::parse,
-            hashes = hashes
-        )
-        return ask(listOf(GpsControlProtocol.address.preferred()))
-            ?: ask(GpsControlProtocol.address.alternates())
-    }
+    private fun readOnce(): GpsReadback? = ParameterAddress.read(
+        transport = DumlTransport(),
+        address = GpsControlProtocol.address,
+        readWindowMs = 2_500,
+        buildRequest = { hash -> GpsControlProtocol.buildReadRequest(hash) },
+        parse = GpsControlProtocol::parse
+    )
 }
 
 internal object GpsControlStateStore {

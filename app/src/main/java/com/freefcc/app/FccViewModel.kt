@@ -1103,16 +1103,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 Thread.sleep(150)
             }
         }
-        // Only now is it worth asking whether this firmware spells the
-        // parameter differently — once, rather than on every attempt.
-        return ParameterAddress.read(
-            transport = gpsTransport,
-            address = GpsControlProtocol.address,
-            readWindowMs = 2_500,
-            buildRequest = { hash -> GpsControlProtocol.buildReadRequest(hash) },
-            parse = GpsControlProtocol::parse,
-            hashes = GpsControlProtocol.address.alternates()
-        )
+        return null
     }
 
     private fun applyGpsReadback(readback: GpsReadback?, unavailableMessage: String) {
@@ -1313,14 +1304,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 Thread.sleep(150)
             }
         }
-        return ParameterAddress.read(
-            transport = ledTransport,
-            address = LedReadbackProtocol.address,
-            readWindowMs = 2_500,
-            buildRequest = { hash -> LedReadbackProtocol.buildRequest(hash) },
-            parse = LedReadbackProtocol::parse,
-            hashes = LedReadbackProtocol.address.alternates()
-        )
+        return null
     }
 
     private fun applyLedReadback(readback: LedReadback?, unavailableMessage: String) {
@@ -1407,15 +1391,8 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                     readLedState(ledTransport, attempts = 1)
                 }
 
-                // The profile carries the canonical hash literally. When a
-                // readback proved this aircraft answers to the other spelling,
-                // write to that one instead — otherwise the write addresses a
-                // parameter the firmware does not have and quietly does nothing.
-                val profile = LedProfileHash.retargeted(
-                    loadedProfile,
-                    LedReadbackProtocol.address
-                )
-                log("Loaded LED profile: ${profile.frames.size} frames (port ${profile.port})")
+                log("Loaded LED profile: ${loadedProfile.frames.size} frames " +
+                    "(port ${loadedProfile.port})")
 
                 val expectedState = if (on) LedState.ON else LedState.OFF
                 val requestedLabel = if (on) "ON" else "OFF"
@@ -1428,6 +1405,16 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 for (commandAttempt in 1..2) {
                     update { copy(ledStatus = "LED $requestedLabel attempt $commandAttempt/2...") }
                     log("LED $requestedLabel attempt $commandAttempt/2")
+
+                    // Built per attempt, not once: the profile carries the
+                    // canonical hash literally, and the readback between the
+                    // two attempts is exactly where a different spelling gets
+                    // proven. A profile built before that would spend the
+                    // second attempt on the name that just failed.
+                    val profile = LedProfileHash.retargeted(
+                        loadedProfile,
+                        LedReadbackProtocol.address
+                    )
 
                     // 2 connection bursts × 5 writes each = 10 total sends.
                     for (burst in 0 until 2) {

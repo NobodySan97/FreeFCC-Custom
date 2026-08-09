@@ -69,27 +69,30 @@ internal class ParameterAddress(vararg names: String) {
     /** Candidate to write with: the proven one, else the canonical name. */
     fun preferred(): ByteArray = confirmed ?: candidates.first()
 
-    /**
-     * The spellings left to try once [preferred] has gone unanswered.
-     *
-     * Asking under every name on every read doubled how long a readback held
-     * port 40007 — and on an aircraft that answers to the first name, the
-     * second one can only ever time out. So the names are a last resort, tried
-     * once after the ordinary retries, not part of every attempt.
-     */
-    fun alternates(): List<ByteArray> {
-        val chosen = preferred()
-        return candidates.filterNot { it.contentEquals(chosen) }
-    }
-
     /** True once a read has proven which name this aircraft answers to. */
     val isConfirmed: Boolean
         get() = confirmed != null
 
-    /** Test seam — forgets what an aircraft proved. */
+    /**
+     * Forgets what an aircraft proved. Called when the aircraft changes: the
+     * confirmation belongs to the one that answered, and writing to a name the
+     * new aircraft may not have is a switch that silently does nothing.
+     */
     fun forgetConfirmed() {
         confirmed = null
     }
+
+    /**
+     * The spellings worth sending on one attempt.
+     *
+     * While the name is known, only that one is asked — the others can no
+     * longer be right, because a swap forgets the confirmation. Until then
+     * every candidate is tried on every attempt, so the one that works gets the
+     * same number of tries as the one that does not; giving it a single try at
+     * the end dropped its odds on a bus that answers about one request in three.
+     */
+    fun spellingsToTry(): List<ByteArray> =
+        if (isConfirmed) listOf(preferred()) else candidates
 
     companion object {
         /**
@@ -108,7 +111,7 @@ internal class ParameterAddress(vararg names: String) {
             readWindowMs: Int,
             buildRequest: (ByteArray) -> ByteArray,
             parse: (ByteArray?) -> T?,
-            hashes: List<ByteArray> = listOf(address.preferred())
+            hashes: List<ByteArray> = address.spellingsToTry()
         ): T? {
             for (parameterHash in hashes) {
                 val request = buildRequest(parameterHash)
@@ -122,6 +125,12 @@ internal class ParameterAddress(vararg names: String) {
                 parse(exchange.validatedPayload)?.let { return it }
             }
             return null
+        }
+
+        /** Drops every parameter's confirmation, for an aircraft that changed. */
+        fun forgetAllConfirmed() {
+            FOREARM_LED.forgetConfirmed()
+            GPS_ENABLE.forgetConfirmed()
         }
 
         /** Front arm LEDs. Short form confirmed present on Lito X1 firmware 03.07. */
