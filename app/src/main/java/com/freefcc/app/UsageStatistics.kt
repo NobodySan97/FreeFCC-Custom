@@ -326,6 +326,9 @@ internal object UsageStatistics {
     private const val UPLOAD_INTERVAL_MS = 24 * 60 * 60 * 1000L
     private const val RETRY_INTERVAL_MS = 60 * 60 * 1000L
 
+    /** Floor between retries triggered by the link coming back. */
+    private const val NETWORK_RETRY_MIN_INTERVAL_MS = 60 * 1000L
+
     private const val CONNECT_TIMEOUT_MS = 5_000
     private const val READ_TIMEOUT_MS = 5_000
     private const val MAX_RESPONSE_BYTES = 4_096
@@ -334,6 +337,7 @@ internal object UsageStatistics {
     private val lock = Any()
     private val uploadBusy = AtomicBoolean(false)
     private val forcedUploadPending = AtomicBoolean(false)
+    private val networkRestoredPending = AtomicBoolean(false)
     private val executor = Executors.newSingleThreadExecutor { task ->
         Thread(task, "FreeFCC-statistics").apply { isDaemon = true }
     }
@@ -396,6 +400,10 @@ internal object UsageStatistics {
         )
         if (endpoints.isEmpty()) return
         if (force) forcedUploadPending.set(true)
+        // Sticky, like `force`: a link coming back while an offline attempt is
+        // still running would otherwise be dropped on the floor — the very
+        // moment the retry exists for.
+        if (networkRestored) networkRestoredPending.set(true)
         if (!uploadBusy.compareAndSet(false, true)) return
 
         val appContext = context.applicationContext
@@ -403,14 +411,19 @@ internal object UsageStatistics {
             try {
                 val automaticIdentityChanged = captureAutomaticControllerSerial(appContext)
                 val shouldForce = forcedUploadPending.getAndSet(false) || automaticIdentityChanged
+                val linkReturned = networkRestoredPending.getAndSet(false)
                 try {
-                    uploadIfDue(appContext, endpoints, shouldForce, networkRestored)
+                    uploadIfDue(appContext, endpoints, shouldForce, linkReturned)
                 } catch (_: Exception) {
                     // Statistics must never affect application behavior.
                 }
             } finally {
                 uploadBusy.set(false)
-                if (forcedUploadPending.get()) scheduleUpload(appContext)
+                if (forcedUploadPending.get()) {
+                    scheduleUpload(appContext)
+                } else if (networkRestoredPending.get()) {
+                    scheduleUpload(appContext, networkRestored = true)
+                }
             }
         }
     }
@@ -583,7 +596,12 @@ internal object UsageStatistics {
         // flight, and by the time the hour is up it is usually switched off.
         // This cannot make anything send more than once a day — the cadence
         // above is checked first.
-        if (networkRestored && lastAttemptAt > lastSuccessAt) return true
+        // A link that flaps must not turn into an attempt per flap: each one
+        // costs a connect timeout against every endpoint. One a minute is
+        // enough to catch a link that came back to stay.
+        if (networkRestored && lastAttemptAt > lastSuccessAt) {
+            return !isWithin(now, lastAttemptAt, NETWORK_RETRY_MIN_INTERVAL_MS)
+        }
         if (isWithin(now, lastAttemptAt, RETRY_INTERVAL_MS)) return false
         return true
     }

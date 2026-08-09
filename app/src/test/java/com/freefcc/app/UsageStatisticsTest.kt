@@ -376,6 +376,17 @@ class UsageStatisticsTest {
                 networkRestored = true
             )
         )
+        // A link that flaps cannot turn into an attempt per flap: each attempt
+        // costs a connect timeout against every endpoint.
+        assertFalse(
+            UsageStatistics.shouldUpload(
+                now = now,
+                lastSuccessAt = dueSince,
+                lastAttemptAt = now - 10_000L,
+                force = false,
+                networkRestored = true
+            )
+        )
         // Without a link event the hourly backoff is unchanged.
         assertFalse(
             UsageStatistics.shouldUpload(
