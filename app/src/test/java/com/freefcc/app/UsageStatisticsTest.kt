@@ -335,4 +335,42 @@ class UsageStatisticsTest {
         assertFalse(json.contains("coordinate"))
         assertFalse(json.contains("logcat"))
     }
+
+    @Test
+    fun anUnsentReportIsOfferedAgainOnAShortBeatRatherThanWaitingADay() {
+        val minute = 60_000L
+        val now = 10 * 24 * 60 * minute
+
+        // The controller is switched on for one flight. Holding the report for
+        // its daily turn assumes it will still be on when the day turns over.
+        assertTrue(
+            UsageStatistics.shouldUpload(
+                now = now,
+                lastSuccessAt = now - 60 * minute,
+                lastAttemptAt = now - 3 * minute,
+                force = false,
+                pending = true
+            )
+        )
+        // But a dead network is not retried in a tight loop.
+        assertFalse(
+            UsageStatistics.shouldUpload(
+                now = now,
+                lastSuccessAt = now - 60 * minute,
+                lastAttemptAt = now - 30_000L,
+                force = false,
+                pending = true
+            )
+        )
+        // With nothing owed the daily cadence is unchanged.
+        assertFalse(
+            UsageStatistics.shouldUpload(
+                now = now,
+                lastSuccessAt = now - 60 * minute,
+                lastAttemptAt = 0L,
+                force = false,
+                pending = false
+            )
+        )
+    }
 }

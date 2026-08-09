@@ -7,6 +7,10 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.IBinder
 import android.text.SpannableString
 import android.text.Spanned
@@ -55,9 +59,34 @@ class AppForegroundService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val gpsActionBusy = AtomicBoolean(false)
 
+    /**
+     * Sends what is owed as soon as the controller has a link again.
+     *
+     * The controller is powered for a flight and put away, often with no
+     * network while it is on. A report that waits for its daily turn assumes
+     * the controller will still be running when that turn comes, which is the
+     * one thing it usually is not.
+     */
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            UsageStatistics.onNetworkAvailable(this@AppForegroundService)
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         AppForegroundNotification.createChannel(this)
+        runCatching {
+            getSystemService(ConnectivityManager::class.java)?.registerNetworkCallback(
+                NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .build(),
+                networkCallback
+            )
+        }
+        // Also on start: the service comes up with the controller, and by then
+        // a link may already be there with a report still owed from last time.
+        UsageStatistics.onNetworkAvailable(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -244,6 +273,10 @@ class AppForegroundService : Service() {
         AppForegroundNotification.create(this)
 
     override fun onDestroy() {
+        runCatching {
+            getSystemService(ConnectivityManager::class.java)
+                ?.unregisterNetworkCallback(networkCallback)
+        }
         serviceScope.cancel()
         super.onDestroy()
     }
