@@ -21,7 +21,8 @@
     <LinearLayout
         android:id="@+id/notification_fcc_row"
         android:layout_width="match_parent"
-        android:layout_height="36dp"
+        android:layout_height="40dp"
+        android:layout_marginTop="4dp"
         android:orientation="horizontal">
 
         <TextView
@@ -30,7 +31,9 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:background="@android:color/transparent"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            android:background="@drawable/notification_chip"
             android:gravity="center"
             android:padding="0dp"
             android:textColor="@android:color/white"
@@ -42,7 +45,9 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:background="@android:color/transparent"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            android:background="@drawable/notification_chip"
             android:gravity="center"
             android:padding="0dp"
             android:textColor="@android:color/white"
@@ -54,7 +59,9 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:background="@android:color/transparent"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            android:background="@drawable/notification_chip"
             android:gravity="center"
             android:padding="0dp"
             android:textColor="@android:color/white"
@@ -79,7 +86,8 @@
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="36dp"
+            android:layout_height="40dp"
+            android:layout_marginTop="4dp"
             android:orientation="horizontal">
 
             <TextView
@@ -88,7 +96,9 @@
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:background="@android:color/transparent"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="@drawable/notification_chip"
                 android:gravity="center"
                 android:padding="0dp"
                 android:textColor="@android:color/white"
@@ -100,7 +110,9 @@
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:background="@android:color/transparent"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="@drawable/notification_chip"
                 android:gravity="center"
                 android:padding="0dp"
                 android:textColor="@android:color/white"

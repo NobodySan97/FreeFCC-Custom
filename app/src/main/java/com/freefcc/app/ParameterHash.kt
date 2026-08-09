@@ -69,6 +69,19 @@ internal class ParameterAddress(vararg names: String) {
     /** Candidate to write with: the proven one, else the canonical name. */
     fun preferred(): ByteArray = confirmed ?: candidates.first()
 
+    /**
+     * The spellings left to try once [preferred] has gone unanswered.
+     *
+     * Asking under every name on every read doubled how long a readback held
+     * port 40007 — and on an aircraft that answers to the first name, the
+     * second one can only ever time out. So the names are a last resort, tried
+     * once after the ordinary retries, not part of every attempt.
+     */
+    fun alternates(): List<ByteArray> {
+        val chosen = preferred()
+        return candidates.filterNot { it.contentEquals(chosen) }
+    }
+
     /** True once a read has proven which name this aircraft answers to. */
     val isConfirmed: Boolean
         get() = confirmed != null
@@ -94,9 +107,10 @@ internal class ParameterAddress(vararg names: String) {
             address: ParameterAddress,
             readWindowMs: Int,
             buildRequest: (ByteArray) -> ByteArray,
-            parse: (ByteArray?) -> T?
+            parse: (ByteArray?) -> T?,
+            hashes: List<ByteArray> = listOf(address.preferred())
         ): T? {
-            for (parameterHash in address.candidates) {
+            for (parameterHash in hashes) {
                 val request = buildRequest(parameterHash)
                 val exchange = transport.sendAndReceiveRaw(
                     frame = request,

@@ -20,7 +20,9 @@ package com.freefcc.app
  * | `0x0c`, `0x0d` | 16-byte device id |
  * | `0x00`, `0xff` | status `0xfd`, no field |
  *
- * Only `0x04` is used here — it returns the serial with no framing to strip.
+ * Only `0x04` is asked for. It answers in both shapes — measured live on the
+ * same aircraft — so the serial is found inside the field rather than assumed
+ * to be the whole of it.
  */
 internal object AircraftSerialProtocol {
 
@@ -58,13 +60,13 @@ internal object AircraftSerialProtocol {
         val declaredLength = (payload[1].toInt() and 0xFF) or ((payload[2].toInt() and 0xFF) shl 8)
         if (declaredLength <= 0 || HEADER_SIZE + declaredLength > payload.size) return ""
 
-        val serial = String(
-            payload,
-            HEADER_SIZE,
-            declaredLength,
-            Charsets.US_ASCII
-        ).trim()
-        return if (DumlTransport.isFullAircraftSerial(serial)) serial else ""
+        // Observed live on Avata 360: the same request comes back either as
+        // the bare serial or behind four bytes (`00 16 20 08`). Both carry the
+        // same aircraft, so the serial is found inside the declared field
+        // rather than required to be the whole of it. ISO-8859-1 keeps the
+        // non-text bytes one-to-one so they cannot merge into the match.
+        val field = String(payload, HEADER_SIZE, declaredLength, Charsets.ISO_8859_1)
+        return DumlTransport.findFullAircraftSerial(field).orEmpty()
     }
 }
 
@@ -161,11 +163,13 @@ internal object AircraftSerialQueryRunner {
     const val DEFAULT_ATTEMPTS = 3
 
     /**
-     * One attempt is enough where the caller already retries on its own beat.
-     * The background window pays for every millisecond it holds 40007, and a
-     * miss there costs a ten-second wait rather than a failed operation.
+     * Fewer attempts than the button, but not one: measured live, a single
+     * request is answered about a third of the time, so one attempt would
+     * leave most background windows empty and the next check two minutes away.
+     * The window still pays for every millisecond it holds 40007, so this
+     * stays well short of the button's budget.
      */
-    const val BACKGROUND_ATTEMPTS = 1
+    const val BACKGROUND_ATTEMPTS = 2
 
     private const val READ_WINDOW_MS = 600
 

@@ -8,6 +8,9 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.view.View
 import android.widget.RemoteViews
 import java.util.concurrent.atomic.AtomicBoolean
@@ -334,6 +337,45 @@ internal object AppForegroundNotification {
             .build()
     }
 
+    /**
+     * Draws one control of the notification: its label, its tick and whether it
+     * reads as the option in force.
+     *
+     * The tick used to be a plain character in the label, which on a dark shade
+     * is the same colour as every other option and says nothing until it is
+     * read. Green carries the meaning at a glance, and the same green fills the
+     * control behind it so the state survives even where the glyph is small.
+     */
+    /** Same green as the active control's fill, so both read as one state. */
+    private const val SELECTED_TICK_COLOR = 0xFF41C463.toInt()
+
+    private fun applyControl(
+        views: RemoteViews,
+        viewId: Int,
+        label: String,
+        selected: Boolean
+    ) {
+        views.setTextViewText(viewId, controlLabel(label, selected))
+        views.setInt(
+            viewId,
+            "setBackgroundResource",
+            if (selected) R.drawable.notification_chip_active else R.drawable.notification_chip
+        )
+    }
+
+    /** `✓ label` with the tick in green, or the bare label when not selected. */
+    private fun controlLabel(label: String, selected: Boolean): CharSequence {
+        if (!selected) return label
+        val marked = SpannableString("✓ $label")
+        marked.setSpan(
+            ForegroundColorSpan(SELECTED_TICK_COLOR),
+            0,
+            1,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+        return marked
+    }
+
     private fun createRemoteViews(
         context: Context,
         selectedMode: AutoFccMode?,
@@ -348,31 +390,26 @@ internal object AppForegroundNotification {
             R.id.notification_auto_status,
             AppNotificationActionPolicy.statusText(selectedMode, accessibilityEnabled)
         )
-        views.setTextViewText(
+        applyControl(
+            views,
             R.id.notification_home_point,
-            if (selectedMode == AutoFccMode.HOME_POINT_TEXT) "✓ Home Point" else "Home Point"
+            "Home Point",
+            selectedMode == AutoFccMode.HOME_POINT_TEXT
         )
-        views.setTextViewText(
+        applyControl(
+            views,
             R.id.notification_periodic,
-            if (selectedMode == AutoFccMode.PERIODIC_5S) "✓ Every 5 sec" else "Every 5 sec"
+            "Every 5 sec",
+            selectedMode == AutoFccMode.PERIODIC_5S
         )
-        views.setTextViewText(
-            R.id.notification_fcc_off,
-            if (selectedMode == null) "✓ Off" else "Off"
-        )
+        applyControl(views, R.id.notification_fcc_off, "Off", selectedMode == null)
         views.setTextViewText(
             R.id.notification_gps_status,
             gpsStatusOverride ?: gpsState?.let { "GPS: Last verified ${it.name}" }
                 ?: "GPS: status unknown"
         )
-        views.setTextViewText(
-            R.id.notification_gps_on,
-            if (gpsState == GpsState.ON) "✓ GPS ON" else "GPS ON"
-        )
-        views.setTextViewText(
-            R.id.notification_gps_off,
-            if (gpsState == GpsState.OFF) "✓ GPS OFF" else "GPS OFF"
-        )
+        applyControl(views, R.id.notification_gps_on, "GPS ON", gpsState == GpsState.ON)
+        applyControl(views, R.id.notification_gps_off, "GPS OFF", gpsState == GpsState.OFF)
         views.setViewVisibility(
             R.id.notification_fcc_row,
             if (showGpsControls) View.VISIBLE else View.GONE

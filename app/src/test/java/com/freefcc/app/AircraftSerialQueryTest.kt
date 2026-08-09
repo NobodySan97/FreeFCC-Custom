@@ -195,4 +195,30 @@ class AircraftSerialQueryTest {
 
         assertArrayEquals(byteArrayOf(0x0C), frame.copyOfRange(11, 12))
     }
+
+    @Test
+    fun readsTheSerialOutOfBothShapesTheAircraftAnswersWith() {
+        val serial = "1581FA8JC264600B31QZ"
+        // Measured live on Avata 360: the same selector came back twice, once
+        // bare and once behind four bytes. Requiring the field to be nothing
+        // but the serial threw the second reply away and wasted the attempt.
+        val bare = reply(0x00, serial.length, serial.toByteArray(Charsets.US_ASCII))
+        val framed = reply(
+            0x00,
+            4 + serial.length,
+            byteArrayOf(0x00, 0x16, 0x20, 0x08) + serial.toByteArray(Charsets.US_ASCII)
+        )
+
+        assertEquals(serial, AircraftSerialProtocol.parse(bare))
+        assertEquals(serial, AircraftSerialProtocol.parse(framed))
+    }
+
+    @Test
+    fun aSerialOutsideTheDeclaredFieldIsNotPickedUp() {
+        val serial = "1581FA8JC264600B31QZ"
+        // Only two bytes are declared, so bytes beyond them are not this field.
+        val payload = reply(0x00, 2, serial.toByteArray(Charsets.US_ASCII))
+
+        assertEquals("", AircraftSerialProtocol.parse(payload))
+    }
 }

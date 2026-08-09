@@ -1103,7 +1103,16 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 Thread.sleep(150)
             }
         }
-        return null
+        // Only now is it worth asking whether this firmware spells the
+        // parameter differently — once, rather than on every attempt.
+        return ParameterAddress.read(
+            transport = gpsTransport,
+            address = GpsControlProtocol.address,
+            readWindowMs = 2_500,
+            buildRequest = { hash -> GpsControlProtocol.buildReadRequest(hash) },
+            parse = GpsControlProtocol::parse,
+            hashes = GpsControlProtocol.address.alternates()
+        )
     }
 
     private fun applyGpsReadback(readback: GpsReadback?, unavailableMessage: String) {
@@ -1304,7 +1313,14 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 Thread.sleep(150)
             }
         }
-        return null
+        return ParameterAddress.read(
+            transport = ledTransport,
+            address = LedReadbackProtocol.address,
+            readWindowMs = 2_500,
+            buildRequest = { hash -> LedReadbackProtocol.buildRequest(hash) },
+            parse = LedReadbackProtocol::parse,
+            hashes = LedReadbackProtocol.address.alternates()
+        )
     }
 
     private fun applyLedReadback(readback: LedReadback?, unavailableMessage: String) {

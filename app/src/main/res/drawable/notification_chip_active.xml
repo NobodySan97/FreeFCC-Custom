@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The option currently in force. The green matches the tick drawn in its
+     label, so colour and glyph say the same thing rather than two things. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#3341C463" />
+    <stroke
+        android:width="1dp"
+        android:color="#8041C463" />
+    <corners android:radius="8dp" />
+</shape>

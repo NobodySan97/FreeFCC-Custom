@@ -958,6 +958,17 @@ class DumlTransport {
         internal fun isFullAircraftSerial(text: String): Boolean =
             FULL_SERIAL_REGEX.matches(text)
 
+        /**
+         * The full factory serial carried somewhere inside [text], or null.
+         *
+         * A `00:51` reply does not always hand the serial over on its own: the
+         * aircraft answers the same request in two shapes, and one of them puts
+         * four bytes in front of it. Requiring the whole field to be the serial
+         * threw that reply away.
+         */
+        internal fun findFullAircraftSerial(text: String): String? =
+            FULL_SERIAL_REGEX.find(text)?.value
+
         /** Extracts the safest known identity forms from a binary telemetry window. */
         internal fun extractAircraftIdentity(buffer: CharSequence): String? {
             val text = buffer.toString()
