@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.70-beta — 2026-08-07
+
+- **Aircraft Catalog & Identification Upgrades:** Added support for product code WA151 (DJI Lito X1), passive DUML model code resolution, serial length normalization, and HardwareLock socket contention protection.
+
 ## 1.5.69-beta — 2026-08-05
 
 - **Experimental UI & Aircraft Identification:** Complete redesign of app dashboard layout with 0% CPU re-composition rendering, telemetry status top header with beta tag, update channel switcher (🟢 Stable vs 🧪 Beta), WA530 (DJI Avata 360) aircraft model support, corporate service word filtering, and native memory leak protections.

@@ -30,6 +30,7 @@ internal object AircraftModelCatalog {
         "WA140" to "DJI Mini 4 Pro",
         "WA150" to "DJI Mini 5 Pro",
         "WA141" to "DJI Flip",
+        "WA151" to "DJI Lito X1",
         "WA520" to "DJI Avata 2",
         "WA521" to "DJI Neo",
         "WA530" to "DJI Avata 360",
