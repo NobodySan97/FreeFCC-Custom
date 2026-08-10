@@ -135,7 +135,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         private val logcatCaptureBusy = AtomicBoolean(false)
         private val ledOperationBusy = AtomicBoolean(false)
         private val gpsOperationBusy = AtomicBoolean(false)
-        import java.lang.ref.WeakReference`n`n        @Volatile private var activeLanController: WeakReference<FccViewModel>? = null
+                @Volatile private var activeLanController: WeakReference<FccViewModel>? = null
         private val networkLogServer = NetworkLogServer(
             logSnapshot = {
                 synchronized(processLogLock) { processLogs.toList() }
