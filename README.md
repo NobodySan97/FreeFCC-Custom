@@ -53,7 +53,7 @@ A free and open-source Android app that unlocks FCC mode, sends experimental 4G 
 | Download | Link |
 |----------|------|
 | FreeFCC Custom App (APK) | [GitHub Releases](https://github.com/NobodySan97/FreeFCC-Custom/releases) |
-| Helper Apps (zip) | [freefcc.duckdns.org/downloads/freefcc-helpers.zip](https://freefcc.duckdns.org/downloads/freefcc-helpers.zip) |
+| Helper Apps (zip) | [freefcc.pages.dev/downloads/freefcc-helpers.zip](https://freefcc.pages.dev/downloads/freefcc-helpers.zip) |
 
 Release changes are tracked in [CHANGELOG.md](CHANGELOG.md).
 
@@ -133,7 +133,7 @@ If you test it on a model or firmware version not listed here, please [open an i
 
 ## Install Guide
 
-The original flow was tested on Mini 5 Pro with RC2 firmware v10.00.0700. No PC is needed. The repository README is the maintained installation guide; the older `freefcc.duckdns.org` page is not currently authoritative.
+The original flow was tested on Mini 5 Pro with RC2 firmware v10.00.0700. No PC is needed. The repository README is the maintained installation guide; the older `freefcc.pages.dev` page is not currently authoritative.
 
 ### 1. Prep the SD card
 
