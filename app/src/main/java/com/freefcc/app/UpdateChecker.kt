@@ -79,7 +79,35 @@ object UpdateChecker {
             val json = if (includePreRelease) {
                 val array = org.json.JSONArray(body)
                 if (array.length() == 0) return null
-                array.getJSONObject(0)
+                var bestRelease = array.getJSONObject(0)
+                for (i in 1 until array.length()) {
+                    val cand = array.getJSONObject(i)
+                    val candTag = cand.optString("tag_name", "").removePrefix("v")
+                    val bestTag = bestRelease.optString("tag_name", "").removePrefix("v")
+                    val candV = candTag.split("-").first().split(".").mapNotNull { it.toIntOrNull() }
+                    val bestV = bestTag.split("-").first().split(".").mapNotNull { it.toIntOrNull() }
+                    val maxLen = maxOf(candV.size, bestV.size)
+                    var candIsGreater = false
+                    var checked = false
+                    for (j in 0 until maxLen) {
+                        val cA = candV.getOrElse(j) { 0 }
+                        val cB = bestV.getOrElse(j) { 0 }
+                        if (cA != cB) {
+                            candIsGreater = cA > cB
+                            checked = true
+                            break
+                        }
+                    }
+                    if (!checked) {
+                        val candPre = cand.optBoolean("prerelease", false)
+                        val bestPre = bestRelease.optBoolean("prerelease", false)
+                        if (!candPre && bestPre) candIsGreater = true
+                    }
+                    if (candIsGreater) {
+                        bestRelease = cand
+                    }
+                }
+                bestRelease
             } else {
                 JSONObject(body)
             }
