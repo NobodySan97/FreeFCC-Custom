@@ -1,5 +1,7 @@
 package com.freefcc.app
 
+import kotlinx.coroutines.flow.first
+
 import android.app.Service
 import android.content.ComponentName
 import android.content.Context
@@ -470,7 +472,7 @@ class FccKeepaliveService : Service() {
         while (requestGate.isCurrent(generation)) {
             val hardwareLease = HardwareLock.tryBegin()
             if (hardwareLease == null) {
-                delay(200)
+                HardwareLock.busy.first { !it }
                 continue
             }
             val connected = try {
@@ -501,7 +503,7 @@ class FccKeepaliveService : Service() {
         while (requestGate.isCurrent(generation) && sessionLease == null) {
             hardwareLease = HardwareLock.tryBegin()
             if (hardwareLease == null) {
-                delay(200)
+                HardwareLock.busy.first { !it }
                 continue
             }
             sessionLease = DumlPortSessionLock.tryBegin(pinnedPort)
@@ -568,7 +570,7 @@ class FccKeepaliveService : Service() {
         while (requestGate.isCurrent(generation) && sessionLease == null) {
             hardwareLease = HardwareLock.tryBegin()
             if (hardwareLease == null) {
-                delay(200)
+                HardwareLock.busy.first { !it }
                 continue
             }
             sessionLease = DumlPortSessionLock.tryBegin(pinnedPort)

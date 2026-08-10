@@ -23,7 +23,9 @@ class AppForegroundService : Service() {
             "com.freefcc.app.notification.SELECT_OFF"
 
         fun start(context: Context) {
-            context.startForegroundService(Intent(context, AppForegroundService::class.java))
+            try {
+                context.startForegroundService(Intent(context, AppForegroundService::class.java))
+            } catch (ignored: Exception) {}
         }
 
         fun refresh(context: Context) {

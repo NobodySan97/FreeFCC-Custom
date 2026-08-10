@@ -13,9 +13,11 @@ internal object AppStartupPolicy {
 class AppStartupReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (AppStartupPolicy.shouldStart(intent.action)) {
-            AppForegroundService.start(context)
-            FccKeepaliveService.startSelectedMode(context)
-            FloatingButtonService.start(context)
+            try {
+                AppForegroundService.start(context)
+                FccKeepaliveService.startSelectedMode(context)
+                FloatingButtonService.start(context)
+            } catch (ignored: Exception) {}
         }
     }
 }

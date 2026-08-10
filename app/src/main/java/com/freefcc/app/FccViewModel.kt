@@ -1,5 +1,7 @@
 package com.freefcc.app
 
+import java.lang.ref.WeakReference
+
 import android.Manifest
 import android.app.Application
 import android.content.Context
@@ -133,17 +135,17 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         private val logcatCaptureBusy = AtomicBoolean(false)
         private val ledOperationBusy = AtomicBoolean(false)
         private val gpsOperationBusy = AtomicBoolean(false)
-        @Volatile private var activeLanController: FccViewModel? = null
+        import java.lang.ref.WeakReference`n`n        @Volatile private var activeLanController: WeakReference<FccViewModel>? = null
         private val networkLogServer = NetworkLogServer(
             logSnapshot = {
                 synchronized(processLogLock) { processLogs.toList() }
             },
             apiStatusSnapshot = {
-                activeLanController?.lanStatusJson()
+                activeLanController?.get()?.lanStatusJson()
                     ?: LanJson.objectOf("ok" to false, "error" to "app_not_ready")
             },
             apiCommandHandler = { params ->
-                activeLanController?.handleLanCommand(params)
+                activeLanController?.get()?.handleLanCommand(params)
                     ?: NetworkApiResponse(
                         503,
                         LanJson.objectOf("ok" to false, "error" to "app_not_ready")
@@ -217,7 +219,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         internal fun logServiceEvent(message: String) {
             val time = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
             appendProcessLog("[$time] $message")
-            activeLanController?.refreshProcessLogs()
+            activeLanController?.get()?.refreshProcessLogs()
         }
     }
 
@@ -411,7 +413,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun init() {
-        activeLanController = this
+        activeLanController = WeakReference(this)
         if (initialized) return
         initialized = true
         val model = try { Build.DEVICE } catch (_: Exception) { "unknown" }
@@ -517,7 +519,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
 
     /** Rebinds the process-wide bridge when the controller's Wi-Fi address changed. */
     fun refreshLanBridgeBinding() {
-        activeLanController = this
+        activeLanController = WeakReference(this)
         if (!prefs.getBoolean("lan_log_enabled", false) || _state.value.isLanLogStarting) return
         val current = networkLogServer.currentEndpoint()
         if (current != null) {
@@ -2586,7 +2588,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         prefs.unregisterOnSharedPreferenceChangeListener(preferenceListener)
-        if (activeLanController === this) activeLanController = null
+        if (activeLanController?.get() === this) activeLanController = null
         super.onCleared()
     }
 
