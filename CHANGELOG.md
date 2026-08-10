@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.5.70-beta — 2026-08-09
+## 1.5.71-beta — 2026-08-10
 
 - **Aircraft Catalog & Identification Upgrades:** Added support for product code WA151 (DJI Lito X1), passive DUML model code resolution, serial length normalization, and HardwareLock socket contention protection.
 - **Performance Optimization:** Eliminated heavy string allocations in the passive telemetry listener, reducing CPU load and memory usage during background DUML monitoring.
