@@ -195,7 +195,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppRoot(viewModel: FccViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val pagerState = rememberPagerState(initialPage = 0) { 5 }
+    val pagerState = rememberPagerState(initialPage = 0) { 4 }
     val scope = rememberCoroutineScope()
 
     val entrance = remember { Animatable(0f) }
@@ -239,9 +239,8 @@ private fun AppRoot(viewModel: FccViewModel) {
             when (page) {
                 0 -> FccPage(state, viewModel)
                 1 -> ModemPage(state, viewModel)
-                2 -> InfoPage(state, viewModel)
-                3 -> LogPage(state, viewModel)
-                4 -> UpdatePage(state, viewModel)
+                2 -> DiagnosticsPage(state, viewModel)
+                3 -> UpdatePage(state, viewModel)
             }
         }
 
@@ -482,61 +481,28 @@ private fun FccPage(state: AppState, viewModel: FccViewModel) {
                     )
                 }
                 Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     GlowButton(
-                        "Invia Richiesta FCC",
-                        Cyan,
-                        filled = false,
-                        enabled = !state.isHardwareBusy
+                        "INVIA RICHIESTA FCC",
+                        Color(0xFFFF9D4D), // Amber/Orange
+                        filled = true,
+                        enabled = !state.isHardwareBusy,
+                        modifier = Modifier.fillMaxWidth().height(64.dp)
                     ) {
                         viewModel.enableFcc()
                     }
-                    GlowButton("Apri DJI Fly", Green) {
+                    GlowButton(
+                        "APRI DJI FLY",
+                        Green,
+                        filled = true,
+                        modifier = Modifier.fillMaxWidth().height(64.dp)
+                    ) {
                         viewModel.launchDjiFly()
                     }
                 }
             }
-
-            if (state.isConnected) {
-                Spacer(Modifier.height(16.dp))
-                var serialField by remember(state.aircraftSerial, state.manualSerial) {
-                    mutableStateOf(state.manualSerial.ifEmpty { state.aircraftSerial })
-                }
-                OutlinedTextField(
-                    value = serialField,
-                    onValueChange = { serialField = it.trim() },
-                    label = { Text("Seriale Drone (per FCC 4G)") },
-                    placeholder = { Text("auto-rilevato, o digitalo a mano") },
-                    singleLine = true,
-                    enabled = !state.isHardwareBusy,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = TextWhite,
-                        unfocusedTextColor = TextWhite,
-                        focusedBorderColor = Amber,
-                        unfocusedBorderColor = TextGray,
-                        focusedLabelColor = Amber,
-                        unfocusedLabelColor = TextGray,
-                        focusedPlaceholderColor = TextGray,
-                        unfocusedPlaceholderColor = TextGray,
-                        cursorColor = Amber
-                    )
-                )
-                Spacer(Modifier.height(8.dp))
-                GlowButton(
-                    if (state.isProbingSerial) "Lettura seriale in corso…" else "Leggi seriale dal drone",
-                    Cyan, filled = false, enabled = !state.isHardwareBusy
-                ) { viewModel.probeSerial() }
-                if (serialField.isNotBlank() && serialField != state.manualSerial) {
-                    Spacer(Modifier.height(8.dp))
-                    GlowButton("Usa questo seriale", Cyan, filled = false, enabled = !state.isHardwareBusy) {
-                        viewModel.setManualSerial(serialField)
-                    }
-                }
-            }
-        }
 
         Spacer(Modifier.height(SectionSpacing))
         SystemPermissionsCard(
@@ -544,20 +510,6 @@ private fun FccPage(state: AppState, viewModel: FccViewModel) {
             onRequestAccessibility = { requestHomePointAuto() },
             onRequestOverlay = { requestFloatingButton(true) }
         )
-
-        // Aircraft GPS and LED controls share port 40007 and are serialized.
-        Spacer(Modifier.height(SectionSpacing))
-        GlowCard {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                GpsControlPanel(state, viewModel, Modifier.weight(1f).fillMaxHeight())
-                LedControlPanel(state, viewModel, Modifier.weight(1f).fillMaxHeight())
-            }
-        }
 
     }
 }
@@ -800,21 +752,39 @@ private fun ModemPage(state: AppState, viewModel: FccViewModel) {
         GlowCard {
             Text("Aircraft identity", color = TextWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
-            InfoRow("Last model code", state.aircraftModelCode.ifEmpty { "Not detected" })
-            Spacer(Modifier.height(4.dp))
-            DividerLine()
-            Spacer(Modifier.height(4.dp))
-            InfoRow("Last factory S/N", state.aircraftSerial.ifEmpty { "Not detected" })
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = { viewModel.probeSerial() },
-                enabled = !state.isHardwareBusy && !state.is4gBusy,
+            var serialField by remember(state.aircraftSerial, state.manualSerial) {
+                mutableStateOf(state.manualSerial.ifEmpty { state.aircraftSerial })
+            }
+            OutlinedTextField(
+                value = serialField,
+                onValueChange = { serialField = it.trim() },
+                label = { Text("Seriale Drone (per FCC 4G)") },
+                placeholder = { Text("auto-rilevato, o digitalo a mano") },
+                singleLine = true,
+                enabled = !state.isHardwareBusy,
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)
-            ) {
-                Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Refresh aircraft identity")
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = TextWhite,
+                    unfocusedTextColor = TextWhite,
+                    focusedBorderColor = Amber,
+                    unfocusedBorderColor = TextGray,
+                    focusedLabelColor = Amber,
+                    unfocusedLabelColor = TextGray,
+                    focusedPlaceholderColor = TextGray,
+                    unfocusedPlaceholderColor = TextGray,
+                    cursorColor = Amber
+                )
+            )
+            Spacer(Modifier.height(8.dp))
+            GlowButton(
+                if (state.isProbingSerial) "Lettura seriale in corso…" else "Leggi seriale dal drone",
+                Cyan, filled = false, enabled = !state.isHardwareBusy
+            ) { viewModel.probeSerial() }
+            if (serialField.isNotBlank() && serialField != state.manualSerial) {
+                Spacer(Modifier.height(8.dp))
+                GlowButton("Usa questo seriale", Cyan, filled = false, enabled = !state.isHardwareBusy) {
+                    viewModel.setManualSerial(serialField)
+                }
             }
         }
 
@@ -847,15 +817,31 @@ private fun ModemPage(state: AppState, viewModel: FccViewModel) {
                 }
             }
         }
+
+        Spacer(Modifier.height(SectionSpacing))
+
+        GlowCard {
+            Text("Hardware Tools", color = TextWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                GpsControlPanel(state, viewModel, Modifier.weight(1f).fillMaxHeight())
+                LedControlPanel(state, viewModel, Modifier.weight(1f).fillMaxHeight())
+            }
+        }
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Page 3: Info
+// Page 3: Diagnostics
 // ═══════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun InfoPage(state: AppState, viewModel: FccViewModel) {
+private fun DiagnosticsPage(state: AppState, viewModel: FccViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -865,7 +851,7 @@ private fun InfoPage(state: AppState, viewModel: FccViewModel) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(Modifier.height(PageTopPadding))
-        PageTitle("Device Info", Icons.Outlined.Info)
+        PageTitle("Diagnostics & Logs", Icons.Outlined.Info)
         Spacer(Modifier.height(8.dp))
 
         GlowCard {
@@ -911,26 +897,7 @@ private fun InfoPage(state: AppState, viewModel: FccViewModel) {
                 Text("Refresh aircraft identity")
             }
         }
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// Page 3: Log
-// ═══════════════════════════════════════════════════════════════════════
-
-@Composable
-private fun LogPage(state: AppState, viewModel: FccViewModel) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = PageHorizontalPadding)
-            .padding(bottom = BottomNavHeight + PageBottomPadding),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(Modifier.height(PageTopPadding))
-        PageTitle("Activity Log", Icons.Outlined.History)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(SectionSpacing))
 
         GlowCard {
             Row(
@@ -1771,8 +1738,7 @@ private fun BottomNavBar(
     val tabs = listOf(
         Triple("FCC", Icons.Filled.Wifi, Cyan),
         Triple("4G", Icons.Filled.SettingsInputAntenna, Amber),
-        Triple("Info", Icons.Filled.Info, Green),
-        Triple("Log", Icons.Filled.History, Amber),
+        Triple("Diagnostica", Icons.Filled.Info, Green),
         Triple("Update", Icons.Filled.SystemUpdate, Color(0xFF79A8FF))
     )
 
