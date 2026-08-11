@@ -503,6 +503,7 @@ private fun FccPage(state: AppState, viewModel: FccViewModel) {
                     }
                 }
             }
+        }
 
         Spacer(Modifier.height(SectionSpacing))
         SystemPermissionsCard(
@@ -1700,11 +1701,13 @@ private fun GlowButton(
     color: Color,
     filled: Boolean = true,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier.fillMaxWidth().height(46.dp),
     onClick: () -> Unit
 ) {
     Button(
         onClick = onClick,
         enabled = enabled,
+        modifier = modifier,
         colors = ButtonDefaults.buttonColors(
             containerColor = if (filled) color else Color.Transparent,
             contentColor = if (filled) BgDark else color,
@@ -1716,10 +1719,7 @@ private fun GlowButton(
             !filled && enabled -> BorderStroke(1.5.dp, color.copy(0.6f))
             filled && enabled -> BorderStroke(1.dp, color.copy(0.3f))
             else -> null
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(46.dp)
+        }
     ) {
         Text(text, fontWeight = FontWeight.Bold, fontSize = 14.sp, letterSpacing = 0.3.sp)
     }
