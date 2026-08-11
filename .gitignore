@@ -24,3 +24,5 @@ keystore.properties
 # Local firmware/APK unpacking scratch, never committed
 extracted/
 freefcc-helpers.zip
+.vs/
+*.patch
