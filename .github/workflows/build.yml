@@ -104,13 +104,17 @@ jobs:
         run: |
           APK="app/build/outputs/apk/release/app-release.apk"
           if [ ! -f "$APK" ]; then APK="$(ls app/build/outputs/apk/release/*.apk | head -1)"; fi
-          echo "Publishing $APK to release ${GITHUB_REF_NAME}"
+          
+          NEW_APK="FreeFCC-Custom-${GITHUB_REF_NAME}.apk"
+          mv "$APK" "$NEW_APK"
+          
+          echo "Publishing $NEW_APK to release ${GITHUB_REF_NAME}"
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" "$APK" --clobber
+            gh release upload "${GITHUB_REF_NAME}" "$NEW_APK" --clobber
           else
             if [[ "${GITHUB_REF_NAME}" == *"-beta"* ]]; then
-              gh release create "${GITHUB_REF_NAME}" "$APK" --title "${GITHUB_REF_NAME}" --generate-notes --prerelease
+              gh release create "${GITHUB_REF_NAME}" "$NEW_APK" --title "${GITHUB_REF_NAME}" --generate-notes --prerelease
             else
-              gh release create "${GITHUB_REF_NAME}" "$APK" --title "${GITHUB_REF_NAME}" --generate-notes
+              gh release create "${GITHUB_REF_NAME}" "$NEW_APK" --title "${GITHUB_REF_NAME}" --generate-notes
             fi
           fi

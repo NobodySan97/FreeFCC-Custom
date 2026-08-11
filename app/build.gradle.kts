@@ -14,8 +14,8 @@ android {
         applicationId = "com.freefcc.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 91
-        versionName = "1.5.75-beta"
+        versionCode = 92
+        versionName = "1.5.76-beta"
     }
 
     val keystorePropsFile = rootProject.file("keystore.properties")
