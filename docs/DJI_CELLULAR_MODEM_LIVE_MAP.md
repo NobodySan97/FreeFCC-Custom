@@ -800,9 +800,11 @@ handling у `rc331` иной и требует отдельного разбор
 ## Граница с FreeFCC и OpenFCC
 
 Текущий FreeFCC не выполняет перечисленные Fibocom AT-команды. Его experimental
-4G profile строит 128 DUML frames и пишет их в abstract DUSS socket
-`/duss/mb/0x205` без ACK/readback. Это aircraft/controller command path, а не
-настройка cellular bearer.
+4G profile (до 2026-08-11 — 128-кадровый sweep `51:00..7F`; теперь один
+targeted-кадр `51:1A` liveview HYBRID + serial, см.
+[`REVERIFICATION_20260811.md`](REVERIFICATION_20260811.md)) пишет в abstract
+DUSS socket `/duss/mb/0x205` без ACK/readback. Это aircraft/controller command
+path, а не настройка cellular bearer.
 
 Исследованный OpenFCC Windows launcher имеет отдельный `fourg_swap` flow:
 скачивает DJI-signed controller `update.zip`, передаёт его на пульт и применяет

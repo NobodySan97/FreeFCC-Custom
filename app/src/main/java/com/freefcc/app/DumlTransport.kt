@@ -688,7 +688,7 @@ class DumlTransport {
      * A successful connection only proves that the controller's DUSS router
      * currently exposes `/duss/mb/0x205`. It does not distinguish an external
      * Cellular Dongle from an integrated eSIM module and does not prove that
-     * the 128-frame activation profile is compatible with the linked aircraft.
+     * the targeted 4G activation request is compatible with the linked aircraft.
      */
     fun is4gEndpointReachable(): Boolean {
         var socket: LocalSocket? = null
@@ -742,9 +742,9 @@ class DumlTransport {
      * Sends a list of frames via Unix domain socket for 4G activation.
      * Fire-and-forget: no ACK read, just write and flush per frame.
      *
-     * Opens ONE abstract-namespace socket for the entire 128-frame burst and
+     * Opens ONE abstract-namespace socket for the entire burst and
      * reuses it for every frame, matching the reference app's persistent
-     * relay-session architecture. This avoids 127 redundant socket connect/
+     * relay-session architecture. This avoids redundant socket connect/
      * close syscalls (one per frame) and is the 1:1 match with the native
      * relay send path. If the socket cannot be opened, returns false
      * immediately — callers should pre-check with [is4gEndpointReachable]

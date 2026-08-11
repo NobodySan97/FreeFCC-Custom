@@ -632,7 +632,7 @@ private fun ModemPage(state: AppState, viewModel: FccViewModel) {
         GlowCard {
             BodyText(
                 if (state.fourGMessage.isNotEmpty()) state.fourGMessage
-                else "Experimental 128-frame DJI profile. Endpoint reachability and successful writes do not prove that 4G activated.",
+                else "Experimental targeted 4G request (service mode HYBRID). Endpoint reachability and successful writes do not prove that 4G activated.",
                 TextGray
             )
             Spacer(Modifier.height(8.dp))

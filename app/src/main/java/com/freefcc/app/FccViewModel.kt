@@ -922,13 +922,17 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
     // --- 4G ---
 
     /**
-     * Sends the 128-frame 4G activation profile.
-     * The aircraft serial is embedded in each frame's payload at runtime.
+     * Sends the targeted 4G activation request: a single 0x51:0x1A
+     * wlm_service_mode_switch_req frame (liveview HYBRID + aircraft serial as
+     * target SN). The serial is embedded in the payload at runtime.
      * 4G frames are sent via Unix domain socket (/duss/mb/0x205), not TCP.
      *
-     * The socket does not respond, so this can only confirm the frames were
-     * written — never confirm the aircraft actually activated 4G. There is
-     * no "off" action: no send-only command exists to reliably deactivate it.
+     * The socket does not respond, so this can only confirm the frame was
+     * written — never confirm the aircraft actually activated 4G. The WLM
+     * refuses the switch (resp 3,3,3) until it has seen LTE availability
+     * (dongle beacon/pairing), so a dongle-equipped, linked aircraft is a
+     * hard precondition. There is no "off" action: no send-only command
+     * exists to reliably deactivate it.
      *
      * Guards:
      * 1. Identity must be either a full 1581... factory serial or a short

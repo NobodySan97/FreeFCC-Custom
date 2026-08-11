@@ -13,8 +13,8 @@
 |---|---|---|
 | DJI Avata 360 Enhanced Transmission edition имеет встроенный модуль и IoT eSIM | OBSERVED | Официальные DJI Store/FAQ: `https://store.dji.com/cn/product/dji-avata-360`, `https://repair.dji.com/help/content?customId=zh-cn03400008285&lang=zh-CN` |
 | С RC2 наземное интернет-плечо Avata 360 использует Wi-Fi hotspot телефона | OBSERVED | Официальный DJI FAQ по Enhanced Transmission |
-| Текущий FreeFCC отправляет 128 кадров через abstract socket `/duss/mb/0x205` | OBSERVED | `DumlTransport.sendFramesUnix()`, `profiles/4g.json` |
-| Payload каждого кадра: `000000 + ASCII(identity)`, `cmd_set=0x51`, `cmd_id=0..127` | OBSERVED | `Profiles.load4g()`, `profiles/4g.json` |
+| FreeFCC (до 2026-08-11) отправлял 128 кадров через abstract socket `/duss/mb/0x205` | OBSERVED | `DumlTransport.sendFramesUnix()`, `profiles/4g.json`. **С 2026-08-11 sweep заменён на один targeted-кадр `51:1A` с `{00, LIVEVIEW, HYBIRD, SN}`** — семантика восстановлена дизассемблированием `dji_wlm` (см. `REVERIFICATION_20260811.md`, `.scratch/reverify_20260811/wlm_link_switch_trace.md`) |
+| Payload кадров sweep: `000000 + ASCII(identity)`, `cmd_set=0x51`, `cmd_id=0..127`; в новом профиле один кадр `51:1A` с prefix `000001` | OBSERVED | `Profiles.load4g()`, `profiles/4g.json` |
 | Штатный DJI Fly eSIM flow использует `cmd_set=0x18`, request/push `cmd_id=0x4b` и push ACK `cmd_id=0x4c` | OBSERVED | ARM64 disassembly `libdongle_esim_core.so` из DJI Fly 1.21.4 |
 | Штатный DJI flow и 128-frame профиль FreeFCC — разные протоколы | DERIVED | Различаются command set, command IDs, payload layout, ACK и lifecycle observer |
 | Socket connect не даёт ACK и не доказывает физический тип модема или активацию | DERIVED | API используется как fire-and-forget; response/readback отсутствует |
