@@ -825,5 +825,5 @@ SHA256 50bc1e3a1ac532af4ed54a0057960610e619ddfe0246233f134a5dd02d26b741
 - FIBOCOM NL668 AT Commands User Manual, mirror:
   `https://device.report/m/a5e1582fe8b5d9da1208e235921c7255f45bbb07b4b6cb3751e9c282033b1574`
 - OpenFCC Apps: `https://openfcc.app/apps`
-- FreeFCC 4G code: `Profiles.load4g()`, `DumlTransport.sendFramesUnix()`,
+- FreeFCC 4G code: `Profiles.load4g()`, `DumlTransport.sendFramesUnixAwaitResponse()`,
   `FccViewModel.send4gActivationFrames()`.

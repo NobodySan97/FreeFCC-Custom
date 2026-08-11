@@ -7,23 +7,7 @@ import org.junit.Test
 class FourGIdentityTest {
 
     @Test
-    fun shortModelCodeIsAcceptedWithoutOffByOne() {
-        val identity = FccViewModel.parseFourGIdentity("WA341")
-
-        assertEquals("WA341", identity?.payloadSerial)
-        assertEquals("wa341", identity?.modelCode)
-    }
-
-    @Test
-    fun capturedStyleIdentityKeepsPayloadSuffix() {
-        val identity = FccViewModel.parseFourGIdentity("wa341test")
-
-        assertEquals("WA341TEST", identity?.payloadSerial)
-        assertEquals("wa341", identity?.modelCode)
-    }
-
-    @Test
-    fun fullFactorySerialIsAcceptedWithoutPretendingPrefixIsModel() {
+    fun fullFactorySerialIsAccepted() {
         val serial = "1581ABCDEF012345"
         val identity = FccViewModel.parseFourGIdentity(serial)
 
@@ -32,25 +16,26 @@ class FourGIdentityTest {
     }
 
     @Test
+    fun fullFactorySerialIsNormalized() {
+        val identity = FccViewModel.parseFourGIdentity("  1581abcdef012345 ")
+
+        assertEquals("1581ABCDEF012345", identity?.payloadSerial)
+    }
+
+    @Test
+    fun shortModelCodeIsRejected() {
+        // A model code is not a peer SN: the WLM resolves the payload's SN
+        // field via wlm_peer_dev_list_find, so WA341 would be refused.
+        assertNull(FccViewModel.parseFourGIdentity("WA341"))
+        assertNull(FccViewModel.parseFourGIdentity("WA530"))
+        assertNull(FccViewModel.parseFourGIdentity("WM265T"))
+        assertNull(FccViewModel.parseFourGIdentity("wa341test"))
+    }
+
+    @Test
     fun malformedIdentityIsRejected() {
         assertNull(FccViewModel.parseFourGIdentity(""))
         assertNull(FccViewModel.parseFourGIdentity("1581TOO_SHORT"))
         assertNull(FccViewModel.parseFourGIdentity("not-a-dji-identity"))
-    }
-
-    @Test
-    fun avata360ModelCodeIsAcceptedWithoutAnAllowlist() {
-        val identity = FccViewModel.parseFourGIdentity("WA530")
-
-        assertEquals("WA530", identity?.payloadSerial)
-        assertEquals("wa530", identity?.modelCode)
-    }
-
-    @Test
-    fun enterpriseModelSuffixIsNotTruncated() {
-        val identity = FccViewModel.parseFourGIdentity("WM265T")
-
-        assertEquals("WM265T", identity?.payloadSerial)
-        assertEquals("wm265t", identity?.modelCode)
     }
 }
