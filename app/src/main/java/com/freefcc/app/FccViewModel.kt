@@ -45,6 +45,8 @@ data class AppState(
     val isHardwareBusy: Boolean = false,
     val busyProgress: Float = 0f,
     val aircraftSerial: String = "",
+    val manualSerial: String = "",
+    val isProbingSerial: Boolean = false,
     val aircraftModelCode: String = "",
     val aircraftModelName: String = "",
     val aircraftModelVerifiedAtMs: Long? = null,
@@ -284,6 +286,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         }
         // Migrate the former single identity field into separate display
         // values. Cached values remain display-only until a fresh probe.
+        val manual = prefs.getString("manual_aircraft_sn", "").orEmpty()
         val cachedIdentity = prefs.getString("aircraft_serial", "").orEmpty()
         val cachedModelCode = prefs.getString(PREF_AIRCRAFT_MODEL_CODE, "").orEmpty()
         val cachedModelName = prefs.getString(PREF_AIRCRAFT_MODEL_NAME, "").orEmpty()
@@ -294,15 +297,18 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         if (cachedModelCode.isEmpty() && legacyModelCode.isNotEmpty()) {
             prefs.edit().putString(PREF_AIRCRAFT_MODEL_CODE, legacyModelCode).apply()
         }
+        val shownSerial = manual.ifEmpty { cachedSerial }
         if (
-            cachedSerial.isNotEmpty() ||
+            shownSerial.isNotEmpty() ||
             cachedModelCode.isNotEmpty() ||
             cachedModelName.isNotEmpty() ||
-            legacyModelCode.isNotEmpty()
+            legacyModelCode.isNotEmpty() ||
+            manual.isNotEmpty()
         ) {
             update {
                 copy(
-                    aircraftSerial = cachedSerial,
+                    aircraftSerial = shownSerial,
+                    manualSerial = manual,
                     aircraftModelCode = cachedModelCode.ifEmpty { legacyModelCode },
                     aircraftModelName = cachedModelName,
                     aircraftModelVerifiedAtMs = cachedModelVerifiedAt.takeIf { it > 0L }
@@ -310,6 +316,23 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             }
         }
         restorePersistedControlReadbacks()
+    }
+
+    /**
+     * Stores (or clears) a manually-entered aircraft serial. A manual serial
+     * takes priority over auto-detection everywhere — the reliable fallback
+     * when the controller never surfaces the serial on its own.
+     */
+    fun setManualSerial(serial: String) {
+        val s = serial.trim().uppercase()
+        prefs.edit().putString("manual_aircraft_sn", s).apply()
+        if (s.isEmpty()) {
+            update { copy(manualSerial = "") }
+            log("Manual serial cleared — auto-detection will be used")
+        } else {
+            update { copy(manualSerial = s, aircraftSerial = s) }
+            log(if (DumlTransport.isValidSerial(s)) "Manual serial set: $s" else "Manual serial set: $s (note: unusual format)")
+        }
     }
 
     private fun restorePersistedControlReadbacks() {
@@ -1522,7 +1545,8 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             log("Hardware busy — please wait for the current operation to finish.")
             return false
         }
-        log("Probing for aircraft serial...")
+        log("Reading aircraft serial...")
+        update { copy(isProbingSerial = true) }
         runOnIO {
             var portLease: Port40007Lock.Lease? = null
             var sessionLease: DumlPortSessionLock.Lease? = null
@@ -1538,7 +1562,11 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                     log("Serial probe skipped — DUML port $effectivePort is busy")
                     return@runOnIO
                 }
-                val serial = transport.probeSerial(2_500, effectivePort)
+                var serial = transport.probeSerialActive(800, effectivePort)
+                if (serial.isEmpty()) {
+                    log("No reply to the serial query — listening for telemetry (up to 8s)...")
+                    serial = transport.probeSerial(8000, effectivePort)
+                }
                 if (serial.isNotEmpty()) {
                     aircraftIdentityVerified = true
                     verifiedAircraftIdentity = serial
@@ -1547,9 +1575,10 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 } else {
                     aircraftIdentityVerified = false
                     verifiedAircraftIdentity = ""
-                    log("No serial detected — is the aircraft powered on?")
+                    log("No serial detected — power on and link the aircraft with the live view up, or enter it manually.")
                 }
             } finally {
+                update { copy(isProbingSerial = false) }
                 sessionLease?.close()
                 portLease?.let(Port40007Lock::releaseFromLed)
                 hardwareLease.close()

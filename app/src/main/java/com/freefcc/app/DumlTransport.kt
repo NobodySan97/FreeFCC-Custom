@@ -576,9 +576,17 @@ class DumlTransport {
         return listenForSerial(timeoutMs, port)
     }
 
+    // --- Serial detection: passive extraction + active query ---
+
+    /** Serial-query targets: aircraft flight controller (3), remote radio (6). */
+    private val serialQueryTargets = listOf(3, 6)
+    /** Version/serial inquiry command IDs in the GENERAL (cmdSet 0) set. */
+    private val serialQueryCmdIds = listOf(87, 1)
+    private val serialQueryBuilder = DumlBuilder()
+
     /**
-     * Opens a TCP socket to the DUML proxy and listens for data
-     * matching the given regex pattern.
+     * Passively listens for telemetry and extracts the aircraft serial,
+     * reassembling 55 CC 30 75 length-prefixed chunks when present.
      */
     private fun listenForSerial(timeoutMs: Int, requestedPort: Int?): String {
         var socket: Socket? = null
@@ -588,29 +596,152 @@ class DumlTransport {
             socket.connect(InetSocketAddress(HOST, port), CONNECT_TIMEOUT_MS)
             socket.soTimeout = 200
 
-            val buffer = StringBuilder()
-            val buf = ByteArray(4096)
+            val acc = ByteArrayOutputStream()
+            val buf = ByteArray(8192)
             val input = socket.getInputStream()
             val deadline = System.currentTimeMillis() + timeoutMs
 
-            while (System.currentTimeMillis() < deadline) {
+            while (System.currentTimeMillis() < deadline && acc.size() < 524288) {
                 try {
                     val n = input.read(buf)
                     if (n > 0) {
-                        // Use ISO-8859-1 for 1:1 byte-to-char mapping — DUML
-                        // telemetry is binary and UTF-8 decoding corrupts
-                        // byte sequences that look like multi-byte chars.
-                        buffer.append(String(buf, 0, n, Charsets.ISO_8859_1))
-                        extractAircraftIdentity(buffer)?.let { return it }
-                        if (buffer.length > SERIAL_SCAN_BUFFER_LIMIT) {
-                            buffer.delete(0, buffer.length - SERIAL_SCAN_OVERLAP)
-                        }
-                    }
+                        acc.write(buf, 0, n)
+                        val s = extractSerialAdvanced(acc.toByteArray())
+                        if (s.isNotEmpty()) return s
+                    } else if (n < 0) break
                 } catch (_: IOException) { /* read timeout — keep trying */ }
             }
         } catch (_: IOException) { /* connection failed */ }
         finally { try { socket?.close() } catch (_: IOException) {} }
         return ""
+    }
+
+    /**
+     * Actively asks the aircraft (then the controller radio) for its serial by
+     * sending a version/serial inquiry and reading the reply. Used when passive
+     * telemetry does not surface the serial (the most common field failure).
+     */
+    fun probeSerialActive(perQueryMs: Int = 800, requestedPort: Int? = null): String {
+        val port = requestedPort ?: findWorkingPort()
+        for (dst in serialQueryTargets) {
+            for (cmdId in serialQueryCmdIds) {
+                val frame = serialQueryBuilder.buildFrame(
+                    DumlFrame(sender = 42, cmdType = 0x40, cmdSet = 0, cmdId = cmdId, dst = dst, payload = ByteArray(0))
+                )
+                val raw = sendAndReadRaw(frame, perQueryMs, port)
+                if (raw.isEmpty()) continue
+                val fromFrame = parseQueryResponse(raw, cmdId)
+                if (fromFrame.isNotEmpty()) return fromFrame
+                val fromScan = extractSerialAdvanced(raw)
+                if (fromScan.isNotEmpty()) return fromScan
+            }
+        }
+        return ""
+    }
+
+    /** Writes a frame then reads whatever the proxy returns within the window. */
+    private fun sendAndReadRaw(frame: ByteArray, windowMs: Int, port: Int): ByteArray {
+        var socket: Socket? = null
+        return try {
+            socket = Socket()
+            socket.connect(InetSocketAddress(HOST, port), CONNECT_TIMEOUT_MS)
+            socket.tcpNoDelay = true
+            socket.soTimeout = 120
+            socket.getOutputStream().apply { write(frame); flush() }
+            val input = socket.getInputStream()
+            val acc = ByteArrayOutputStream()
+            val buf = ByteArray(4096)
+            val deadline = System.currentTimeMillis() + windowMs
+            while (System.currentTimeMillis() < deadline && acc.size() < 65536) {
+                try {
+                    val n = input.read(buf)
+                    if (n > 0) acc.write(buf, 0, n) else if (n < 0) break
+                } catch (_: IOException) { /* keep reading until the window closes */ }
+            }
+            acc.toByteArray()
+        } catch (_: IOException) { ByteArray(0) }
+        finally { try { socket?.close() } catch (_: IOException) {} }
+    }
+
+    /**
+     * Parses DUML frames out of [data] and returns the serial from the first
+     * frame whose cmdSet is 0 and cmdId equals [expectCmdId] — taking the
+     * longest printable ASCII run (8–32 chars) in that frame's payload.
+     */
+    private fun parseQueryResponse(data: ByteArray, expectCmdId: Int): String {
+        var i = 0
+        while (i < data.size) {
+            if (data[i] != 0x55.toByte()) { i++; continue }
+            if (i + 13 > data.size) break
+            val len = (data[i + 1].toInt() and 0xFF) or ((data[i + 2].toInt() and 0x03) shl 8)
+            if (len < 13 || i + len > data.size) { i++; continue }
+            val cmdSet = data[i + 9].toInt() and 0xFF
+            val cmdId = data[i + 10].toInt() and 0xFF
+            if (cmdSet == 0 && cmdId == expectCmdId) {
+                val payload = data.copyOfRange(i + 11, i + len - 2)
+                val s = longestPrintable(payload, 8, 32)
+                if (isValidSerial(s)) return s
+            }
+            i += len
+        }
+        return ""
+    }
+
+    /**
+     * Extracts a serial from raw bytes using our existing regex optimizations,
+     * then after reassembling 55 CC 30 75 chunks.
+     */
+    private fun extractSerialAdvanced(data: ByteArray): String {
+        extractAircraftIdentity(String(data, Charsets.ISO_8859_1))?.let { return it }
+        val reassembled = reassembleChunks(data)
+        if (reassembled.isNotEmpty()) {
+            extractAircraftIdentity(String(reassembled, Charsets.ISO_8859_1))?.let { return it }
+        }
+        return ""
+    }
+
+    /** Reassembles 55 CC 30 75 [len:u32 LE] [payload] chunks into one buffer. */
+    private fun reassembleChunks(data: ByteArray): ByteArray {
+        val out = ByteArrayOutputStream()
+        var i = indexOf(data, CHUNK_MAGIC, 0)
+        while (i in 0..(data.size - 8)) {
+            val len = (data[i + 4].toInt() and 0xFF) or ((data[i + 5].toInt() and 0xFF) shl 8) or
+                      ((data[i + 6].toInt() and 0xFF) shl 16) or ((data[i + 7].toInt() and 0xFF) shl 24)
+            val start = i + 8
+            val end = if (len in 1..data.size && start + len <= data.size) start + len else start
+            if (end > start) out.write(data, start, end - start)
+            i = indexOf(data, CHUNK_MAGIC, maxOf(end, i + 9))
+        }
+        return out.toByteArray()
+    }
+
+    private fun indexOf(haystack: ByteArray, needle: ByteArray, from: Int): Int {
+        if (needle.isEmpty()) return -1
+        var i = maxOf(from, 0)
+        val last = haystack.size - needle.size
+        while (i <= last) {
+            var j = 0
+            while (j < needle.size && haystack[i + j] == needle[j]) j++
+            if (j == needle.size) return i
+            i++
+        }
+        return -1
+    }
+
+    private fun longestPrintable(data: ByteArray, min: Int, max: Int): String {
+        var best = ""
+        val sb = StringBuilder()
+        for (b in data) {
+            val c = b.toInt() and 0xFF
+            if (c in 33..126) {
+                sb.append(c.toChar())
+            } else {
+                if (sb.length in min..max && sb.length > best.length) best = sb.toString()
+                sb.setLength(0)
+            }
+        }
+        if (sb.length in min..max && sb.length > best.length) best = sb.toString()
+        return best
     }
 
     /**
@@ -905,6 +1036,15 @@ class DumlTransport {
         )
 
         /** Extracts the safest known identity forms from a binary telemetry window. */
+        internal val CHUNK_MAGIC = byteArrayOf(0x55, 0xCC.toByte(), 0x30, 0x75)
+
+        fun isValidSerial(serial: String?): Boolean {
+            if (serial.isNullOrBlank()) return false
+            if (serial.equals("unknown", ignoreCase = true)) return false
+            if (serial.length < 8 || serial.length > 32) return false
+            return serial.all { it.isLetterOrDigit() }
+        }
+
         internal fun extractAircraftIdentity(buffer: CharSequence): String? {
             return FULL_SERIAL_REGEX.find(buffer)?.value
                 ?: RC2_SERIAL_SUFFIX_REGEX.find(buffer)?.value

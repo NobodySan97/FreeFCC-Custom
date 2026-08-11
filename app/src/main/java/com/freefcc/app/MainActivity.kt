@@ -500,8 +500,41 @@ private fun FccPage(state: AppState, viewModel: FccViewModel) {
             }
 
             if (state.isConnected) {
+                Spacer(Modifier.height(16.dp))
+                var serialField by remember(state.aircraftSerial, state.manualSerial) {
+                    mutableStateOf(state.manualSerial.ifEmpty { state.aircraftSerial })
+                }
+                OutlinedTextField(
+                    value = serialField,
+                    onValueChange = { serialField = it.trim() },
+                    label = { Text("Seriale Drone (per FCC 4G)") },
+                    placeholder = { Text("auto-rilevato, o digitalo a mano") },
+                    singleLine = true,
+                    enabled = !state.isHardwareBusy,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite,
+                        focusedBorderColor = Amber,
+                        unfocusedBorderColor = TextGray,
+                        focusedLabelColor = Amber,
+                        unfocusedLabelColor = TextGray,
+                        focusedPlaceholderColor = TextGray,
+                        unfocusedPlaceholderColor = TextGray,
+                        cursorColor = Amber
+                    )
+                )
                 Spacer(Modifier.height(8.dp))
-                SerialRow(state.aircraftSerial, enabled = !state.isHardwareBusy) { viewModel.probeSerial() }
+                GlowButton(
+                    if (state.isProbingSerial) "Lettura seriale in corso…" else "Leggi seriale dal drone",
+                    Cyan, filled = false, enabled = !state.isHardwareBusy
+                ) { viewModel.probeSerial() }
+                if (serialField.isNotBlank() && serialField != state.manualSerial) {
+                    Spacer(Modifier.height(8.dp))
+                    GlowButton("Usa questo seriale", Cyan, filled = false, enabled = !state.isHardwareBusy) {
+                        viewModel.setManualSerial(serialField)
+                    }
+                }
             }
         }
 
