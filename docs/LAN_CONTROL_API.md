@@ -86,6 +86,13 @@ DUML Home Point listener.
 Aircraft identity is split into `aircraft_model_code` (for example `WA530`) and
 `aircraft_serial` (full factory S/N or the best serial form observed). Cached
 display values never bypass the fresh identity requirement for a 4G send.
+The DJI Fly Accessibility service allows one background identity probe on
+`40007` when the UI first reports a stable aircraft link. It does not re-read
+identity on a timer or after Home Point. A disconnect shorter than 10 seconds
+does not re-arm the probe; after a stable disconnect, the next link gets one new
+probe. The automatic S/N read makes at most two `600 ms` request/response
+attempts and never adds a passive model-listen window; model discovery remains
+screen-only. Manual serial/GPS/LED/4G actions can still open `40007` explicitly.
 
 ## Bounded OpenFCC/DJI logcat capture
 

@@ -520,6 +520,42 @@ response. Только тогда разбирать outer envelope и пров�
 6. Успех означает изменение реального Enhanced Transmission state/link, а не
    только 128 успешных socket writes.
 
+## Live RC2 + Air 3S 2026-08-12: двухминутные обрывы `40007`
+
+Устройство: RC2 `rc331`, DJI Fly `1.21.8`, Air 3S `WA234`, FreeFCC `1.5.77`.
+LAN accessibility log зафиксировал краткие `N/A`/`Пульт не подключен к мобильному
+устройству` в `13:47:08`, `13:49:08`, `13:51:12`, `13:53:19`, `13:55:21`;
+следующее срабатывание пришло с первым подходящим UI event в `13:58:17`.
+
+**ROOT CAUSE:** `AircraftIdentityProbePolicy.VERIFY_INTERVAL_MS = 2 min`
+переоткрывал фоновую проверку S/N. `captureAircraftSerialFromDuml()` захватывал
+`40007`, отправлял `00:51` и ждал ответ до `600 ms`, максимум две попытки.
+Код уже предупреждал, что удержание `40007` лишает DJI Fly aircraft link.
+
+Home Point создавал второй путь к той же ошибке: после события identity policy
+разрешал отдельное чтение `40007`. В первом эпизоде Home Point принят в
+`13:38:15`, FCC-профиль завершён на `40009` в `13:38:21`, S/N прочитан в
+`13:38:23`, а disconnect появился в `13:38:27`. Повторные FCC writes на `40009`
+сами по себе обрыв не воспроизвели; в Home Point режиме обрыв в `13:47:08`
+произошёл без FCC write/readback рядом с ним.
+
+Исправление подготовлено для FreeFCC `1.5.78`:
+
+- удалены интервальные и Home Point-triggered identity windows;
+- DJI Fly UI классифицирует устойчивое подключение/отключение;
+- на одно реальное link session разрешён один identity probe `40007`;
+- краткий disconnect менее `10 s` не переармит probe;
+- после устойчивого отключения следующее подключение получает один новый probe;
+- probe ограничен двумя S/N request/response попытками по `600 ms`, без
+  дополнительного пассивного model-listen;
+- Home Point только сигнализирует FCC writer и не запускает identity read.
+
+Статус evidence: причина **OBSERVED + SOURCE-CONFIRMED**. Исправление прошло
+unit tests, Android lint, debug и minified release build, но ещё не
+устанавливалось на RC2 и требует live A/B проверки новой APK: после единственного
+стартового probe не должно быть новых `N/A` через 2 минуты и не должно быть
+identity probe после Home Point.
+
 ## Критерии закрытия
 
 - Любой новый TCP wrapper можно проверить через LAN без APK rebuild.

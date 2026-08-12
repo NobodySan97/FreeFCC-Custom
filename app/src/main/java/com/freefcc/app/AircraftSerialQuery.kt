@@ -70,89 +70,6 @@ internal object AircraftSerialProtocol {
     }
 }
 
-/**
- * Combines what the aircraft answered with what listening on the bus adds.
- *
- * The query returns a serial and nothing else, while the passive listen is the
- * only place a model arrives over the bus. Keeping the two apart lets the
- * listen — and the port it holds — be skipped once neither is missing.
- */
-internal object AircraftIdentitySources {
-
-    /**
-     * True when listening can still add something the query did not answer.
-     *
-     * A stored model counts only while it belongs to the aircraft that just
-     * answered. Treating any stored model as known would pair a newly read
-     * serial with the previous aircraft's model — the swap leaves the model
-     * behind, the query returns the new serial, and nothing ever listens to
-     * correct it.
-     */
-    fun needsListen(
-        queriedSerial: String,
-        storedSerial: String,
-        storedModelCode: String
-    ): Boolean {
-        val identityComplete = storedSerial.isNotEmpty() && storedModelCode.isNotEmpty()
-        // An unanswered query is not a reason to listen when there is nothing
-        // left to discover. Listening on every missed answer turned the
-        // two-minute verification into a burst: the window stays open, retries
-        // every ten seconds for a minute, and each retry holds the port for the
-        // whole listen. One request that went unanswered just means asking
-        // again on the next beat.
-        if (queriedSerial.isEmpty()) return !identityComplete
-        if (storedModelCode.isEmpty()) return true
-        return !AircraftSerialForms.sameAircraft(queriedSerial, storedSerial)
-    }
-
-    /**
-     * True when the window has done all it can and should close rather than
-     * retry on the ten-second beat.
-     */
-    fun verificationSettled(
-        queriedSerial: String,
-        storedSerial: String,
-        storedModelCode: String
-    ): Boolean = queriedSerial.isEmpty() &&
-        storedSerial.isNotEmpty() &&
-        storedModelCode.isNotEmpty()
-
-    /**
-     * The query's serial wins; the model can only come from the listen.
-     *
-     * A model is taken only when the listen did not name a different aircraft.
-     * Port 40007 still carries frames from the aircraft that was just
-     * unplugged, and pairing those with the serial we asked for is how a
-     * mismatched identity gets stored and reported.
-     */
-    fun merge(
-        queriedSerial: String,
-        listened: AircraftLinkIdentity?,
-        storedSerial: String = ""
-    ): AircraftLinkIdentity {
-        val listenedSerial = listened?.serial.orEmpty()
-        val swapped = queriedSerial.isNotEmpty() &&
-            storedSerial.isNotEmpty() &&
-            !AircraftSerialForms.sameAircraft(queriedSerial, storedSerial)
-        val modelNamesThisAircraft = when {
-            // The listen said whose model it is, so take it at its word.
-            listenedSerial.isNotEmpty() && queriedSerial.isNotEmpty() ->
-                AircraftSerialForms.sameAircraft(queriedSerial, listenedSerial)
-            listenedSerial.isNotEmpty() -> true
-            // Nothing attributed it. Right after a swap the bus is still
-            // repeating the aircraft that left, and pairing its model with the
-            // serial we asked for is what makes a mixed identity stick. Any
-            // other time there is nothing to contradict, and the model is read
-            // again on the next discovery beat anyway.
-            else -> !swapped
-        }
-        return AircraftLinkIdentity(
-            serial = queriedSerial.ifEmpty { listenedSerial },
-            model = listened?.model.takeIf { modelNamesThisAircraft }
-        )
-    }
-}
-
 /** Runs the `00:51` serial query over the LED port with bounded retries. */
 internal object AircraftSerialQueryRunner {
 
@@ -163,13 +80,11 @@ internal object AircraftSerialQueryRunner {
     const val DEFAULT_ATTEMPTS = 3
 
     /**
-     * Fewer attempts than the button, but not one: measured live, a single
-     * request is answered about a third of the time, so one attempt would
-     * leave most background windows empty and the next check two minutes away.
-     * The window still pays for every millisecond it holds 40007, so this
-     * stays well short of the button's budget.
+     * The link-session probe gets two attempts because a single request is
+     * answered only about a third of the time. Success returns immediately;
+     * a miss is not retried until a real disconnect/reconnect.
      */
-    const val BACKGROUND_ATTEMPTS = 2
+    const val LINK_SESSION_ATTEMPTS = 2
 
     private const val READ_WINDOW_MS = 600
 
