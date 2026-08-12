@@ -209,19 +209,20 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         return true
     }
 
-    /**
-     * Resolves the product code for a model the screen named but did not code,
-     * with one short passive window. Runs at most once per model name: with the
-     * aircraft off the ports stay silent anyway, so there is nothing to retry.
-     * No DUML command is written.
-     */
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+
+    override fun onDestroy() {
+        super.onDestroy()
+        kotlinx.coroutines.cancel(scope)
+    }
+
     private fun captureAircraftCodeFromDuml(modelName: String) {
         if (modelName == codeProbeDoneForName) return
         if (!modelCaptureBusy.compareAndSet(false, true)) return
         codeProbeDoneForName = modelName
         val prefs = getSharedPreferences("freefcc", Context.MODE_PRIVATE)
 
-        thread(name = "FreeFCC-aircraft-model", isDaemon = true) {
+        kotlinx.coroutines.launch(scope) {
             try {
                 val identity = AircraftModelProbe.capture(
                     FccRuntime.tracker.state.value.controllerPort
@@ -231,7 +232,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
                         "Aircraft code lookup for $modelName: " +
                             "no 00:82/03:34 identity on known ports"
                     )
-                    return@thread
+                    return@launch
                 }
 
                 prefs.edit().apply {

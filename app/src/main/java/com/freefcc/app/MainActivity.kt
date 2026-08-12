@@ -88,7 +88,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        AppForegroundService.start(this)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || 
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            AppForegroundService.start(this)
+        }
         requestNotificationPermissionIfNeeded()
         requestBatteryExemptionOnce()
         viewModel.init()
@@ -521,8 +524,22 @@ private fun SystemPermissionsCard(
     onRequestAccessibility: () -> Unit,
     onRequestOverlay: () -> Unit
 ) {
-    val isAccessEnabled = remember(context) { FccKeepaliveService.isDjiFlyTextAccessEnabled(context) }
-    val isOverlayEnabled = remember(context) { Settings.canDrawOverlays(context) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var isAccessEnabled by remember { mutableStateOf(FccKeepaliveService.isDjiFlyTextAccessEnabled(context)) }
+    var isOverlayEnabled by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                isAccessEnabled = FccKeepaliveService.isDjiFlyTextAccessEnabled(context)
+                isOverlayEnabled = Settings.canDrawOverlays(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     GlowCard {
         Text("Stato Sistema & Permessi", color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -903,54 +920,108 @@ private fun DiagnosticsPage(state: AppState, viewModel: FccViewModel) {
         GlowCard {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Wifi, null, tint = Cyan, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("LAN Control Bridge", color = TextWhite, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "Live status, commands and logs · private Wi-Fi",
-                        color = TextGray,
-                        fontSize = 11.sp
-                    )
-                }
-                if (state.isLanLogStarting) {
-                    CircularProgressIndicator(color = Cyan, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                } else {
-                    Switch(
-                        checked = state.lanLogUrl.isNotEmpty(),
-                        onCheckedChange = viewModel::setLanLoggingEnabled
-                    )
-                }
-            }
-            if (state.lanLogMessage.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                BodyText(
-                    state.lanLogMessage,
-                    if (state.lanLogMessage.contains("failed", ignoreCase = true)) Red else TextGray
-                )
-            }
-            if (state.lanLogUrl.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                BodyText("Codex can discover this controller through the UDP beacon; no link copying is needed.", TextDim)
-            }
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = PageHorizontalPadding)
+            .padding(bottom = BottomNavHeight + PageBottomPadding),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        item {
+            Spacer(Modifier.height(PageTopPadding))
+            PageTitle("Diagnostics & Logs", Icons.Outlined.Info)
+            Spacer(Modifier.height(8.dp))
         }
 
-        Spacer(Modifier.height(SectionSpacing))
-
-        GlowCard {
-            if (state.logMessages.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    BodyText("No activity yet.", TextDim)
+        item {
+            GlowCard {
+                Text("Technical details", color = TextWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(6.dp))
+                InfoRow("App version", FccViewModel.APP_VERSION)
+                Spacer(Modifier.height(4.dp))
+                DividerLine()
+                Spacer(Modifier.height(4.dp))
+                InfoRow("Controller code", state.controllerModel.ifEmpty { "Not detected" })
+                Spacer(Modifier.height(4.dp))
+                DividerLine()
+                Spacer(Modifier.height(4.dp))
+                InfoRow(
+                    "Last aircraft model",
+                    state.aircraftModelName.ifEmpty {
+                        state.aircraftModelCode.ifEmpty { "Not detected" }
+                    }
+                )
+                Spacer(Modifier.height(4.dp))
+                DividerLine()
+                Spacer(Modifier.height(4.dp))
+                InfoRow("Last aircraft code", state.aircraftModelCode.ifEmpty { "Not detected" })
+                Spacer(Modifier.height(4.dp))
+                DividerLine()
+                Spacer(Modifier.height(4.dp))
+                InfoRow("Last aircraft S/N", state.aircraftSerial.ifEmpty { "Not detected" })
+                if (state.lanLogUrl.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    DividerLine()
+                    Spacer(Modifier.height(4.dp))
+                    InfoRow("LAN bridge", state.lanLogUrl)
                 }
-            } else {
-                Column(
-                    Modifier.fillMaxWidth()
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { viewModel.refreshAircraftIdentity() },
+                    enabled = !state.isHardwareBusy,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)
                 ) {
+                    Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Refresh aircraft identity")
+                }
+            }
+            Spacer(Modifier.height(SectionSpacing))
+        }
+
+        item {
+            GlowCard {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Wifi, null, tint = Cyan, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("LAN Control Bridge", color = TextWhite, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Live status, commands and logs · private Wi-Fi",
+                            color = TextGray,
+                            fontSize = 11.sp
+                        )
+                    }
+                    if (state.isLanLogStarting) {
+                        CircularProgressIndicator(color = Cyan, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                    } else {
+                        Switch(
+                            checked = state.lanLogUrl.isNotEmpty(),
+                            onCheckedChange = viewModel::setLanLoggingEnabled
+                        )
+                    }
+                }
+                if (state.lanLogMessage.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    BodyText(
+                        state.lanLogMessage,
+                        if (state.lanLogMessage.contains("failed", ignoreCase = true)) Red else TextGray
+                    )
+                }
+                if (state.lanLogUrl.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    BodyText("Codex can discover this controller through the UDP beacon; no link copying is needed.", TextDim)
+                }
+            }
+            Spacer(Modifier.height(SectionSpacing))
+        }
+
+        item {
+            if (state.logMessages.isEmpty()) {
                     state.logMessages.forEachIndexed { index, entry ->
                         val color = when {
                             entry.contains("enabled", true) ||
@@ -1327,7 +1398,10 @@ private fun ModeBadge(state: AppState) {
             if (active) {
                 Icon(
                     Icons.Outlined.Info, null, tint = Amber,
-                    modifier = Modifier.size(24.dp).scale(checkScale.value)
+                    modifier = Modifier.size(24.dp).graphicsLayer {
+                        scaleX = checkScale.value
+                        scaleY = checkScale.value
+                    }
                 )
             } else {
                 Icon(
@@ -1504,11 +1578,12 @@ private fun SerialRow(serial: String, enabled: Boolean = true, onRefresh: () -> 
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
-            Box(
-                modifier = Modifier.offset {
-                    androidx.compose.ui.unit.IntOffset(0, if (isConnected) bobbingState.value.dp.roundToPx() else 0)
-                }
-            ) {
+        Box(
+            modifier = Modifier.graphicsLayer {
+                val offset = if (isConnected) bobbingState.value else 0f
+                translationY = offset * density
+            }
+        ) {
                 Icon(
                     Icons.Filled.Flight,
                     null,
@@ -1599,8 +1674,12 @@ private fun PulsingStatusDot(
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size((sizeDp + 4).dp)) {
         Box(
             modifier = Modifier
-                .size((sizeDp * scale).dp)
-                .alpha(alpha * 0.45f)
+                .size(sizeDp.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    this.alpha = alpha * 0.45f
+                }
                 .background(color, CircleShape)
         )
         Box(

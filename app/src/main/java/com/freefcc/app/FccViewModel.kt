@@ -532,6 +532,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 }
                 log("LAN control bridge ready at ${endpoint.address}:${endpoint.port} (password hidden from log)")
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 networkLogServer.close()
                 val reason = e.message ?: e.javaClass.simpleName
                 update { copy(isLanLogStarting = false, lanLogUrl = "", lanLogMessage = "LAN control bridge failed: $reason") }
@@ -767,6 +768,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                     log("FCC apply failed — writes failed")
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 FccRuntime.tracker.state.value.lastApplyAttempt
                     ?.takeIf { it.origin == FccApplyOrigin.MANUAL && it.finishedAtMs == null }
                     ?.let { attempt ->
@@ -804,6 +806,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             )
             true
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             log("Could not start Auto FCC: ${e.message}")
             update {
                 copy(
@@ -1014,6 +1017,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                     log("4G activation failed — at least one frame write failed on the Unix socket")
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 log("4G activation error: ${e.message}")
                 update { copy(is4gBusy = false, fourGMessage = "4G error: ${e.message}") }
             } finally {
@@ -1087,6 +1091,7 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 log("GPS read error: ${e.message}")
                 update {
                     copy(
@@ -2617,7 +2622,10 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         prefs.unregisterOnSharedPreferenceChangeListener(preferenceListener)
-        if (activeLanController?.get() === this) activeLanController = null
+        if (activeLanController?.get() === this) {
+            activeLanController = null
+            networkLogServer.close()
+        }
         super.onCleared()
     }
 
