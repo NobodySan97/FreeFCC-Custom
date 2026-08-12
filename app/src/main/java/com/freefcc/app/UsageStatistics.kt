@@ -317,6 +317,7 @@ internal object UsageStatistics {
     private const val PREFS_NAME = "usage_statistics"
     private const val PREF_INSTALLATION_ID = "installation_id"
     private const val PREF_REPORT_SEQUENCE = "report_sequence"
+    private const val PREF_PENDING_REPORT_PAYLOAD = "pending_report_payload"
     private const val PREF_LAST_SUCCESS_AT = "last_success_at"
     private const val PREF_LAST_ATTEMPT_AT = "last_attempt_at"
     private const val PREF_CONTROLLER_SERIAL = "controller_serial"
@@ -439,6 +440,12 @@ internal object UsageStatistics {
             .filter { it.startsWith("https://") }
             .distinct()
 
+    internal fun deliveryComplete(results: List<Boolean>): Boolean =
+        results.isNotEmpty() && results.all { it }
+
+    internal fun payloadForAttempt(pendingPayload: String, freshPayload: String): String =
+        pendingPayload.ifEmpty { freshPayload }
+
     private fun uploadIfDue(
         context: Context,
         endpoints: List<String>,
@@ -447,31 +454,41 @@ internal object UsageStatistics {
     ) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
+        val pendingPayload = prefs.getString(PREF_PENDING_REPORT_PAYLOAD, "").orEmpty()
         if (!shouldUpload(
                 now = now,
                 lastSuccessAt = prefs.getLong(PREF_LAST_SUCCESS_AT, 0L),
                 lastAttemptAt = prefs.getLong(PREF_LAST_ATTEMPT_AT, 0L),
                 force = force,
-                networkRestored = networkRestored
+                networkRestored = networkRestored,
+                pendingReport = pendingPayload.isNotEmpty()
             )
         ) return
         prefs.edit().putLong(PREF_LAST_ATTEMPT_AT, now).apply()
 
-        val payload = buildPayload(context)
+        val hadPendingPayload = pendingPayload.isNotEmpty()
+        val payload = payloadForAttempt(
+            pendingPayload = pendingPayload,
+            freshPayload = if (hadPendingPayload) "" else buildPayload(context)
+        )
+        if (!hadPendingPayload) {
+            // Persist before the first request: retrying a rebuilt body with the
+            // same sequence would correctly be rejected as replay_conflict.
+            if (!prefs.edit().putString(PREF_PENDING_REPORT_PAYLOAD, payload).commit()) return
+        }
         val payloadBytes = payload.toByteArray(Charsets.UTF_8)
         // Один и тот же отчёт с одним report_sequence уходит на все адреса,
-        // чтобы базы приёмников содержали одно и то же. Недоступность одного из
-        // них не отменяет отправку на остальные: счётчики абсолютные, поэтому
-        // пропущенный отчёт догоняется следующим.
-        var accepted = false
-        for (endpoint in endpoints) {
-            accepted = post(endpoint, payloadBytes) || accepted
-        }
-        if (accepted) {
+        // и остаётся сохранённым до подтверждения от каждого приёмника.
+        val results = endpoints.map { endpoint -> post(endpoint, payloadBytes) }
+        if (deliveryComplete(results)) {
             prefs.edit()
                 .putLong(PREF_LAST_SUCCESS_AT, now)
                 .putLong(PREF_REPORT_SEQUENCE, prefs.getLong(PREF_REPORT_SEQUENCE, 0L) + 1L)
+                .remove(PREF_PENDING_REPORT_PAYLOAD)
                 .apply()
+            // Пока старый отчёт догонял второй сервер, состояние могло
+            // измениться. Следом один раз отправляем уже актуальный снимок.
+            if (hadPendingPayload) forcedUploadPending.set(true)
         }
     }
 
@@ -584,12 +601,13 @@ internal object UsageStatistics {
         lastSuccessAt: Long,
         lastAttemptAt: Long,
         force: Boolean,
-        networkRestored: Boolean = false
+        networkRestored: Boolean = false,
+        pendingReport: Boolean = false
     ): Boolean {
         if (force) return true
         // One report a day, unchanged. This is the cadence the app documents
         // and the only thing that bounds how often anything is sent.
-        if (isWithin(now, lastSuccessAt, UPLOAD_INTERVAL_MS)) return false
+        if (!pendingReport && isWithin(now, lastSuccessAt, UPLOAD_INTERVAL_MS)) return false
         // An attempt newer than the last success is an attempt that failed.
         // A link coming back is a new chance at it, and waiting out the hourly
         // backoff would waste that chance: the controller is powered for one

@@ -303,6 +303,26 @@ class UsageStatisticsTest {
             emptyList<String>(),
             UsageStatistics.endpoints("http://one.example/api/v1/statistics", "  ")
         )
+        assertTrue(UsageStatistics.deliveryComplete(listOf(true, true)))
+        assertFalse(UsageStatistics.deliveryComplete(listOf(true, false)))
+        assertFalse(UsageStatistics.deliveryComplete(emptyList()))
+        assertEquals(
+            "pending-payload",
+            UsageStatistics.payloadForAttempt("pending-payload", "fresh-payload")
+        )
+        assertEquals(
+            "fresh-payload",
+            UsageStatistics.payloadForAttempt("", "fresh-payload")
+        )
+        assertTrue(
+            UsageStatistics.shouldUpload(
+                now = 7_200_000L,
+                lastSuccessAt = 6_900_000L,
+                lastAttemptAt = 1L,
+                force = false,
+                pendingReport = true
+            )
+        )
     }
 
     @Test

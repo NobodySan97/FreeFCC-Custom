@@ -1,7 +1,9 @@
 package com.freefcc.app
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AircraftModelCatalogTest {
@@ -113,6 +115,9 @@ class AircraftModelCatalogTest {
             "DJI Care Refresh",
             "DJI Store",
             "DJI Inc",
+            "DJI Lito",
+            "DJI Simulator",
+            "DJI Global Creator Community",
             "DJI RC Pro 2",
             "DJI Goggles 3"
         ).forEach { label ->
@@ -136,6 +141,7 @@ class AircraftModelCatalogTest {
         // with `product_official_name_UAV165` = `DJI Lito X1`.
         assertEquals("DJI Lito X1", AircraftModelCatalog.nameForCode("WA151"))
         assertEquals("DJI Lito 1", AircraftModelCatalog.nameForCode("WA152"))
+        assertEquals("WA151", AircraftModelCatalog.findOnScreen(listOf("DJI Lito X1"))?.code)
         assertEquals("DJI Neo 2", AircraftModelCatalog.nameForCode("WA020"))
         assertEquals("DJI Mini 2 SE", AircraftModelCatalog.nameForCode("WM1615"))
         assertEquals("DJI Mini 4K", AircraftModelCatalog.nameForCode("WM1617"))
@@ -191,5 +197,33 @@ class AircraftModelCatalogTest {
         ).forEach { screen ->
             assertNull(screen.toString(), AircraftModelCatalog.findOnScreen(screen))
         }
+    }
+
+    @Test
+    fun knownProductCodeOutranksAnUnrelatedDjiLabelOnTheSameScreen() {
+        val match = AircraftModelCatalog.findOnScreen(listOf("DJI Lito", "WA530"))
+
+        assertEquals("WA530", match?.code)
+        assertEquals("DJI Avata 360", match?.name)
+    }
+}
+
+class AircraftModelObservationGateTest {
+    @Test
+    fun aChangedNameNeedsTwoObservationsAtLeastASecondApart() {
+        val gate = AircraftModelObservationGate(confirmationMs = 1_000L)
+
+        assertFalse(gate.accepts(storedName = "DJI Air 3S", observedName = "DJI Zephyr 9", 0L))
+        assertFalse(gate.accepts(storedName = "DJI Air 3S", observedName = "DJI Zephyr 9", 999L))
+        assertTrue(gate.accepts(storedName = "DJI Air 3S", observedName = "DJI Zephyr 9", 1_000L))
+    }
+
+    @Test
+    fun aDifferentCandidateRestartsConfirmationAndTheStoredNameNeedsNone() {
+        val gate = AircraftModelObservationGate(confirmationMs = 1_000L)
+
+        assertFalse(gate.accepts("DJI Air 3S", "DJI Zephyr 9", 0L))
+        assertFalse(gate.accepts("DJI Air 3S", "DJI Borealis 2", 2_000L))
+        assertTrue(gate.accepts("DJI Air 3S", "DJI Air 3S", 2_001L))
     }
 }

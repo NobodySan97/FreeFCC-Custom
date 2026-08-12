@@ -74,4 +74,11 @@ internal class DjiFlyLinkSessionProbeGate(
             }
         }
     }
+
+    /** A confirmed screen-model change is a new aircraft even without another UI disconnect. */
+    @Synchronized
+    fun rearmForConfirmedAircraftChange() {
+        probeSpent = false
+        disconnectedAtMs = null
+    }
 }

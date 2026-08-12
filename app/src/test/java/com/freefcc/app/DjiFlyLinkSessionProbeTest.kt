@@ -81,4 +81,14 @@ class DjiFlyLinkSessionProbeGateTest {
         assertTrue(gate.onUiState(DjiFlyLinkUiState.CONNECTED, 20_000L))
         assertFalse(gate.onUiState(DjiFlyLinkUiState.CONNECTED, 200_000L))
     }
+
+    @Test
+    fun aConfirmedAircraftChangeRearmsExactlyOneProbe() {
+        val gate = DjiFlyLinkSessionProbeGate()
+
+        assertTrue(gate.onUiState(DjiFlyLinkUiState.CONNECTED, 1_000L))
+        gate.rearmForConfirmedAircraftChange()
+        assertTrue(gate.onUiState(DjiFlyLinkUiState.CONNECTED, 2_000L))
+        assertFalse(gate.onUiState(DjiFlyLinkUiState.CONNECTED, 3_000L))
+    }
 }

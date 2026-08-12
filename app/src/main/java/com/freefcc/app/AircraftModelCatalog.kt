@@ -115,8 +115,11 @@ internal object AircraftModelCatalog {
         "CARE", "FORUM", "ACADEMY", "SUPPORT", "SERVICE", "VIRTUAL", "GOGGLES",
         "MOTION", "RC", "RM", "GL", "MIC", "OSMO", "POCKET", "ACTION", "POWER",
         "TERRA", "CELLULAR", "TRANSMISSION", "SDK", "INC", "LTD", "LIMITED",
-        "COMPANY", "TECHNOLOGY"
+        "COMPANY", "TECHNOLOGY", "SIMULATOR", "GLOBAL"
     )
+
+    /** Generic DJI Fly captions that look like model names but are not aircraft. */
+    private val NON_AIRCRAFT_NAMES = setOf("DJI LITO")
 
     /**
      * Families that never name an aircraft by themselves — every member
@@ -162,9 +165,13 @@ internal object AircraftModelCatalog {
 
         val haystack = labels.joinToString(" | ").uppercase(Locale.US)
         val code = CODE_REGEX.find(haystack)?.value.orEmpty()
-        val name = screenName(labels)
-            ?: ALIASES.firstOrNull { containsWord(haystack, it.first) }?.second
-            ?: nameForCode(code)
+        // A product code is a stronger identity than an unrelated generic DJI
+        // caption elsewhere on the screen.
+        val name = nameForCode(code).ifEmpty {
+            screenName(labels)
+                ?: ALIASES.firstOrNull { containsWord(haystack, it.first) }?.second
+                ?: ""
+        }
 
         val resolvedCode = code.ifEmpty { CODE_BY_NAME[normalize(name)].orEmpty() }
         return if (resolvedCode.isEmpty() && name.isEmpty()) {
@@ -208,6 +215,7 @@ internal object AircraftModelCatalog {
 
     private fun isAircraftName(value: String): Boolean {
         if (value.length > 28 || !PRODUCT_NAME_REGEX.matches(value)) return false
+        if (normalize(value) in NON_AIRCRAFT_NAMES) return false
         val words = value.split(' ')
         if (words.size < 2) return false
         val family = words[1].uppercase(Locale.US)
@@ -250,4 +258,27 @@ internal object AircraftModelCatalog {
 
     private fun isWordChar(value: Char?): Boolean =
         value != null && (value.isLetterOrDigit())
+}
+
+/** Requires a changed screen model to remain visible before it replaces stored identity. */
+internal class AircraftModelObservationGate(
+    private val confirmationMs: Long = 1_000L
+) {
+    private var candidateName = ""
+    private var candidateSinceMs = 0L
+
+    @Synchronized
+    fun accepts(storedName: String, observedName: String, nowMs: Long): Boolean {
+        if (observedName.isEmpty()) return false
+        if (observedName == storedName) {
+            candidateName = ""
+            return true
+        }
+        if (observedName != candidateName) {
+            candidateName = observedName
+            candidateSinceMs = nowMs
+            return false
+        }
+        return nowMs - candidateSinceMs >= confirmationMs
+    }
 }

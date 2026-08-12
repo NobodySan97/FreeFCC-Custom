@@ -109,7 +109,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
     private var lastUiHomePointMatchAtMs = 0L
     private val serialCaptureBusy = AtomicBoolean(false)
     private val linkSessionProbeGate = DjiFlyLinkSessionProbeGate()
-    @Volatile private var pendingSwapName = ""
+    private val modelObservationGate = AircraftModelObservationGate()
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -181,15 +181,15 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         val storedName = prefs.getString(FccViewModel.PREF_AIRCRAFT_MODEL_NAME, "").orEmpty()
         val code = AircraftModelCatalog.codeFor(match.name, match.code, storedName, storedCode)
         val name = match.name.ifEmpty { storedName.takeIf { code == storedCode }.orEmpty() }
+        if (!modelObservationGate.accepts(storedName, name, now)) return true
         val unchanged = code == storedCode && name == storedName
         // A confirmed swap to another aircraft invalidates the stored S/N: it
         // belongs to the previous one and would otherwise be reported next to
         // the new model. One sighting is not enough — DJI Fly screens list
         // other aircraft too, and a name flickering past would drop a serial
-        // that was read correctly. Require the new name twice in a row.
+        // that was read correctly. The observation gate requires one second.
         val nameChanged = storedName.isNotEmpty() && name.isNotEmpty() && name != storedName
-        val aircraftSwapped = nameChanged && name == pendingSwapName
-        pendingSwapName = if (nameChanged) name else ""
+        val aircraftSwapped = nameChanged
         val lastWriteAt = prefs.getLong(FccViewModel.PREF_AIRCRAFT_MODEL_AT, 0L)
         if (unchanged && now - lastWriteAt < MODEL_UI_REWRITE_MS) {
             return true
@@ -219,6 +219,11 @@ class DjiFlyAccessibilityService : AccessibilityService() {
             )
             putLong(FccViewModel.PREF_AIRCRAFT_MODEL_AT, now)
         }.apply()
+        if (aircraftSwapped) {
+            // The next connected UI snapshot performs one bounded serial query
+            // for the new aircraft. No timer or Home Point event can re-arm it.
+            linkSessionProbeGate.rearmForConfirmedAircraftChange()
+        }
         if (!unchanged) UsageStatistics.scheduleUpload(this, force = true)
         if (!unchanged) {
             FccViewModel.logServiceEvent(
@@ -353,8 +358,10 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         // Accessibility is screen-only. Port 40007 is reserved for explicit
         // link-session identity and manual diagnostics, never for a timer or
         // Home Point follow-up.
-        val serialReadFromUi = UsageStatistics.captureAircraftSerialFromUi(this, labels)
         captureAircraftModelFromUi("visible_ui", labels)
+        // Model first: a confirmed swap clears the previous S/N, then an S/N
+        // visible on this same screen can immediately populate the new one.
+        val serialReadFromUi = UsageStatistics.captureAircraftSerialFromUi(this, labels)
         if (identityProbeDue && !serialReadFromUi) {
             FccViewModel.logServiceEvent(
                 "Aircraft link connected: starting one identity probe on port 40007"
