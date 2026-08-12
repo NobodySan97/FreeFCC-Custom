@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
@@ -920,139 +921,77 @@ private fun DiagnosticsPage(state: AppState, viewModel: FccViewModel) {
         GlowCard {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = PageHorizontalPadding)
-            .padding(bottom = BottomNavHeight + PageBottomPadding),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        item {
-            Spacer(Modifier.height(PageTopPadding))
-            PageTitle("Diagnostics & Logs", Icons.Outlined.Info)
-            Spacer(Modifier.height(8.dp))
-        }
-
-        item {
-            GlowCard {
-                Text("Technical details", color = TextWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
-                InfoRow("App version", FccViewModel.APP_VERSION)
-                Spacer(Modifier.height(4.dp))
-                DividerLine()
-                Spacer(Modifier.height(4.dp))
-                InfoRow("Controller code", state.controllerModel.ifEmpty { "Not detected" })
-                Spacer(Modifier.height(4.dp))
-                DividerLine()
-                Spacer(Modifier.height(4.dp))
-                InfoRow(
-                    "Last aircraft model",
-                    state.aircraftModelName.ifEmpty {
-                        state.aircraftModelCode.ifEmpty { "Not detected" }
-                    }
-                )
-                Spacer(Modifier.height(4.dp))
-                DividerLine()
-                Spacer(Modifier.height(4.dp))
-                InfoRow("Last aircraft code", state.aircraftModelCode.ifEmpty { "Not detected" })
-                Spacer(Modifier.height(4.dp))
-                DividerLine()
-                Spacer(Modifier.height(4.dp))
-                InfoRow("Last aircraft S/N", state.aircraftSerial.ifEmpty { "Not detected" })
-                if (state.lanLogUrl.isNotEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    DividerLine()
-                    Spacer(Modifier.height(4.dp))
-                    InfoRow("LAN bridge", state.lanLogUrl)
-                }
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = { viewModel.refreshAircraftIdentity() },
-                    enabled = !state.isHardwareBusy,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)
-                ) {
-                    Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Refresh aircraft identity")
-                }
-            }
-            Spacer(Modifier.height(SectionSpacing))
-        }
-
-        item {
-            GlowCard {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Wifi, null, tint = Cyan, modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("LAN Control Bridge", color = TextWhite, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "Live status, commands and logs · private Wi-Fi",
-                            color = TextGray,
-                            fontSize = 11.sp
-                        )
-                    }
-                    if (state.isLanLogStarting) {
-                        CircularProgressIndicator(color = Cyan, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                    } else {
-                        Switch(
-                            checked = state.lanLogUrl.isNotEmpty(),
-                            onCheckedChange = viewModel::setLanLoggingEnabled
-                        )
-                    }
-                }
-                if (state.lanLogMessage.isNotEmpty()) {
-                    Spacer(Modifier.height(6.dp))
-                    BodyText(
-                        state.lanLogMessage,
-                        if (state.lanLogMessage.contains("failed", ignoreCase = true)) Red else TextGray
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Wifi, null, tint = Cyan, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("LAN Control Bridge", color = TextWhite, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Live status, commands and logs · private Wi-Fi",
+                        color = TextGray,
+                        fontSize = 11.sp
                     )
                 }
-                if (state.lanLogUrl.isNotEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    BodyText("Codex can discover this controller through the UDP beacon; no link copying is needed.", TextDim)
+                if (state.isLanLogStarting) {
+                    CircularProgressIndicator(color = Cyan, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                } else {
+                    Switch(
+                        checked = state.lanLogUrl.isNotEmpty(),
+                        onCheckedChange = viewModel::setLanLoggingEnabled
+                    )
                 }
             }
-            Spacer(Modifier.height(SectionSpacing))
+            if (state.lanLogMessage.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                BodyText(
+                    state.lanLogMessage,
+                    if (state.lanLogMessage.contains("failed", ignoreCase = true)) Red else TextGray
+                )
+            }
+            if (state.lanLogUrl.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                BodyText("Codex can discover this controller through the UDP beacon; no link copying is needed.", TextDim)
+            }
         }
+        Spacer(Modifier.height(SectionSpacing))
 
-        item {
+        GlowCard {
+            Text("Process Log", color = TextWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
             if (state.logMessages.isEmpty()) {
-                    state.logMessages.forEachIndexed { index, entry ->
-                        val color = when {
-                            entry.contains("enabled", true) ||
-                            entry.contains("connected", true) ||
-                            entry.contains("restored", true) ||
-                            entry.contains("received", true) -> Green
+                BodyText("No log messages yet.", TextDim)
+            } else {
+                state.logMessages.forEachIndexed { index, entry ->
+                    val color = when {
+                        entry.contains("enabled", true) ||
+                        entry.contains("connected", true) ||
+                        entry.contains("restored", true) ||
+                        entry.contains("received", true) -> Green
 
-                            entry.contains("fail", true) ||
-                            entry.contains("error", true) -> Red
+                        entry.contains("fail", true) ||
+                        entry.contains("error", true) -> Red
 
-                            entry.contains("Enabling", true) ||
-                            entry.contains("Disabling", true) ||
-                            entry.contains("Probing", true) ||
-                            entry.contains("Querying", true) ||
-                            entry.contains("Loaded", true) -> Amber
+                        entry.contains("Enabling", true) ||
+                        entry.contains("Disabling", true) ||
+                        entry.contains("Probing", true) ||
+                        entry.contains("Querying", true) ||
+                        entry.contains("Loaded", true) -> Amber
 
-                            else -> Cyan.copy(0.6f)
-                        }
-                        if (index > 0) {
-                            Spacer(Modifier.height(2.dp))
-                            DividerLine(alpha = 0.3f)
-                            Spacer(Modifier.height(2.dp))
-                        }
-                        Text(
-                            entry,
-                            color = color,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
+                        else -> Cyan.copy(0.6f)
                     }
+                    if (index > 0) {
+                        Spacer(Modifier.height(2.dp))
+                        DividerLine(alpha = 0.3f)
+                        Spacer(Modifier.height(2.dp))
+                    }
+                    Text(
+                        entry,
+                        color = color,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
                 }
             }
         }

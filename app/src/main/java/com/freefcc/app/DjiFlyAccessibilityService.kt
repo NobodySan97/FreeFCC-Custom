@@ -11,6 +11,8 @@ import java.util.ArrayDeque
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 internal object DjiFlyHomePointMatcher {
     private val whitespace = Regex("\\s+")
@@ -213,7 +215,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
-        kotlinx.coroutines.cancel(scope)
+        scope.cancel()
     }
 
     private fun captureAircraftCodeFromDuml(modelName: String) {
@@ -222,7 +224,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         codeProbeDoneForName = modelName
         val prefs = getSharedPreferences("freefcc", Context.MODE_PRIVATE)
 
-        kotlinx.coroutines.launch(scope) {
+        scope.launch {
             try {
                 val identity = AircraftModelProbe.capture(
                     FccRuntime.tracker.state.value.controllerPort
