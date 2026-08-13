@@ -11,7 +11,12 @@
 A free and open-source Android app that unlocks FCC mode, sends experimental 4G activation frames, and queries device info on DJI smart controllers with a screen (RC2, RC Pro 2, RC Plus).
 
 > ℹ️ **Fork & Upstream Attribution**:  
-> This repository is a custom fork derived from [danusha2345/SkylabFCCfree](https://github.com/danusha2345/SkylabFCCfree) and [doesthings/FreeFCC](https://github.com/doesthings/FreeFCC). It incorporates additional enhancements including a Floating Overlay Mini Menu, Live Radio Country State detection (`AU` vs `CE`), System Permissions Status Card, In-Flight Toast feedback, and UI localization.
+> This repository is a custom fork derived from [danusha2345/SkylabFCCfree](https://github.com/danusha2345/SkylabFCCfree) and [doesthings/FreeFCC](https://github.com/doesthings/FreeFCC). This custom version has been significantly re-engineered and includes the following exclusive enhancements compared to upstream:
+> * **Modern UI Rework:** The interface has been completely rewritten using Jetpack Compose with a modular, responsive design (Glow Cards, Bottom Navigation).
+> * **Targeted 4G Activation:** Replaced the legacy 128-frame sweep with a much safer, single targeted `0x51:0x1A` service mode switch frame.
+> * **Live Radio Country State detection** (`AU` vs `CE`).
+> * **System Permissions Status Card & In-Flight Toast feedback**.
+> * **Extended UI Localization & Telemetry-free architecture**.
 
 </div>
 
