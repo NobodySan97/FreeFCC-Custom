@@ -296,19 +296,19 @@ recovered from controller binaries.
 
 ### 4G Profile
 
-128 frames sent in a single round with 10ms between each. Each frame carries the aircraft's serial number in its payload. The serial is read from the controller at runtime by listening for telemetry on the DUML socket.
+A single targeted activation frame (`0x51:0x1A`) in `LIVEVIEW_HYBRID` mode. The payload carries the aircraft's serial number. The serial is read from the controller at runtime by listening for telemetry on the DUML socket, and the response is read back from the Unix socket to verify the switch status.
 
 The captured profile is confirmed only as an external-module protocol artifact. FreeFCC does not use a model allowlist: an explicit send accepts any freshly observed full factory serial or structurally valid `WA/WM` identity. DJI Avata 360 Enhanced Transmission edition has an integrated IoT eSIM module; compatibility with this exact profile remains a hypothesis pending a live send and DJI Fly state evidence.
 
-**How the 4G activation frames are sent:**
+**How the 4G activation frame is sent:**
 
-Unlike FCC which goes through the standard DUML TCP proxy on port 40009, 4G frames are sent via a Unix domain socket at `/duss/mb/0x205` (abstract namespace). This is a DJI internal DUSS route, not proof of a particular physical modem type. The app opens one `LocalSocket` for the complete 128-frame burst, writes and flushes each frame, then closes the socket. No ACK is read back — the app can only confirm the frames were written, never that the aircraft activated 4G. A separate read-only button checks endpoint reachability without sending frames.
+Unlike FCC which goes through the standard DUML TCP proxy on port 40009, the 4G frame is sent via a Unix domain socket at `/duss/mb/0x205` (abstract namespace). The app writes the request and then reads back the response (WLM status codes like `0,0,0` for success, or `3,3,3` for link not ready). A separate read-only button checks endpoint reachability without sending frames.
 
 The frame format is:
 - `sender = 2` (MOBILE_APP)
 - `cmd_type = 0` (Request, NO_ACK_NEEDED, no encryption)
 - `cmd_set = 81` (0x51, experimental/internal command set in this profile)
-- `cmd_id = 0..127` (sequential, one per frame)
+- `cmd_id = 26` (0x1A, targeted service mode switch)
 - `dst = 238` (0xEE, OFDM_GROUND index 7)
 - `payload = 000000 + ASCII(aircraft_serial)`
 
@@ -326,19 +326,8 @@ identity.
 The `/duss/mb/0x205` pre-check proves only local route availability. It does not distinguish an external Cellular Dongle from an integrated eSIM module and does not validate model-specific payload semantics.
 
 Static evidence from the downloaded RC2, RC Pro 2 v576 and WA530 firmware
-shows that `0x205` is the local DUSS router, destination `0xEE` reaches
-ground-side `dji_wlm`, and the RC2/RC Pro 2 main `0x51` table covers only IDs
-`00..51`. Request/ACK handlers must be counted separately: depending on the
-active device-manager variant, 32–33 sweep frames can enter request handlers
-on RC2 and 34–35 on RC Pro 2. Handler `51:1A` has an SDR-only liveview branch
-for the leading zeros used by this profile. In handler
-`51:19 wlm_modem_onoff_control`, all three checked builds (RC2, RC Pro 2 v576 and
-WA530) reject lengths ≤7; the longer sweep payload places the first ASCII
-identity character into a control field, and the checked RC2 handler does not
-reach its on/off action. The user's live send of the complete sweep produced
-no visible effect. These findings do not prove danger, activation or universal
-failure; they bound the profile as an unverified experiment with separate
-upstream compatibility claims.
+shows that `0x205` is the local DUSS router and destination `0xEE` reaches
+ground-side `dji_wlm`. The legacy 128-frame sweep was a no-op because it used mode `00` (SDR) and many IDs had no handlers. The new approach targets the specific handler `51:1A` (`wlm_service_mode_switch_req`) with a `LIVEVIEW_HYBRID` mode byte (`01`), correctly interpreting WLM response tuples to confirm the switch.
 See [Avata 360/4G research](docs/AVATA360_4G_RESEARCH.md) and the
 [local firmware corpus](docs/FIRMWARE_CORPUS.md). The active RC Pro 2
 `0x51` handlers are listed separately in the
@@ -387,7 +376,7 @@ Profiles combine historical/upstream captures with commands verified during curr
 app/src/main/
   assets/profiles/
     fcc.json          14-frame FCC core (country write/readback is code-driven)
-    4g.json           experimental 128-frame 0x51 serial sweep
+    4g.json           single targeted 0x51:0x1A service mode switch frame
     device_info.json   1 frame, version inquiry
     led_on.json        1 frame, LED on (port 40007)
     led_off.json       1 frame, LED off (port 40007)
@@ -402,7 +391,11 @@ app/src/main/
     NetworkLogServer.kt Private-Wi-Fi logs/status/command HTTP API
     Profiles.kt        JSON profile loader
     FccViewModel.kt    State management + business logic
-    MainActivity.kt    Compose UI with animations
+    MainActivity.kt    App entry point and BottomNavBar
+  ui/
+    components/        Reusable Jetpack Compose widgets (GlowButton, etc.)
+    screens/           Modular feature screens (FccScreen, ModemScreen, etc.)
+    theme/             Standardized FreeFCC design system (Color, Theme, Type)
   res/
     drawable/          Launcher icon (vector)
     values/            Theme
