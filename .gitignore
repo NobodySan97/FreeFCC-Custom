@@ -26,3 +26,5 @@ extracted/
 freefcc-helpers.zip
 .vs/
 *.patch
+*.diff
+.agents/
