@@ -51,6 +51,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 
+import com.freefcc.app.ui.theme.FreeFccTheme
+import com.freefcc.app.ui.components.*
+
 // ═══════════════════════════════════════════════════════════════════════
 // Colors
 // ═══════════════════════════════════════════════════════════════════════
@@ -104,14 +107,7 @@ class MainActivity : ComponentActivity() {
         })
 
         setContent {
-            MaterialTheme(
-                colorScheme = darkColorScheme(
-                    primary = Cyan, onPrimary = BgDark,
-                    background = BgDark, onBackground = TextWhite,
-                    surface = CardBg, onSurface = TextWhite,
-                    error = Red, secondary = Green, tertiary = Amber
-                )
-            ) {
+            FreeFccTheme {
                 AppRoot(viewModel)
             }
         }
@@ -243,8 +239,8 @@ private fun AppRoot(viewModel: FccViewModel) {
             when (page) {
                 0 -> FccPage(state, viewModel)
                 1 -> ModemPage(state, viewModel)
-                2 -> DiagnosticsPage(state, viewModel)
-                3 -> UpdatePage(state, viewModel)
+                2 -> com.freefcc.app.ui.screens.DiagnosticsScreen(viewModel)
+                3 -> com.freefcc.app.ui.screens.UpdateScreen(viewModel)
             }
         }
 
@@ -254,6 +250,7 @@ private fun AppRoot(viewModel: FccViewModel) {
             onPageSelected = { index ->
                 scope.launch { pagerState.animateScrollToPage(index) }
             },
+            updateAvailable = state.updateAvailable,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
@@ -756,481 +753,10 @@ private fun RowScope.CompactControlButton(
 
 @Composable
 private fun ModemPage(state: AppState, viewModel: FccViewModel) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = PageHorizontalPadding)
-            .padding(bottom = BottomNavHeight + PageBottomPadding),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(Modifier.height(PageTopPadding))
-        PageTitle("4G Modem", Icons.Filled.SettingsInputAntenna)
-        Spacer(Modifier.height(8.dp))
-
-        GlowCard {
-            Text("Aircraft identity", color = TextWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(6.dp))
-            var serialField by remember(state.aircraftSerial, state.manualSerial) {
-                mutableStateOf(state.manualSerial.ifEmpty { state.aircraftSerial })
-            }
-            OutlinedTextField(
-                value = serialField,
-                onValueChange = { serialField = it.trim() },
-                label = { Text("Seriale Drone (per FCC 4G)") },
-                placeholder = { Text("auto-rilevato, o digitalo a mano") },
-                singleLine = true,
-                enabled = !state.isHardwareBusy,
-                modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = TextWhite,
-                    unfocusedTextColor = TextWhite,
-                    focusedBorderColor = Amber,
-                    unfocusedBorderColor = TextGray,
-                    focusedLabelColor = Amber,
-                    unfocusedLabelColor = TextGray,
-                    focusedPlaceholderColor = TextGray,
-                    unfocusedPlaceholderColor = TextGray,
-                    cursorColor = Amber
-                )
-            )
-            Spacer(Modifier.height(8.dp))
-            GlowButton(
-                if (state.isProbingSerial) "Lettura seriale in corso…" else "Leggi seriale dal drone",
-                Cyan, filled = false, enabled = !state.isHardwareBusy
-            ) { viewModel.probeSerial() }
-            if (serialField.isNotBlank() && serialField != state.manualSerial) {
-                Spacer(Modifier.height(8.dp))
-                GlowButton("Usa questo seriale", Cyan, filled = false, enabled = !state.isHardwareBusy) {
-                    viewModel.setManualSerial(serialField)
-                }
-            }
-        }
-
-        Spacer(Modifier.height(SectionSpacing))
-
-        GlowCard {
-            BodyText(
-                if (state.fourGMessage.isNotEmpty()) state.fourGMessage
-                else "Experimental 128-frame DJI profile. Endpoint reachability and successful writes do not prove that 4G activated.",
-                TextGray
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = { viewModel.probe4gEndpoint() },
-                enabled = !state.isHardwareBusy && !state.is4gBusy,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Amber)
-            ) {
-                Icon(Icons.Default.Search, null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Probe 4G Endpoint")
-            }
-            Spacer(Modifier.height(8.dp))
-
-            if (state.is4gBusy) {
-                ProgressDisplay(state.busyProgress, "Sending 4G activation frames...")
-            } else {
-                GlowButton("Send 4G Activation Frames", Amber, enabled = !state.isHardwareBusy) {
-                    viewModel.send4gActivationFrames()
-                }
-            }
-        }
-
-        Spacer(Modifier.height(SectionSpacing))
-
-        GlowCard {
-            Text("Hardware Tools", color = TextWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                GpsControlPanel(state, viewModel, Modifier.weight(1f).fillMaxHeight())
-                LedControlPanel(state, viewModel, Modifier.weight(1f).fillMaxHeight())
-            }
-        }
-    }
+    com.freefcc.app.ui.screens.ModemScreen(viewModel = viewModel)
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// Page 3: Diagnostics
-// ═══════════════════════════════════════════════════════════════════════
-
-@Composable
-private fun DiagnosticsPage(state: AppState, viewModel: FccViewModel) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = PageHorizontalPadding)
-            .padding(bottom = BottomNavHeight + PageBottomPadding),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(Modifier.height(PageTopPadding))
-        PageTitle("Diagnostics & Logs", Icons.Outlined.Info)
-        Spacer(Modifier.height(8.dp))
-
-        GlowCard {
-            Text("Technical details", color = TextWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(6.dp))
-            InfoRow("App version", FccViewModel.APP_VERSION)
-            Spacer(Modifier.height(4.dp))
-            DividerLine()
-            Spacer(Modifier.height(4.dp))
-            InfoRow("Controller code", state.controllerModel.ifEmpty { "Not detected" })
-            Spacer(Modifier.height(4.dp))
-            DividerLine()
-            Spacer(Modifier.height(4.dp))
-            InfoRow(
-                "Last aircraft model",
-                state.aircraftModelName.ifEmpty {
-                    state.aircraftModelCode.ifEmpty { "Not detected" }
-                }
-            )
-            Spacer(Modifier.height(4.dp))
-            DividerLine()
-            Spacer(Modifier.height(4.dp))
-            InfoRow("Last aircraft code", state.aircraftModelCode.ifEmpty { "Not detected" })
-            Spacer(Modifier.height(4.dp))
-            DividerLine()
-            Spacer(Modifier.height(4.dp))
-            InfoRow("Last aircraft S/N", state.aircraftSerial.ifEmpty { "Not detected" })
-            if (state.lanLogUrl.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                DividerLine()
-                Spacer(Modifier.height(4.dp))
-                InfoRow("LAN bridge", state.lanLogUrl)
-            }
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = { viewModel.refreshAircraftIdentity() },
-                enabled = !state.isHardwareBusy,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Cyan)
-            ) {
-                Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Refresh aircraft identity")
-            }
-        }
-        Spacer(Modifier.height(SectionSpacing))
-
-        GlowCard {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Wifi, null, tint = Cyan, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("LAN Control Bridge", color = TextWhite, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "Live status, commands and logs · private Wi-Fi",
-                        color = TextGray,
-                        fontSize = 11.sp
-                    )
-                }
-                if (state.isLanLogStarting) {
-                    CircularProgressIndicator(color = Cyan, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                } else {
-                    Switch(
-                        checked = state.lanLogUrl.isNotEmpty(),
-                        onCheckedChange = viewModel::setLanLoggingEnabled
-                    )
-                }
-            }
-            if (state.lanLogMessage.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                BodyText(
-                    state.lanLogMessage,
-                    if (state.lanLogMessage.contains("failed", ignoreCase = true)) Red else TextGray
-                )
-            }
-            if (state.lanLogUrl.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                BodyText("Codex can discover this controller through the UDP beacon; no link copying is needed.", TextDim)
-            }
-        }
-        Spacer(Modifier.height(SectionSpacing))
-
-        GlowCard {
-            Text("Process Log", color = TextWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            if (state.logMessages.isEmpty()) {
-                BodyText("No log messages yet.", TextDim)
-            } else {
-                state.logMessages.forEachIndexed { index, entry ->
-                    val color = when {
-                        entry.contains("enabled", true) ||
-                        entry.contains("connected", true) ||
-                        entry.contains("restored", true) ||
-                        entry.contains("received", true) -> Green
-
-                        entry.contains("fail", true) ||
-                        entry.contains("error", true) -> Red
-
-                        entry.contains("Enabling", true) ||
-                        entry.contains("Disabling", true) ||
-                        entry.contains("Probing", true) ||
-                        entry.contains("Querying", true) ||
-                        entry.contains("Loaded", true) -> Amber
-
-                        else -> Cyan.copy(0.6f)
-                    }
-                    if (index > 0) {
-                        Spacer(Modifier.height(2.dp))
-                        DividerLine(alpha = 0.3f)
-                        Spacer(Modifier.height(2.dp))
-                    }
-                    Text(
-                        entry,
-                        color = color,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// Page 4: Update
-// ═══════════════════════════════════════════════════════════════════════
-
-@Composable
-private fun UpdatePage(state: AppState, viewModel: FccViewModel) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = PageHorizontalPadding)
-            .padding(bottom = BottomNavHeight + PageBottomPadding),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(Modifier.height(PageTopPadding))
-        PageTitle("Updates", Icons.Outlined.SystemUpdate)
-
-        if (state.isCheckingUpdate) {
-            Spacer(Modifier.height(8.dp))
-            GlowCard {
-                Column(
-                    Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    CircularProgressIndicator(strokeWidth = 2.5.dp, color = Cyan, modifier = Modifier.size(40.dp))
-                    Spacer(Modifier.height(10.dp))
-                    BodyText("Checking GitHub for latest release...", Cyan)
-                }
-            }
-            return@Column
-        }
-
-        val info = state.updateInfo
-        if (info == null && state.updateChecked) {
-            Spacer(Modifier.height(8.dp))
-            GlowCard {
-                Column(
-                    Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(Icons.Outlined.CloudOff, null, tint = TextDim, modifier = Modifier.size(44.dp))
-                    Spacer(Modifier.height(8.dp))
-                    BodyText("Could not check for updates.", TextGray)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "Make sure you're connected to Wi-Fi and try again.",
-                        color = TextDim, fontSize = 12.sp, lineHeight = 17.sp
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    GlowButton("Retry", Cyan) { viewModel.checkForUpdates(force = true) }
-                }
-            }
-            return@Column
-        }
-
-        if (info == null) return@Column
-
-        Spacer(Modifier.height(8.dp))
-
-        GlowCard {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        if (state.updateAvailable) "Update Available" else "Up to Date",
-                        color = if (state.updateAvailable) Green else TextGray,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Current: v${FccViewModel.APP_VERSION}",
-                        color = TextDim, fontSize = 12.sp
-                    )
-                }
-                Icon(
-                    if (state.updateAvailable) Icons.Filled.NewReleases else Icons.Filled.CheckCircle,
-                    null,
-                    tint = if (state.updateAvailable) Green else TextDim,
-                    modifier = Modifier.size(36.dp)
-                )
-            }
-
-            Spacer(Modifier.height(10.dp))
-            DividerLine()
-            Spacer(Modifier.height(10.dp))
-
-            Text("Update Channel", color = TextGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(6.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                val isStable = state.updateChannel == "stable"
-                Surface(
-                    onClick = { viewModel.setUpdateChannel("stable") },
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isStable) Green.copy(0.2f) else BgLight.copy(0.3f),
-                    border = BorderStroke(1.dp, if (isStable) Green else CardBorder.copy(0.4f)),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp)
-                    ) {
-                        Text("🟢 Stable", color = if (isStable) Green else TextGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                val isExperimental = state.updateChannel == "experimental"
-                Surface(
-                    onClick = { viewModel.setUpdateChannel("experimental") },
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isExperimental) Amber.copy(0.2f) else BgLight.copy(0.3f),
-                    border = BorderStroke(1.dp, if (isExperimental) Amber else CardBorder.copy(0.4f)),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp)
-                    ) {
-                        Text("🧪 Beta / Pre-release", color = if (isExperimental) Amber else TextGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            if (state.updateAvailable) {
-                Spacer(Modifier.height(10.dp))
-                DividerLine()
-                Spacer(Modifier.height(10.dp))
-            }
-
-            if (state.updateAvailable) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Latest:", color = TextGray, fontSize = 13.sp)
-                    Text("v${info.version}", color = Green, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                }
-                Spacer(Modifier.height(10.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Released:", color = TextGray, fontSize = 13.sp)
-                    Text(
-                        info.publishedAt.split("T").firstOrNull() ?: "",
-                        color = TextWhite, fontSize = 13.sp
-                    )
-                }
-                if (info.apkSize > 0) {
-                    Spacer(Modifier.height(10.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Size:", color = TextGray, fontSize = 13.sp)
-                        Text(
-                            "%.1f MB".format(info.apkSize / 1048576.0),
-                            color = TextWhite, fontSize = 13.sp
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-            DividerLine()
-            Spacer(Modifier.height(8.dp))
-
-            Text("Changelog", color = Cyan, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(6.dp))
-            if (info.changelog.isNotEmpty()) {
-                Text(
-                    info.changelog,
-                    color = TextGray,
-                    fontSize = 12.sp,
-                    lineHeight = 19.sp
-                )
-            } else {
-                BodyText("No changelog provided.", TextDim)
-            }
-
-            if (state.updateAvailable) {
-                Spacer(Modifier.height(8.dp))
-                when {
-                    state.isDownloadingUpdate -> {
-                        if (state.updateDownloadProgress <= 0f) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                CircularProgressIndicator(
-                                    strokeWidth = 2.5.dp,
-                                    color = Cyan,
-                                    modifier = Modifier.size(32.dp)
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                BodyText("Connecting to GitHub...", Cyan)
-                            }
-                        } else {
-                            ProgressDisplay(
-                                state.updateDownloadProgress,
-                                "Downloading... (${(state.updateDownloadProgress * 100).toInt()}%)"
-                            )
-                        }
-                    }
-                    state.isUpdateDownloaded -> {
-                        GlowButton("Install Update", Green) {
-                            viewModel.installUpdate()
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        GlowButton("Download Again", Cyan, filled = false) {
-                            viewModel.reDownloadUpdate()
-                        }
-                    }
-                    else -> {
-                        GlowButton("Download", Green) {
-                            viewModel.downloadUpdate()
-                        }
-                    }
-                }
-            }
-
-            // "Check Again" button — always visible at the bottom of the
-            // update card, whether up-to-date or an update is available.
-            // Uses force=true to bypass the rate-limit so the user can
-            // recheck immediately at any time.
-            Spacer(Modifier.height(12.dp))
-            DividerLine()
-            Spacer(Modifier.height(10.dp))
-            GlowButton("Check Again", Cyan, filled = false) {
-                viewModel.checkForUpdates(force = true)
-            }
-        }
-    }
-}
+// Legacy inline DiagnosticsPage and UpdatePage removed in M5 refactoring.
 
 // ═══════════════════════════════════════════════════════════════════════
 // Shared components
@@ -1751,89 +1277,56 @@ private fun GlowButton(
 private fun BottomNavBar(
     currentPage: Int,
     onPageSelected: (Int) -> Unit,
+    updateAvailable: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val tabs = listOf(
-        Triple("FCC", Icons.Filled.Wifi, Cyan),
-        Triple("4G", Icons.Filled.SettingsInputAntenna, Amber),
-        Triple("Diagnostica", Icons.Filled.Info, Green),
-        Triple("Update", Icons.Filled.SystemUpdate, Color(0xFF79A8FF))
+        Triple("FCC", Icons.Filled.Wifi, 0),
+        Triple("4G Modem", Icons.Filled.SettingsInputAntenna, 1),
+        Triple("Diagnostica", Icons.Outlined.Info, 2),
+        Triple("Update", Icons.Outlined.SystemUpdate, 3)
     )
 
-    Surface(
-        color = BgDark.copy(0.98f),
-        shadowElevation = 10.dp,
+    NavigationBar(
+        containerColor = BgDark.copy(alpha = 0.98f),
+        contentColor = TextWhite,
+        tonalElevation = 8.dp,
         modifier = modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(BottomNavHeight)
-                .padding(horizontal = 5.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            tabs.forEachIndexed { index, (label, icon, color) ->
-                val selected = currentPage == index
-                val buttonColor by animateColorAsState(
-                    targetValue = if (selected) color.copy(alpha = 0.18f) else BgLight.copy(alpha = 0.82f),
-                    animationSpec = tween(180),
-                    label = "bottomNavButtonColor"
-                )
-                val borderColor by animateColorAsState(
-                    targetValue = if (selected) color.copy(alpha = 0.9f) else CardBorder.copy(alpha = 0.85f),
-                    animationSpec = tween(180),
-                    label = "bottomNavBorderColor"
-                )
-                val contentColor by animateColorAsState(
-                    targetValue = if (selected) color else TextGray,
-                    animationSpec = tween(180),
-                    label = "bottomNavContentColor"
-                )
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .selectable(
-                            selected = selected,
-                            onClick = { onPageSelected(index) },
-                            role = Role.Tab
-                        )
-                        .padding(horizontal = 1.dp, vertical = 3.dp)
-                ) {
-                    Surface(
-                        color = buttonColor,
-                        contentColor = contentColor,
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(if (selected) 1.2.dp else 1.dp, borderColor),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 5.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
+        tabs.forEach { (label, icon, index) ->
+            val selected = currentPage == index
+            NavigationBarItem(
+                selected = selected,
+                onClick = { onPageSelected(index) },
+                icon = {
+                    if (index == 3 && updateAvailable) {
+                        BadgedBox(
+                            badge = {
+                                Badge(containerColor = Red)
+                            }
                         ) {
-                            Icon(
-                                icon,
-                                contentDescription = label,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                label,
-                                fontSize = 9.5.sp,
-                                lineHeight = 10.sp,
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Icon(icon, contentDescription = label)
                         }
+                    } else {
+                        Icon(icon, contentDescription = label)
                     }
-                }
-            }
+                },
+                label = {
+                    Text(
+                        label,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Cyan,
+                    selectedTextColor = Cyan,
+                    indicatorColor = Cyan.copy(alpha = 0.18f),
+                    unselectedIconColor = TextGray,
+                    unselectedTextColor = TextGray
+                )
+            )
         }
     }
 }

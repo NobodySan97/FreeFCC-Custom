@@ -1,6 +1,6 @@
 {
   "name": "4G Activation",
-  "description": "Experimental/internal 0x51 command-ID sweep: 128 fire-and-forget frames with the aircraft serial embedded in each payload. Write completion does not prove 4G activation.",
+  "description": "Experimental targeted request: one 0x51:0x1A wlm_service_mode_switch_req frame asking the ground WLM for liveview HYBRID mode on the aircraft with the given serial. Write completion does not prove 4G activation; the request is refused (resp 3,3,3) while the WLM has not seen LTE availability (no beacon/pairing yet).",
   "sender": 2,
   "sender_desc": "MOBILE_APP, index 0",
   "cmd_type": 0,
@@ -9,12 +9,11 @@
   "inter_frame_delay_ms": 10,
   "inter_round_delay_ms": 0,
   "read_window_ms": 80,
-  "frame_count": 128,
+  "cmd_ids": [26],
   "cmd_set": 81,
-  "cmd_id_start": 0,
   "dst": 238,
   "dst_desc": "OFDM_GROUND, index 7",
   "payload_prefix_hex": "000001",
   "payload_serial_encoding": "ascii",
-  "note": "Each frame's payload is a 3-byte prefix (00 00 01) followed by the ASCII aircraft serial; the third prefix byte is the activation flag (00 = off, 01 = on). Frame i has cmd_id=i (0..127). The serial is read from the controller at runtime via probeSerial(). The profile requests no ACK/readback. Many IDs are now statically mapped, but this payload is not a validated activation contract."
+  "note": "Payload of the single frame (cmd_set 0x51, cmd_id 0x1A = 26) is: {ver=00, service_type=00 (SERVICE_LIVEVIEW), mode=01 (LIVEVIEW_HYBIRD)} + ASCII aircraft serial as the target-SN string. Serial is read at runtime via probeSerial(). The old 128-frame sweep with prefix 000000 was a no-op: mode byte 00 = LIVEVIEW_SDR, and 46 of the IDs have no handler at all."
 }

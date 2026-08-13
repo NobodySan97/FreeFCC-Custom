@@ -777,7 +777,7 @@ class DumlTransport {
      * A successful connection only proves that the controller's DUSS router
      * currently exposes `/duss/mb/0x205`. It does not distinguish an external
      * Cellular Dongle from an integrated eSIM module and does not prove that
-     * the 128-frame activation profile is compatible with the linked aircraft.
+     * the targeted 4G activation request is compatible with the linked aircraft.
      */
     fun is4gEndpointReachable(): Boolean {
         var socket: LocalSocket? = null
@@ -828,26 +828,35 @@ class DumlTransport {
     }
 
     /**
-     * Sends a list of frames via Unix domain socket for 4G activation.
-     * Fire-and-forget: no ACK read, just write and flush per frame.
+     * Sends a list of frames via Unix domain socket for 4G activation, then
+     * waits for the matching response frame on the same socket.
      *
-     * Opens ONE abstract-namespace socket for the entire 128-frame burst and
-     * reuses it for every frame, matching the reference app's persistent
-     * relay-session architecture. This avoids 127 redundant socket connect/
-     * close syscalls (one per frame) and is the 1:1 match with the native
-     * relay send path. If the socket cannot be opened, returns false
-     * immediately — callers should pre-check with [is4gEndpointReachable]
-     * for a better user message.
-     *
-     * Attempts every frame regardless of per-frame write failures, but only
-     * returns true if every single write succeeded.
+     * The send path is the same as the former fire-and-forget helper: ONE
+     * abstract-namespace socket for the whole burst, write+flush per frame. After the last
+     * frame, the socket is drained until [responseTimeoutMs] for a DUML frame
+     * with the given cmd set/cmd id; its payload is returned for the caller
+     * to interpret (e.g. 51:1A returns resp codes (3,3,3) = LTE not
+     * available, (9,9,9) = invalid request). A timeout is not a send failure:
+     * the DUSS router is not guaranteed to route the response back to this
+     * mailbox, so `responsePayload == null` means "status unknown", never
+     * "rejected".
      */
-    fun sendFramesUnix(
+    data class UnixSendResult(
+        val allWritten: Boolean,
+        val responseCmdSet: Int,
+        val responseCmdId: Int,
+        val responsePayload: ByteArray?
+    )
+
+    fun sendFramesUnixAwaitResponse(
         frames: List<ByteArray>,
+        expectedCmdSet: Int,
+        expectedCmdId: Int,
+        responseTimeoutMs: Int = 1500,
         interFrameDelayMs: Long = 10,
         onProgress: (Float) -> Unit = {}
-    ): Boolean {
-        if (frames.isEmpty()) return false
+    ): UnixSendResult {
+        if (frames.isEmpty()) return UnixSendResult(false, 0, 0, null)
 
         var socket: LocalSocket? = null
         var allSuccess = true
@@ -869,14 +878,76 @@ class DumlTransport {
                 onProgress(sent.toFloat() / total)
                 if (interFrameDelayMs > 0) Thread.sleep(interFrameDelayMs)
             }
+
+            if (!allSuccess || responseTimeoutMs <= 0) {
+                return UnixSendResult(allSuccess, 0, 0, null)
+            }
+
+            // Best-effort response readback on the same socket.
+            var input: java.io.InputStream
+            try {
+                input = socket.getInputStream()
+                socket.setSoTimeout(100)
+            } catch (_: Exception) {
+                // Cannot set up a bounded read — report "no response" honestly
+                // instead of risking an indefinite block with the lease held.
+                return UnixSendResult(true, 0, 0, null)
+            }
+            val deadline = System.nanoTime() + responseTimeoutMs * 1_000_000L
+            val buf = ByteArray(2048)
+            var pending = ByteArray(0)
+            while (System.nanoTime() < deadline) {
+                val n = try {
+                    input.read(buf)
+                } catch (_: IOException) {
+                    // Short read timeout — re-check the deadline.
+                    continue
+                }
+                // EOF: peer closed — no response is coming, stop immediately.
+                if (n <= 0) break
+                val combined = ByteArray(pending.size + n)
+                pending.copyInto(combined, 0, pending.size)
+                buf.copyInto(combined, pending.size, 0, n)
+                pending = combined
+
+                var i = 0
+                while (i + 4 <= pending.size) {
+                    if (pending[i] != 0x55.toByte()) { i++; continue }
+                    val frameLen = (pending[i + 1].toInt() and 0xFF) or
+                        ((pending[i + 2].toInt() and 0x03) shl 8)
+                    val headerValid = frameLen in 13..1023 &&
+                        DumlBuilder.crc8(pending, i, 3) == (pending[i + 3].toInt() and 0xFF)
+                    if (!headerValid) {
+                        // False sync — skip one byte; a real frame may start at i+1.
+                        i++
+                        continue
+                    }
+                    if (i + frameLen > pending.size) break // wait for more bytes
+                    val expectedCrc = DumlBuilder.crc16(pending, i, frameLen - 2)
+                    val actualCrc = (pending[i + frameLen - 2].toInt() and 0xFF) or
+                        ((pending[i + frameLen - 1].toInt() and 0xFF) shl 8)
+                    if (expectedCrc != actualCrc) { i++; continue }
+                    val cmdSet = pending[i + 9].toInt() and 0xFF
+                    val cmdId = pending[i + 10].toInt() and 0xFF
+                    if (cmdSet == expectedCmdSet && cmdId == expectedCmdId) {
+                        val payload = pending.copyOfRange(i + 11, i + frameLen - 2)
+                        return UnixSendResult(true, cmdSet, cmdId, payload)
+                    }
+                    i += frameLen
+                }
+                // Drop consumed prefix, keep a possible partial frame.
+                if (i > 0) pending = pending.copyOfRange(i, pending.size)
+                if (pending.size > PARTIAL_TAIL_LIMIT) {
+                    pending = pending.copyOfRange(pending.size - PARTIAL_TAIL_LIMIT, pending.size)
+                }
+            }
+            return UnixSendResult(true, 0, 0, null)
         } catch (_: IOException) {
-            // Socket could not be opened — every frame failed.
             onProgress(1f)
-            return false
+            return UnixSendResult(false, 0, 0, null)
         } finally {
             try { socket?.close() } catch (_: IOException) {}
         }
-        return allSuccess
     }
 
     /**

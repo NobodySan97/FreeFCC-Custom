@@ -76,6 +76,10 @@ object Profiles {
     /**
      * Builds the 4G activation profile at runtime. Unlike static profiles,
      * 4G frames include the aircraft serial in each payload.
+     *
+     * The current profile is a single targeted frame (0x51:0x1A
+     * wlm_service_mode_switch_req, liveview HYBRID + target SN), not the
+     * historical 128-frame ID sweep.
      */
     fun load4g(context: Context, aircraftSerial: String): Profile {
         val json = readAsset(context, "profiles/4g.json")
@@ -88,11 +92,20 @@ object Profiles {
         val interRound = obj.optLong("inter_round_delay_ms", 0)
         val readWindow = obj.optInt("read_window_ms", 80)
 
-        val frameCount = obj.getInt("frame_count")
         val cmdSet = obj.getInt("cmd_set")
-        val cmdIdStart = obj.getInt("cmd_id_start")
         val dst = obj.getInt("dst")
         val prefix = hexToBytes(obj.getString("payload_prefix_hex"))
+
+        // Targeted command IDs (e.g. [26] = 0x1A service mode switch).
+        // Fallback for older profile files: generated sweep of frame_count IDs.
+        val cmdIds = if (obj.has("cmd_ids")) {
+            val arr = obj.getJSONArray("cmd_ids")
+            (0 until arr.length()).map { arr.getInt(it) }
+        } else {
+            val frameCount = obj.getInt("frame_count")
+            val cmdIdStart = obj.optInt("cmd_id_start", 0)
+            (0 until frameCount).map { cmdIdStart + it }
+        }
 
         // Build the payload: prefix + ASCII serial
         val serialBytes = aircraftSerial.toByteArray(Charsets.US_ASCII)
@@ -100,14 +113,13 @@ object Profiles {
         System.arraycopy(prefix, 0, payload, 0, prefix.size)
         System.arraycopy(serialBytes, 0, payload, prefix.size, serialBytes.size)
 
-        // Generate all 128 frames
         val builder = DumlBuilder()
-        val frames = (0 until frameCount).map { i ->
+        val frames = cmdIds.map { cmdId ->
             builder.buildFrame(DumlFrame(
                 sender = sender,
                 cmdType = cmdType,
                 cmdSet = cmdSet,
-                cmdId = cmdIdStart + i,
+                cmdId = cmdId,
                 dst = dst,
                 payload = payload
             ))

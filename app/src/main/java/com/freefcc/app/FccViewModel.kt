@@ -186,25 +186,18 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
 
         private val FULL_SERIAL_PATTERN = Regex("^1581[0-9A-Z]{12,18}$")
         private val MODEL_CODE_PATTERN = Regex("^W[AM][0-9]{3}[A-Z]?$")
-        private val FOUR_G_MODEL_PREFIX_PATTERN = Regex("^W[AM][0-9]{3}")
 
         /**
-         * Normalizes an identity returned by [DumlTransport.probeSerial]. A
-         * full factory serial does not contain a model code. Any structurally
-         * valid WA/WM identity is accepted for an explicit experimental send;
-         * route availability is checked separately before anything is sent.
+         * Normalizes an identity returned by [DumlTransport.probeSerial]. Only
+         * a full factory serial is accepted: the 4G request payload carries it
+         * in the target-SN field of 51:1A, which the WLM resolves via
+         * wlm_peer_dev_list_find — a short WA/WM model code is not a peer SN
+         * and the request would be refused.
          */
         internal fun parseFourGIdentity(raw: String): FourGIdentity? {
             val normalized = raw.trim().uppercase(Locale.US)
-            if (FULL_SERIAL_PATTERN.matches(normalized)) {
-                return FourGIdentity(normalized, null)
-            }
-            val modelCode = (
-                MODEL_CODE_PATTERN.matchEntire(normalized)?.value
-                    ?: FOUR_G_MODEL_PREFIX_PATTERN.find(normalized)?.value
-                )?.lowercase(Locale.US)
-                ?: return null
-            return FourGIdentity(normalized, modelCode)
+            if (!FULL_SERIAL_PATTERN.matches(normalized)) return null
+            return FourGIdentity(normalized, null)
         }
 
         private fun processLogSnapshot(): List<String> =
@@ -943,21 +936,32 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
     // --- 4G ---
 
     /**
-     * Sends the 128-frame 4G activation profile.
-     * The aircraft serial is embedded in each frame's payload at runtime.
+     * Sends the targeted 4G activation request: a single 0x51:0x1A
+     * wlm_service_mode_switch_req frame (liveview HYBRID + aircraft serial as
+     * target SN). The serial is embedded in the payload at runtime.
      * 4G frames are sent via Unix domain socket (/duss/mb/0x205), not TCP.
      *
-     * The socket does not respond, so this can only confirm the frames were
-     * written — never confirm the aircraft actually activated 4G. There is
-     * no "off" action: no send-only command exists to reliably deactivate it.
+     * After the write, the response frame is awaited on the same socket and
+     * interpreted (see the readback paragraph below) — but a missing response
+     * still cannot confirm the aircraft activated 4G. The WLM
+     * refuses the switch (resp 3,3,3) until it has seen LTE availability
+     * (dongle beacon/pairing), so a dongle-equipped, linked aircraft is a
+     * hard precondition. There is no "off" action: no send-only command
+     * exists to reliably deactivate it.
      *
      * Guards:
-     * 1. Identity must be either a full 1581... factory serial or a short
-     *    WA/WM model identity, including a variant suffix such as WM265T.
-     *    Both are valid probeSerial() results.
+     * 1. Identity must be the full 1581... factory serial: the payload carries
+     *    it in the target-SN field of 51:1A, which the WLM resolves via
+     *    wlm_peer_dev_list_find. A short WA/WM model code is not a peer SN and
+     *    the request would be refused.
      * 2. The controller's 4G endpoint must be present (the abstract socket
      *    must be connectable). This does not identify external vs integrated
      *    cellular hardware; it only proves the DUSS route is exposed.
+     *
+     * After the write, the response frame is awaited on the same socket and
+     * the WLM resp codes are shown to the user ((3,3,3) = LTE link not
+     * available yet, (9,9,9) = invalid request). No response within the read
+     * window means "status unknown", never a confirmation.
      */
     fun send4gActivationFrames(): Boolean {
         val hardwareLease = beginHardwareOp()
@@ -975,15 +979,14 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                     update {
                         copy(
                             is4gBusy = false,
-                            fourGMessage = "No usable aircraft identity. Power on and link the drone, then refresh its S/N."
+                            fourGMessage = "No full aircraft serial (1581...). Power on and link the drone, then refresh its S/N. The 4G request needs the exact serial — a model code is refused by the WLM."
                         )
                     }
-                    log("4G activation failed — probe did not return a full 1581... serial or WA/WM model identity")
+                    log("4G activation failed — probe did not return a full 1581... serial")
                     return@runOnIO
                 }
 
-                val modelCode = identity.modelCode
-                log("4G identity accepted for experimental send: ${modelCode ?: "full factory S/N"}")
+                log("4G identity accepted for targeted send: full factory S/N")
 
                 // Guard 2: endpoint pre-check — fast-fail if the DUSS route does not exist.
                 if (!transport.is4gEndpointReachable()) {
@@ -995,27 +998,29 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 }
 
                 val profile = Profiles.load4g(app, identity.payloadSerial)
-                log("Loaded 4G profile: ${profile.frames.size} frames (identity: ${identity.payloadSerial}, model: ${modelCode ?: "unknown"})")
+                log("Loaded 4G profile: ${profile.frames.size} targeted frame(s) (serial: ${identity.payloadSerial})")
 
-                // 4G uses Unix domain socket, not TCP
-                val success = transport.sendFramesUnix(
+                // 4G uses Unix domain socket, not TCP. After writing we wait
+                // for the 51:1A response on the same socket and interpret the
+                // WLM resp codes; a timeout means "status unknown", not a
+                // rejection.
+                val result = transport.sendFramesUnixAwaitResponse(
                     frames = profile.frames,
+                    expectedCmdSet = 0x51,
+                    expectedCmdId = 0x1A,
                     interFrameDelayMs = profile.interFrameDelay
                 ) { progress -> update { copy(busyProgress = progress) } }
 
-                if (success) {
-                    update {
-                        copy(
-                            is4gBusy = false,
-                            busyProgress = 0f,
-                            fourGMessage = "All activation frames written successfully — check 4G status on the aircraft."
-                        )
-                    }
-                    log("4G activation: all ${profile.frames.size} frames written successfully via Unix socket")
-                } else {
+                if (!result.allWritten) {
                     update { copy(is4gBusy = false, fourGMessage = "4G apply failed while writing to the DUSS endpoint") }
                     log("4G activation failed — at least one frame write failed on the Unix socket")
+                    return@runOnIO
                 }
+
+                val resp = result.responsePayload
+                val message = interpretFourGResponse(resp)
+                update { copy(is4gBusy = false, busyProgress = 0f, fourGMessage = message) }
+                log("4G activation: frame written; response=${resp?.joinToString(" ") { "%02X".format(it) } ?: "none (timeout)"} → $message")
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 log("4G activation error: ${e.message}")
@@ -1025,6 +1030,30 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
             }
         }
         return true
+    }
+
+    /**
+     * Maps the 51:1A wlm_service_mode_switch_req response payload to an honest
+     * user message. The WLM replies via wlm_mode_switch_resp with three resp
+     * bytes + a 4-byte retcode: (0,0,0) = accepted (link-switch FSM started),
+     * (3,3,3) = requested mode not eligible right now (LTE link not
+     * available — dongle not paired/activated), (9,9,9) = invalid
+     * service_type/mode in the payload. Other documented error triplets
+     * (5,5,5)/(7,7,7)/(8,8,8) — duplicate request, target not found,
+     * link-mode gate — are reported verbatim as hex.
+     */
+    private fun interpretFourGResponse(resp: ByteArray?): String {
+        if (resp == null) {
+            return "Frame written, but no response within the read window — 4G status unknown. The DUSS router may not route the reply to this app."
+        }
+        fun triplet(v: Int) = resp.size >= 3 &&
+            resp[0] == v.toByte() && resp[1] == v.toByte() && resp[2] == v.toByte()
+        return when {
+            triplet(0) -> "4G switch request ACCEPTED by the controller (resp 0,0,0) — the link switch is running; check 4G status on the aircraft."
+            triplet(3) -> "4G switch REFUSED by the controller (resp 3,3,3): LTE link is not available yet. Pair and activate the cellular dongle first, then retry."
+            triplet(9) -> "4G request rejected as invalid (resp 9,9,9) — please report this response."
+            else -> "4G request answered: ${resp.joinToString(" ") { "%02X".format(it) }} — check 4G status on the aircraft."
+        }
     }
 
     /** Checks only whether the controller exposes the local 4G DUSS endpoint. */
