@@ -80,7 +80,7 @@ import com.freefcc.app.ui.theme.TextMuted
 import com.freefcc.app.ui.theme.TextPrimary
 import com.freefcc.app.ui.theme.TextSecondary
 
-private val BottomNavHeight = 34.dp
+private val BottomNavHeight = 80.dp
 private val PageHorizontalPadding = 16.dp
 private val PageTopPadding = 8.dp
 private val PageBottomPadding = 16.dp

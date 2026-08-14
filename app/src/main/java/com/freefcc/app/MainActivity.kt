@@ -71,7 +71,7 @@ private val TextWhite = Color(0xFFF5F7FA)
 private val TextGray = Color(0xFFA5AFBA)
 private val TextDim = Color(0xFF687581)
 
-private val BottomNavHeight = 34.dp
+private val BottomNavHeight = 80.dp
 private val PageHorizontalPadding = 16.dp
 private val PageTopPadding = 8.dp
 private val PageBottomPadding = 12.dp
