@@ -44,19 +44,19 @@ class ThemeAndComponentsTest {
 
     @Test
     fun testColorPaletteValues() {
-        assertEquals(Color(0xFF0C0E11), DarkBackground)
-        assertEquals(Color(0xFF11151A), DarkBackgroundMid)
-        assertEquals(Color(0xFF151A20), DarkSurface)
-        assertEquals(Color(0xFF1A2027), DarkSurfaceElevated)
-        assertEquals(Color(0xFF303842), DarkBorder)
-        assertEquals(Color(0xFFFF9D4D), BrandOrange)
-        assertEquals(Color(0xFF00E5FF), BrandCyan)
-        assertEquals(Color(0xFF4ED69A), StatusGreen)
-        assertEquals(Color(0xFFFFD166), StatusAmber)
-        assertEquals(Color(0xFFFF5C70), StatusRed)
-        assertEquals(Color(0xFFF5F7FA), TextPrimary)
-        assertEquals(Color(0xFFA5AFBA), TextSecondary)
-        assertEquals(Color(0xFF687581), TextMuted)
+        assertEquals(Color(0xFF0F172A), DarkBackground)
+        assertEquals(Color(0xFF1E293B), DarkBackgroundMid)
+        assertEquals(Color(0x10FFFFFF), DarkSurface)
+        assertEquals(Color(0x1FFFFFFF), DarkSurfaceElevated)
+        assertEquals(Color(0x1FFFFFFF), DarkBorder)
+        assertEquals(Color(0xFF3B82F6), BrandOrange)
+        assertEquals(Color(0xFF60A5FA), BrandCyan)
+        assertEquals(Color(0xFF10B981), StatusGreen)
+        assertEquals(Color(0xFFF59E0B), StatusAmber)
+        assertEquals(Color(0xFFEF4444), StatusRed)
+        assertEquals(Color(0xFFF8FAFC), TextPrimary)
+        assertEquals(Color(0xFF94A3B8), TextSecondary)
+        assertEquals(Color(0xFF64748B), TextMuted)
     }
 
     @Test
@@ -108,11 +108,11 @@ class ThemeAndComponentsTest {
 
     @Test
     fun testShapesHierarchy() {
-        assertEquals(RoundedCornerShape(6.dp), FreeFccShapes.extraSmall)
-        assertEquals(RoundedCornerShape(8.dp), FreeFccShapes.small)
-        assertEquals(RoundedCornerShape(10.dp), FreeFccShapes.medium)
-        assertEquals(RoundedCornerShape(12.dp), FreeFccShapes.large)
-        assertEquals(RoundedCornerShape(14.dp), FreeFccShapes.extraLarge)
+        assertEquals(RoundedCornerShape(8.dp), FreeFccShapes.extraSmall)
+        assertEquals(RoundedCornerShape(12.dp), FreeFccShapes.small)
+        assertEquals(RoundedCornerShape(50), FreeFccShapes.medium)
+        assertEquals(RoundedCornerShape(24.dp), FreeFccShapes.large)
+        assertEquals(RoundedCornerShape(32.dp), FreeFccShapes.extraLarge)
     }
 
     @Test

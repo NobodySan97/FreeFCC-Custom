@@ -69,18 +69,18 @@ class M1EmpiricalStressTest {
         assertEquals(TextMuted, TextDim)
 
         // Verify Color objects
-        assertEquals(Color(0xFF0C0E11).value, DarkBackground.value)
-        assertEquals(Color(0xFF11151A).value, DarkBackgroundMid.value)
-        assertEquals(Color(0xFF151A20).value, DarkSurface.value)
-        assertEquals(Color(0xFF1A2027).value, DarkSurfaceElevated.value)
-        assertEquals(Color(0xFF303842).value, DarkBorder.value)
-        assertEquals(Color(0xFF222A33).value, DarkBorderVariant.value)
-        assertEquals(Color(0xFFFF9D4D).value, BrandOrange.value)
-        assertEquals(Color(0xFF00E5FF).value, BrandCyan.value)
-        assertEquals(Color(0xFF4ED69A).value, StatusGreen.value)
-        assertEquals(Color(0xFFFFD166).value, StatusAmber.value)
-        assertEquals(Color(0xFFFF5C70).value, StatusRed.value)
-        assertEquals(Color(0xFF79A8FF).value, UpdateBlue.value)
+        assertEquals(Color(0xFF0F172A).value, DarkBackground.value)
+        assertEquals(Color(0xFF1E293B).value, DarkBackgroundMid.value)
+        assertEquals(Color(0x10FFFFFF).value, DarkSurface.value)
+        assertEquals(Color(0x1FFFFFFF).value, DarkSurfaceElevated.value)
+        assertEquals(Color(0x1FFFFFFF).value, DarkBorder.value)
+        assertEquals(Color(0x0AFFFFFF).value, DarkBorderVariant.value)
+        assertEquals(Color(0xFF3B82F6).value, BrandOrange.value)
+        assertEquals(Color(0xFF60A5FA).value, BrandCyan.value)
+        assertEquals(Color(0xFF10B981).value, StatusGreen.value)
+        assertEquals(Color(0xFFF59E0B).value, StatusAmber.value)
+        assertEquals(Color(0xFFEF4444).value, StatusRed.value)
+        assertEquals(Color(0xFF3B82F6).value, UpdateBlue.value)
     }
 
     @Test
@@ -155,17 +155,17 @@ class M1EmpiricalStressTest {
 
     @Test
     fun testShapeCornerRadiusHierarchy() {
-        assertEquals(CornerSize(6.dp), FreeFccShapes.extraSmall.topStart)
-        assertEquals(CornerSize(8.dp), FreeFccShapes.small.topStart)
-        assertEquals(CornerSize(10.dp), FreeFccShapes.medium.topStart)
-        assertEquals(CornerSize(12.dp), FreeFccShapes.large.topStart)
-        assertEquals(CornerSize(14.dp), FreeFccShapes.extraLarge.topStart)
+        assertEquals(CornerSize(8.dp), FreeFccShapes.extraSmall.topStart)
+        assertEquals(CornerSize(12.dp), FreeFccShapes.small.topStart)
+        assertEquals(CornerSize(50), FreeFccShapes.medium.topStart)
+        assertEquals(CornerSize(24.dp), FreeFccShapes.large.topStart)
+        assertEquals(CornerSize(32.dp), FreeFccShapes.extraLarge.topStart)
 
-        assertEquals(RoundedCornerShape(6.dp), FreeFccShapes.extraSmall)
-        assertEquals(RoundedCornerShape(8.dp), FreeFccShapes.small)
-        assertEquals(RoundedCornerShape(10.dp), FreeFccShapes.medium)
-        assertEquals(RoundedCornerShape(12.dp), FreeFccShapes.large)
-        assertEquals(RoundedCornerShape(14.dp), FreeFccShapes.extraLarge)
+        assertEquals(RoundedCornerShape(8.dp), FreeFccShapes.extraSmall)
+        assertEquals(RoundedCornerShape(12.dp), FreeFccShapes.small)
+        assertEquals(RoundedCornerShape(50), FreeFccShapes.medium)
+        assertEquals(RoundedCornerShape(24.dp), FreeFccShapes.large)
+        assertEquals(RoundedCornerShape(32.dp), FreeFccShapes.extraLarge)
     }
 
     @Test
