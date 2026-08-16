@@ -52,7 +52,7 @@ import com.freefcc.app.ui.theme.TextMuted
 import com.freefcc.app.ui.theme.TextPrimary
 import com.freefcc.app.ui.theme.TextSecondary
 
-private val BottomNavHeight = 80.dp
+
 private val PageHorizontalPadding = 16.dp
 private val PageTopPadding = 8.dp
 private val PageBottomPadding = 16.dp
@@ -123,7 +123,7 @@ fun ModemScreenContent(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = PageHorizontalPadding)
-            .padding(bottom = BottomNavHeight + PageBottomPadding),
+            .padding(bottom = PageBottomPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(Modifier.height(PageTopPadding))

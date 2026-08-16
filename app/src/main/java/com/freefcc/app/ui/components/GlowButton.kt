@@ -25,7 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.freefcc.app.ui.theme.BgDark
+import com.freefcc.app.ui.theme.TextPrimary
 
 enum class GlowButtonSize(val height: Dp, val fontSizeSp: Int, val iconSizeDp: Dp) {
     COMPACT(36.dp, 11, 14.dp),
@@ -44,7 +44,7 @@ fun GlowButton(
     isLoading: Boolean = false,
     size: GlowButtonSize = GlowButtonSize.DEFAULT,
     icon: ImageVector? = null,
-    shape: CornerBasedShape = RoundedCornerShape(10.dp)
+    shape: CornerBasedShape = RoundedCornerShape(50) // Pill-shaped Material 3 defaults
 ) {
     val buttonModifier = modifier.height(size.height)
     Button(
@@ -52,24 +52,24 @@ fun GlowButton(
         enabled = enabled && !isLoading,
         modifier = buttonModifier,
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (filled) color else Color.Transparent,
-            contentColor = if (filled) BgDark else color,
-            disabledContainerColor = color.copy(alpha = 0.2f),
-            disabledContentColor = color.copy(alpha = 0.4f)
+            containerColor = if (filled) color else Color.White.copy(alpha = 0.1f),
+            contentColor = if (filled) Color.White else color,
+            disabledContainerColor = if (filled) color.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f),
+            disabledContentColor = if (filled) Color.White.copy(alpha = 0.4f) else color.copy(alpha = 0.4f)
         ),
         shape = shape,
         border = when {
-            !filled && enabled -> BorderStroke(1.5.dp, color.copy(alpha = 0.6f))
+            !filled && enabled -> BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
             filled && enabled -> BorderStroke(1.dp, color.copy(alpha = 0.3f))
             else -> null
         },
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
     ) {
         if (isLoading) {
             CircularProgressIndicator(
                 modifier = Modifier.size(size.iconSizeDp),
                 strokeWidth = 2.dp,
-                color = if (filled) BgDark else color
+                color = if (filled) Color.White else color
             )
             Spacer(Modifier.width(8.dp))
         } else if (icon != null) {
@@ -82,9 +82,9 @@ fun GlowButton(
         }
         Text(
             text = text,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
             fontSize = size.fontSizeSp.sp,
-            letterSpacing = 0.3.sp
+            letterSpacing = (-0.5).sp // tighter modern look
         )
     }
 }
@@ -103,9 +103,9 @@ fun GlowIconButton(
     Surface(
         onClick = onClick,
         enabled = enabled && !isLoading,
-        shape = RoundedCornerShape(8.dp),
-        color = color.copy(alpha = 0.15f),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.4f)),
+        shape = RoundedCornerShape(50),
+        color = Color.White.copy(alpha = 0.1f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
         modifier = modifier.size(size)
     ) {
         Box(contentAlignment = Alignment.Center) {

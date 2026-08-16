@@ -5,9 +5,9 @@ import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
 
 val FreeFccShapes = Shapes(
-    extraSmall = RoundedCornerShape(6.dp),  // Micro badges & pills
-    small = RoundedCornerShape(8.dp),       // Compact buttons & nav tabs
-    medium = RoundedCornerShape(10.dp),      // Default buttons & auto toggles
-    large = RoundedCornerShape(12.dp),       // Inner cards & panels
-    extraLarge = RoundedCornerShape(14.dp)   // Main GlowCard containers
+    extraSmall = RoundedCornerShape(8.dp),   // Micro badges & pills
+    small = RoundedCornerShape(12.dp),       // Compact buttons & nav tabs
+    medium = RoundedCornerShape(50),         // Pill-shaped Material 3 buttons (50%)
+    large = RoundedCornerShape(24.dp),       // Inner cards & panels (Glassmorphism)
+    extraLarge = RoundedCornerShape(32.dp)   // Main containers
 )

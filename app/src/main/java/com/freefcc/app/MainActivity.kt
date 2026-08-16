@@ -71,7 +71,7 @@ private val TextWhite = Color(0xFFF5F7FA)
 private val TextGray = Color(0xFFA5AFBA)
 private val TextDim = Color(0xFF687581)
 
-private val BottomNavHeight = 80.dp
+
 private val PageHorizontalPadding = 16.dp
 private val PageTopPadding = 8.dp
 private val PageBottomPadding = 12.dp
@@ -230,29 +230,30 @@ private fun AppRoot(viewModel: FccViewModel) {
                 )
         )
 
-        // Page content — fills space above the bottom nav
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize(),
-            userScrollEnabled = true
-        ) { page ->
-            when (page) {
-                0 -> FccPage(state, viewModel)
-                1 -> ModemPage(state, viewModel)
-                2 -> com.freefcc.app.ui.screens.DiagnosticsScreen(viewModel)
-                3 -> com.freefcc.app.ui.screens.UpdateScreen(viewModel)
+        Row(modifier = Modifier.fillMaxSize()) {
+            // Side navigation
+            SideNavigationRail(
+                currentPage = pagerState.currentPage,
+                onPageSelected = { index ->
+                    scope.launch { pagerState.animateScrollToPage(index) }
+                },
+                updateAvailable = state.updateAvailable
+            )
+
+            // Page content — fills remaining space
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize().weight(1f),
+                userScrollEnabled = true
+            ) { page ->
+                when (page) {
+                    0 -> FccPage(state, viewModel)
+                    1 -> ModemPage(state, viewModel)
+                    2 -> com.freefcc.app.ui.screens.DiagnosticsScreen(viewModel)
+                    3 -> com.freefcc.app.ui.screens.UpdateScreen(viewModel)
+                }
             }
         }
-
-        // Bottom nav — fixed at the bottom, on top of everything
-        BottomNavBar(
-            currentPage = pagerState.currentPage,
-            onPageSelected = { index ->
-                scope.launch { pagerState.animateScrollToPage(index) }
-            },
-            updateAvailable = state.updateAvailable,
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
     }
 }
 
@@ -345,7 +346,7 @@ private fun FccPage(state: AppState, viewModel: FccViewModel) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = PageHorizontalPadding)
-            .padding(bottom = BottomNavHeight + PageBottomPadding),
+            .padding(bottom = PageBottomPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(Modifier.height(4.dp))
@@ -1274,7 +1275,7 @@ private fun GlowButton(
 // ═══════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun BottomNavBar(
+private fun SideNavigationRail(
     currentPage: Int,
     onPageSelected: (Int) -> Unit,
     updateAvailable: Boolean = false,
@@ -1282,20 +1283,20 @@ private fun BottomNavBar(
 ) {
     val tabs = listOf(
         Triple("FCC", Icons.Filled.Wifi, 0),
-        Triple("4G Modem", Icons.Filled.SettingsInputAntenna, 1),
-        Triple("Diagnostica", Icons.Outlined.Info, 2),
+        Triple("Modem", Icons.Filled.SettingsInputAntenna, 1),
+        Triple("Diag", Icons.Outlined.Info, 2),
         Triple("Update", Icons.Outlined.SystemUpdate, 3)
     )
 
-    NavigationBar(
-        containerColor = BgDark.copy(alpha = 0.98f),
+    NavigationRail(
+        containerColor = Color.White.copy(alpha = 0.03f),
         contentColor = TextWhite,
-        tonalElevation = 8.dp,
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.width(90.dp).background(Color.Transparent)
     ) {
+        Spacer(Modifier.weight(1f))
         tabs.forEach { (label, icon, index) ->
             val selected = currentPage == index
-            NavigationBarItem(
+            NavigationRailItem(
                 selected = selected,
                 onClick = { onPageSelected(index) },
                 icon = {
@@ -1319,7 +1320,7 @@ private fun BottomNavBar(
                         overflow = TextOverflow.Ellipsis
                     )
                 },
-                colors = NavigationBarItemDefaults.colors(
+                colors = NavigationRailItemDefaults.colors(
                     selectedIconColor = Cyan,
                     selectedTextColor = Cyan,
                     indicatorColor = Cyan.copy(alpha = 0.18f),
@@ -1327,6 +1328,8 @@ private fun BottomNavBar(
                     unselectedTextColor = TextGray
                 )
             )
+            Spacer(Modifier.height(8.dp))
         }
+        Spacer(Modifier.weight(1f))
     }
 }

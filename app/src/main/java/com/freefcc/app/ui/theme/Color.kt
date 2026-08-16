@@ -6,30 +6,30 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 // ═══════════════════════════════════════════════════════════════════════
-// Primary Dark Theme Palette (Tactical Outdoor Dark)
+// Premium Minimalist Glassmorphism Palette (Aerospace Slate)
 // ═══════════════════════════════════════════════════════════════════════
 
-val DarkBackground = Color(0xFF0C0E11)
-val DarkBackgroundMid = Color(0xFF11151A)
-val DarkSurface = Color(0xFF151A20)
-val DarkSurfaceElevated = Color(0xFF1A2027)
+val DarkBackground = Color(0xFF0F172A) // Slate 900
+val DarkBackgroundMid = Color(0xFF1E293B) // Slate 800
+val DarkSurface = Color(0x10FFFFFF) // 6% White for glass effect
+val DarkSurfaceElevated = Color(0x1FFFFFFF) // 12% White
 
 // Card & Container Outlines
-val DarkBorder = Color(0xFF303842)
-val DarkBorderVariant = Color(0xFF222A33)
+val DarkBorder = Color(0x1FFFFFFF) // 12% White
+val DarkBorderVariant = Color(0x0AFFFFFF) // 4% White
 
 // Brand & Accent Colors
-val BrandOrange = Color(0xFFFF9D4D) // Primary action & brand accent
-val BrandCyan = Color(0xFF00E5FF)   // Secondary tech cyan highlight
-val StatusGreen = Color(0xFF4ED69A)  // Active FCC / Success mint emerald
-val StatusAmber = Color(0xFFFFD166)  // Warning / 4G / Beta accent
-val StatusRed = Color(0xFFFF5C70)    // Error / Disconnected coral red
-val UpdateBlue = Color(0xFF79A8FF)   // Navigation & update blue
+val BrandOrange = Color(0xFF3B82F6) // Replaced with Electric Blue
+val BrandCyan = Color(0xFF60A5FA)   // Blue 400
+val StatusGreen = Color(0xFF10B981)  // Emerald
+val StatusAmber = Color(0xFFF59E0B)  // Amber
+val StatusRed = Color(0xFFEF4444)    // Rose
+val UpdateBlue = Color(0xFF3B82F6)   // Blue 500
 
 // Text Colors (High Contrast for Outdoor Readability)
-val TextPrimary = Color(0xFFF5F7FA)   // ~15.8:1 contrast on DarkBackground
-val TextSecondary = Color(0xFFA5AFBA) // ~7.2:1 contrast on DarkBackground
-val TextMuted = Color(0xFF687581)     // ~3.8:1 contrast on DarkBackground
+val TextPrimary = Color(0xFFF8FAFC)   // Slate 50
+val TextSecondary = Color(0xFF94A3B8) // Slate 400
+val TextMuted = Color(0xFF64748B)     // Slate 500
 
 // Color Aliases for Components and Backward Compatibility
 val BgDark = DarkBackground
@@ -48,18 +48,18 @@ val TextDim = TextMuted
 
 // Ambient Brushes & Gradients
 val BackgroundGradient = Brush.verticalGradient(
-    colors = listOf(DarkBackground, DarkBackgroundMid, DarkBackground)
+    colors = listOf(DarkBackground, Color(0xFF0B1120))
 )
 
 val CardBackgroundGradient = Brush.verticalGradient(
-    colors = listOf(DarkSurface, Color(0xFF11161D))
+    colors = listOf(Color(0x1AFFFFFF), Color(0x0AFFFFFF))
 )
 
 fun cardBorderGradient(borderColor: Color = DarkBorder) = Brush.horizontalGradient(
     listOf(
-        borderColor.copy(alpha = 0.5f),
-        borderColor.copy(alpha = 0.15f),
-        borderColor.copy(alpha = 0.4f)
+        Color(0x33FFFFFF),
+        Color(0x1AFFFFFF),
+        Color(0x26FFFFFF)
     )
 )
 
