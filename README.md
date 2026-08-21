@@ -25,8 +25,10 @@ A free, hardened, and open-source Android app that unlocks FCC mode (5.8 GHz & 2
 > * Low-overhead 10-second send-only periodic keepalive approach.
 >
 > 🚀 **Exclusive Hardening & Enhancements in `NobodySan97/FreeFCC-Custom`:**
+> * **In-Flight Floating Overlay Widget:** Draggable, always-on-top pill that floats over DJI Fly, showing real-time FCC status and enabling instant one-tap FCC re-triggers or mode switching during flight without leaving the camera feed.
 > * **Complete *CleanDesigner* UI Rework:** Modern Jetpack Compose interface with Glassmorphism, Material You theming, and a **Side Navigation Rail** designed specifically for landscape DJI controller screens (DJI RC, RC 2, RC Pro, RC Plus) with 52dp thumb/glove-friendly touch targets.
-> * **Isolated Country Code Execution:** Pushes `07:30` in a dedicated socket session, ensuring the 5.8 GHz FCC profile engages immediately without command collisions.
+> * **5.8 GHz & 2.4 GHz Dual-Band Sblocco:** Complete DUML sequence with isolated country write sessions (`07:30`) ensuring reliable 5.8 GHz FCC engagement.
+> * **Ultra-Low-Overhead 10s Periodic Auto FCC:** Streamlined send-only keepalive eliminating continuous polling, drastically reducing CPU, network, and battery overhead during flight.
 > * **Multi-Tier Concurrency & Thread-Safety:** Atomic `HardwareLock` and `DumlPortSessionLock` architecture across the UI, floating button widget, and background services, eliminating socket interleaving and CRC errors.
 > * **Optimized Quad-Core Performance:** Throttled accessibility scans with native memory handle recycling (`node.recycle()`) for seamless, lag-free operation alongside DJI Fly (<2% CPU load).
 > * **Hardened Dual-CRC Telemetry & Serial Parsing:** Full CRC-8 and CRC-16 validation before packet extraction to eliminate false-framing sync hazards.
@@ -56,7 +58,7 @@ A free, hardened, and open-source Android app that unlocks FCC mode (5.8 GHz & 2
 | **4G Activation** | Sends targeted 4G service mode frames to the aircraft (`0x51:0x1A`, experimental) |
 | **GPS & LED Control** | Direct toggle and verification of aircraft auxiliary LEDs and master GPS parameters |
 | **Device Info & Telemetry** | Displays detected aircraft model name/code, controller code, and factory serial number |
-| **Floating Action Button** | Interactive on-screen overlay widget for quick in-flight FCC status toggling |
+| **In-Flight Floating Overlay** | Interactive, draggable on-screen pill over DJI Fly showing real-time FCC status and one-tap re-triggering |
 | **In-App Auto-Updater** | Automatically checks for updates and installs the latest APK directly from GitHub Releases |
 | **LAN Diagnostic API** | Optional local Wi-Fi HTTP bridge for live logs, diagnostics, and DUML inspection |
 | **100% Free & Telemetry-Free** | No ads, no tracking, no paid activations, and fully open-source |
@@ -93,9 +95,10 @@ No PC is required—installation is done directly on the controller via a microS
 2. Open **FreeFCC Custom** and choose your preferred mode:
    - **Auto FCC — Home Point (Recommended):** Automatically applies FCC upon Home Point match. Enable *FreeFCC Custom Home Point Test* in Accessibility Settings when prompted.
    - **Auto FCC — every 10 sec:** Pushes FCC frames periodically in background via send-only bursts.
+   - **Floating Action Button:** Enable the on-screen overlay widget to see live FCC status and trigger one-tap re-applies directly over DJI Fly.
    - **Send FCC Request:** One-shot manual trigger.
 3. Tap **Open DJI Fly** to launch the flight app.
-4. Enjoy extended range and higher transmission power.
+4. Enjoy extended range and higher transmission power with the floating status pill on screen.
 
 ---
 
