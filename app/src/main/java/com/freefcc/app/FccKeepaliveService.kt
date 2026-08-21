@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 
 enum class AutoFccMode(val wireValue: String) {
     HOME_POINT_TEXT("home_point_text"),
-    PERIODIC_5S("periodic_5s");
+    PERIODIC_10S("periodic_5s");
 
     companion object {
         fun fromWireValue(value: String?): AutoFccMode =
@@ -65,10 +65,9 @@ internal object HomePointSignalPolicy {
 /**
  * Foreground Auto FCC service. Home Point mode keeps waiting for original DJI
  * Fly accessibility text and applies the complete profile after every new
- * flight-session Home Point event. Periodic mode applies the complete profile
- * once and then checks the reported country every five seconds, re-applying the
- * profile only when the controller no longer reports the target country.
- * Both modes remain active until the user turns their switch off.
+ * flight-session Home Point event. Periodic mode is send-only: it pushes the
+ * 07:30 country write plus the profile (two rounds) every ten seconds with
+ * no readback. Both modes remain active until the user turns their switch off.
  */
 class FccKeepaliveService : Service() {
 
@@ -79,7 +78,7 @@ class FccKeepaliveService : Service() {
         const val ACTION_STOP = "com.freefcc.app.STOP_KEEPALIVE"
         private const val EXTRA_REQUEST_GENERATION = "request_generation"
         private const val EXTRA_AUTO_MODE = "auto_mode"
-        internal const val PERIODIC_INTERVAL_MS = 5_000L
+        internal const val PERIODIC_INTERVAL_MS = 10_000L
         internal const val HOME_POINT_DEBOUNCE_MS = 30_000L
         private const val APPLY_CONNECT_RETRY_DELAY_MS = 5_000L
         private const val PREFS_NAME = "freefcc"
@@ -212,13 +211,6 @@ class FccKeepaliveService : Service() {
 
         internal fun deliveredAutoMode(action: String?, encodedMode: String?): AutoFccMode? =
             AutoFccMode.fromWireValue(encodedMode).takeIf { action == ACTION_START }
-
-        /** Log key for a periodic country check; identical ticks are not logged twice. */
-        internal fun periodicCountryState(result: FccCountryRegionResult): String =
-            "${result.initialCountry ?: "unknown"}:${result.writeAttempts}:" +
-                "${result.writeCompleted}:${result.writeAckMatched}:" +
-                "${result.readCompleted}:${result.readAckMatched}:" +
-                "${result.observedCountry ?: "unknown"}:${result.verified}"
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -409,14 +401,16 @@ class FccKeepaliveService : Service() {
             }
 
             FccViewModel.logServiceEvent(
-                "PERIODIC FCC: starting full profile, then a country check every 5s"
+                "PERIODIC FCC: sending the profile (two rounds) every 10s, no readback"
             )
             val pinnedPort = awaitControllerPort(generation) ?: return@launch
-            ensureCountryRegion(generation, pinnedPort)?.let { result ->
-                logCountryRegionResult("PERIODIC FCC bootstrap", result)
-            }
+            // Periodic mode is send-only: the 07:30 country write goes out as
+            // its own session, then the clean FCC profile runs two rounds (the
+            // same burst Home Point applies to engage 5.8). No country readback.
+            val periodicProfile = bootstrapProfile
+            sendCountryWrite(generation, pinnedPort)
             val bootstrapReport = applyWithPreWriteRetry(
-                profile = bootstrapProfile,
+                profile = periodicProfile,
                 generation = generation,
                 pinnedPort = pinnedPort,
                 label = "PERIODIC FCC bootstrap",
@@ -427,22 +421,13 @@ class FccKeepaliveService : Service() {
                 return@launch
             }
 
-            var lastTickCountryState: String? = null
             while (requestGate.isCurrent(generation)) {
                 delay(PERIODIC_INTERVAL_MS)
                 if (!requestGate.isCurrent(generation)) return@launch
-                val country = ensureCountryRegion(generation, pinnedPort) ?: return@launch
-                // A tick that already reads the target country costs one query
-                // and sends nothing; the log records only state transitions.
-                val state = periodicCountryState(country)
-                if (state != lastTickCountryState) {
-                    lastTickCountryState = state
-                    logCountryRegionResult("PERIODIC FCC tick", country)
-                }
-                if (country.skippedWrite) continue
+                sendCountryWrite(generation, pinnedPort)
                 if (!requestGate.isCurrent(generation)) return@launch
                 val report = applyProfileOnce(
-                    profile = bootstrapProfile,
+                    profile = periodicProfile,
                     generation = generation,
                     pinnedPort = pinnedPort,
                     label = "PERIODIC FCC re-apply",
@@ -637,6 +622,45 @@ class FccKeepaliveService : Service() {
                 "matching_acks=${report.matchingAcks}; RF state unknown"
         )
         return report
+    }
+
+    /**
+     * Sends the 07:30 country write for the selected region once, write-only
+     * (no readback). It runs as its own port session so it never lands inside
+     * the FCC profile burst — mixing it in stops 5.8 from engaging. The region
+     * is read fresh so a change takes effect on the next tick.
+     */
+    private suspend fun sendCountryWrite(generation: Long, pinnedPort: Int) {
+        var hardwareLease: HardwareLock.Lease? = null
+        var sessionLease: DumlPortSessionLock.Lease? = null
+        while (requestGate.isCurrent(generation) && sessionLease == null) {
+            hardwareLease = HardwareLock.tryBegin()
+            if (hardwareLease == null) {
+                delay(200)
+                continue
+            }
+            sessionLease = DumlPortSessionLock.tryBegin(pinnedPort)
+            if (sessionLease == null) {
+                hardwareLease.close()
+                hardwareLease = null
+                delay(200)
+            }
+        }
+        if (!requestGate.isCurrent(generation) || hardwareLease == null || sessionLease == null) {
+            sessionLease?.close()
+            hardwareLease?.close()
+            return
+        }
+        try {
+            transport.sendFrame(
+                frame = FccCountryRegion.buildWriteFrame(FccCountryRegion.TARGET_COUNTRY),
+                readWindowMs = 80,
+                port = pinnedPort
+            )
+        } finally {
+            sessionLease.close()
+            hardwareLease.close()
+        }
     }
 
     private fun finishAutoRun(generation: Long, success: Boolean, error: String?) {

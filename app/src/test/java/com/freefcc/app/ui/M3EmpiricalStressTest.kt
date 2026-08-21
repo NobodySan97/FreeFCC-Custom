@@ -222,8 +222,8 @@ class M3EmpiricalStressTest {
         val homePointSelected = AppState(selectedAutoMode = AutoFccMode.HOME_POINT_TEXT)
         assertEquals(AutoFccMode.HOME_POINT_TEXT, homePointSelected.selectedAutoMode)
 
-        val periodicSelected = AppState(selectedAutoMode = AutoFccMode.PERIODIC_5S)
-        assertEquals(AutoFccMode.PERIODIC_5S, periodicSelected.selectedAutoMode)
+        val periodicSelected = AppState(selectedAutoMode = AutoFccMode.PERIODIC_10S)
+        assertEquals(AutoFccMode.PERIODIC_10S, periodicSelected.selectedAutoMode)
     }
 
     @Test
@@ -235,12 +235,12 @@ class M3EmpiricalStressTest {
         currentMode = AutoFccSelection.updatedMode(currentMode, AutoFccMode.HOME_POINT_TEXT, true)
         assertEquals(AutoFccMode.HOME_POINT_TEXT, currentMode)
 
-        // 2. Switch rapidly to PERIODIC_5S (should replace HOME_POINT_TEXT)
-        currentMode = AutoFccSelection.updatedMode(currentMode, AutoFccMode.PERIODIC_5S, true)
-        assertEquals(AutoFccMode.PERIODIC_5S, currentMode)
+        // 2. Switch rapidly to PERIODIC_10S (should replace HOME_POINT_TEXT)
+        currentMode = AutoFccSelection.updatedMode(currentMode, AutoFccMode.PERIODIC_10S, true)
+        assertEquals(AutoFccMode.PERIODIC_10S, currentMode)
 
-        // 3. Toggle PERIODIC_5S off -> should become null
-        currentMode = AutoFccSelection.updatedMode(currentMode, AutoFccMode.PERIODIC_5S, false)
+        // 3. Toggle PERIODIC_10S off -> should become null
+        currentMode = AutoFccSelection.updatedMode(currentMode, AutoFccMode.PERIODIC_10S, false)
         assertNull(currentMode)
 
         // 4. Toggle HOME_POINT_TEXT on -> becomes HOME_POINT_TEXT
@@ -262,9 +262,9 @@ class M3EmpiricalStressTest {
         assertTrue(state2.isFloatingButtonEnabled)
         assertNull(state2.selectedAutoMode)
 
-        val state3 = AppState(selectedAutoMode = AutoFccMode.PERIODIC_5S, isFloatingButtonEnabled = false)
+        val state3 = AppState(selectedAutoMode = AutoFccMode.PERIODIC_10S, isFloatingButtonEnabled = false)
         assertFalse(state3.isFloatingButtonEnabled)
-        assertEquals(AutoFccMode.PERIODIC_5S, state3.selectedAutoMode)
+        assertEquals(AutoFccMode.PERIODIC_10S, state3.selectedAutoMode)
     }
 
     // ═══════════════════════════════════════════════════════════════════════

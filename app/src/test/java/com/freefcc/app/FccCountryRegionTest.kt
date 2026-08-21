@@ -138,6 +138,16 @@ class FccCountryRegionTest {
         assertNull(FccCountryRegion.parseReadback(byteArrayOf(0x00, 0x41, 0x31, 0x00)))
     }
 
+    @Test
+    fun `buildWriteFrame produces valid 07-30 DUML frame`() {
+        val frame = FccCountryRegion.buildWriteFrame("AU")
+        assertEquals(0x55, frame[0].toInt() and 0xFF)
+        assertEquals(0x07, frame[9].toInt() and 0xFF)
+        assertEquals(0x30, frame[10].toInt() and 0xFF)
+        assertEquals(0x41, frame[11].toInt() and 0xFF)
+        assertEquals(0x55, frame[12].toInt() and 0xFF)
+    }
+
     private fun exchange(
         payload: ByteArray?,
         matched: Boolean = payload != null

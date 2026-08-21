@@ -155,10 +155,10 @@ internal object AppForegroundNotification {
                 requestCode = 2
             ),
             icon = android.R.drawable.ic_popup_sync,
-            label = if (selectedMode == AutoFccMode.PERIODIC_5S) {
-                "✓ Every 5 sec"
+            label = if (selectedMode == AutoFccMode.PERIODIC_10S) {
+                "✓ Every 10 sec"
             } else {
-                "Every 5 sec"
+                "Every 10 sec"
             }
         )
         val offAction = notificationAction(
@@ -222,7 +222,7 @@ internal object AppForegroundNotification {
 internal object AppNotificationActionPolicy {
     fun selectedMode(action: String?): AutoFccMode? = when (action) {
         AppForegroundService.ACTION_SELECT_HOME_POINT -> AutoFccMode.HOME_POINT_TEXT
-        AppForegroundService.ACTION_SELECT_PERIODIC -> AutoFccMode.PERIODIC_5S
+        AppForegroundService.ACTION_SELECT_PERIODIC -> AutoFccMode.PERIODIC_10S
         else -> null
     }
 
@@ -237,7 +237,7 @@ internal object AppNotificationActionPolicy {
                 "Auto FCC: Home Point · enable Accessibility"
             }
         }
-        AutoFccMode.PERIODIC_5S -> "Auto FCC: every 5 seconds"
+        AutoFccMode.PERIODIC_10S -> "Auto FCC: every 10 seconds"
         null -> "Auto FCC: Off"
     }
 }

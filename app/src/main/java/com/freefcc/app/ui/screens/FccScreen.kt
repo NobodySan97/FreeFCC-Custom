@@ -571,12 +571,12 @@ private fun AutoFccModesCard(
                 }
             )
 
-            // Auto FCC 5s periodic
+            // Auto FCC 10s periodic
             AutoModeToggle(
-                text = "Auto FCC — Ricorrente ogni 5 secondi",
-                checked = selectedAutoMode == AutoFccMode.PERIODIC_5S,
+                text = "Auto FCC — Ricorrente ogni 10 secondi",
+                checked = selectedAutoMode == AutoFccMode.PERIODIC_10S,
                 onCheckedChange = { checked ->
-                    onSetAutoFccMode(AutoFccMode.PERIODIC_5S, checked)
+                    onSetAutoFccMode(AutoFccMode.PERIODIC_10S, checked)
                 }
             )
 
@@ -878,9 +878,9 @@ fun FccScreenPreviewAutoFccActive() {
                 aircraftModelCode = "WM169",
                 aircraftSerial = "1581F4X55667788",
                 isFccEnabled = true,
-                selectedAutoMode = AutoFccMode.PERIODIC_5S,
+                selectedAutoMode = AutoFccMode.PERIODIC_10S,
                 isFloatingButtonEnabled = true,
-                message = "Auto-FCC attivo (invio periodico ogni 5s)"
+                message = "Auto-FCC attivo (invio periodico ogni 10s)"
             ),
             onConnectClick = {},
             onProbeSerial = {},
