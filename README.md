@@ -7,6 +7,7 @@
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/NobodySan97/FreeFCC-Custom?style=flat-square)](https://github.com/NobodySan97/FreeFCC-Custom/releases)
 [![Downloads](https://img.shields.io/github/downloads/NobodySan97/FreeFCC-Custom/total?style=flat-square&color=brightgreen)](https://github.com/NobodySan97/FreeFCC-Custom/releases)
+[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-ff5e5b?style=flat-square&logo=ko-fi&logoColor=white)](https://ko-fi.com/nobodysan)
 
 A free, hardened, and open-source Android app that unlocks FCC mode (5.8 GHz & 2.4 GHz), sends experimental 4G activation frames, and queries device telemetry on DJI smart controllers with a screen (DJI RC, RC 2, RC Pro, RC Plus).
 
@@ -134,6 +135,18 @@ In the **DJI Fly app**, open **Settings $\rightarrow$ Transmission** and check t
 | **DJI Neo 1 / Neo 2** | RC2 | ✅ Working | N/A | Full FCC |
 | **DJI Avata 2 / Avata 360** | RC2 | ✅ Working | Experimental | Full FCC + LED |
 | **DJI M30T / Matrice 350** | RC Plus | ✅ Working | Experimental | Full FCC |
+
+---
+
+## ☕ Support the Project
+
+If FreeFCC Custom helped you unlock your DJI drone's full transmission potential, consider supporting ongoing development, reverse-engineering, and hardware testing:
+
+<div align="center">
+
+[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Offrimi%20un%20caffè-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/nobodysan)
+
+</div>
 
 ---
 

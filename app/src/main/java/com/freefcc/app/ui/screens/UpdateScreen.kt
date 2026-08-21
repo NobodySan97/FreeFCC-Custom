@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -332,6 +333,49 @@ fun UpdateScreenContent(
                 onClick = onCheckForUpdates,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            Spacer(Modifier.height(16.dp))
+
+            // Support on Ko-fi
+            val uriHandler = LocalUriHandler.current
+            GlowCard(
+                borderColor = Color(0xFFFF5E5B).copy(alpha = 0.5f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Supporta lo Sviluppo",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Offri un caffè per supportare FreeFCC Custom",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                    }
+                    GlowButton(
+                        text = "☕ KO-FI",
+                        color = Color(0xFFFF5E5B),
+                        filled = true,
+                        size = GlowButtonSize.COMPACT,
+                        onClick = {
+                            try {
+                                uriHandler.openUri("https://ko-fi.com/nobodysan")
+                            } catch (_: Exception) {}
+                        },
+                        modifier = Modifier.width(100.dp)
+                    )
+                }
+            }
         }
     }
 }
