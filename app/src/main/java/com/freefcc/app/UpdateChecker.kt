@@ -35,6 +35,11 @@ data class UpdateInfo(
             val n = new.getOrElse(i) { 0 }
             if (n != c) return n > c
         }
+        val currentIsPre = currentVersion.contains("-")
+        val newIsPre = isPreRelease || version.contains("-")
+        if (currentIsPre && !newIsPre) {
+            return true
+        }
         return false
     }
 

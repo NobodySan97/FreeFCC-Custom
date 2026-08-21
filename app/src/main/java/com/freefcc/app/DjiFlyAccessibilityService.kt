@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
+import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import java.text.Normalizer
@@ -263,7 +264,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
 
     private fun logVisibleUiSnapshot() {
         val now = System.currentTimeMillis()
-        if (now - lastUiScanAtMs < 1_000L) return
+        if (now - lastUiScanAtMs < 2_000L) return
         lastUiScanAtMs = now
 
         val root = rootInActiveWindow ?: return
@@ -291,10 +292,11 @@ class DjiFlyAccessibilityService : AccessibilityService() {
 
     private fun handleHomePointMatch(source: String, value: CharSequence) {
         val accepted = FccKeepaliveService.notifyHomePointDetected()
+        val textSafe = DjiFlyHomePointMatcher.normalize(value).take(240)
         FccViewModel.logServiceEvent(
             "DJI FLY ACCESSIBILITY TEST: HOME POINT MATCH source=$source " +
                 "auto_fcc_trigger_accepted=$accepted " +
-                "text=${value.toString().replace(Regex("\\s+"), " ").take(240)}"
+                "text=$textSafe"
         )
     }
 
@@ -303,13 +305,25 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         val pending = ArrayDeque<AccessibilityNodeInfo>()
         pending.add(root)
         var visited = 0
-        while (pending.isNotEmpty() && visited < 300 && labels.size < 80) {
+        while (pending.isNotEmpty() && visited < 100 && labels.size < 40) {
             val node = pending.removeFirst()
             visited += 1
             node.text?.toString()?.trim()?.takeIf(String::isNotEmpty)?.let(labels::add)
             node.contentDescription?.toString()?.trim()?.takeIf(String::isNotEmpty)?.let(labels::add)
             for (index in 0 until node.childCount) {
                 node.getChild(index)?.let(pending::addLast)
+            }
+            @Suppress("DEPRECATION")
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                node.recycle()
+            }
+        }
+        while (pending.isNotEmpty()) {
+            @Suppress("DEPRECATION")
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                pending.removeFirst().recycle()
+            } else {
+                pending.removeFirst()
             }
         }
         return labels

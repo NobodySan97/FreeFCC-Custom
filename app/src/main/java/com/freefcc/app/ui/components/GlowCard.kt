@@ -24,7 +24,7 @@ fun GlowCard(
     modifier: Modifier = Modifier,
     borderColor: Color = CardBorder,
     backgroundColor: Color = CardBg,
-    gradientEndColor: Color = Color.Transparent, // Unused in glassmorphism but kept for signature
+    gradientEndColor: Color = Color.Transparent,
     shape: CornerBasedShape = RoundedCornerShape(24.dp),
     contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
     onClick: (() -> Unit)? = null,
@@ -41,8 +41,8 @@ fun GlowCard(
         shape = shape,
         modifier = cardModifier.glassmorphism(
             cornerRadius = 24.dp,
-            borderAlpha = 0.12f,
-            bgAlpha = 0.06f
+            borderColor = borderColor,
+            backgroundColor = backgroundColor
         )
     ) {
         Column(

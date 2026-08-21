@@ -11,13 +11,17 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Applies a premium minimalist glassmorphism effect to the component.
- * Uses a soft translucent background and an ultra-thin subtle border to create depth.
+ * Uses a soft translucent background and a subtle border to create depth.
  */
 fun Modifier.glassmorphism(
     cornerRadius: Dp = 24.dp,
-    borderAlpha: Float = 0.12f,
-    bgAlpha: Float = 0.06f
-) = this
-    .clip(RoundedCornerShape(cornerRadius))
-    .background(Color.White.copy(alpha = bgAlpha))
-    .border(1.dp, Color.White.copy(alpha = borderAlpha), RoundedCornerShape(cornerRadius))
+    borderColor: Color = Color.White.copy(alpha = 0.12f),
+    backgroundColor: Color = Color.White.copy(alpha = 0.06f),
+    borderWidth: Dp = 1.dp
+): Modifier {
+    val shape = RoundedCornerShape(cornerRadius)
+    return this
+        .clip(shape)
+        .background(backgroundColor)
+        .border(borderWidth, borderColor, shape)
+}

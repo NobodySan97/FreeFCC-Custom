@@ -672,9 +672,14 @@ class DumlTransport {
         var i = 0
         while (i < data.size) {
             if (data[i] != 0x55.toByte()) { i++; continue }
-            if (i + 13 > data.size) break
+            if (i + 4 > data.size) break
             val len = (data[i + 1].toInt() and 0xFF) or ((data[i + 2].toInt() and 0x03) shl 8)
-            if (len < 13 || i + len > data.size) { i++; continue }
+            val headerValid = len in 13..1023 && (i + len <= data.size) &&
+                DumlBuilder.crc8(data, i, 3) == (data[i + 3].toInt() and 0xFF)
+            if (!headerValid) { i++; continue }
+            val expectedCrc = DumlBuilder.crc16(data, i, len - 2)
+            val actualCrc = (data[i + len - 2].toInt() and 0xFF) or ((data[i + len - 1].toInt() and 0xFF) shl 8)
+            if (expectedCrc != actualCrc) { i++; continue }
             val cmdSet = data[i + 9].toInt() and 0xFF
             val cmdId = data[i + 10].toInt() and 0xFF
             if (cmdSet == 0 && cmdId == expectCmdId) {
@@ -821,7 +826,7 @@ class DumlTransport {
 
             // Best-effort ACK drain. A timeout is not a write failure because
             // NO_ACK_NEEDED profiles legitimately return no response.
-            try { socket.getInputStream().read(ackBuffer) } catch (_: IOException) {}
+            try { socket.getInputStream().read(ByteArray(512)) } catch (_: IOException) {}
             return true
         } catch (_: IOException) { return false }
         finally { try { socket?.close() } catch (_: IOException) {} }
@@ -1163,22 +1168,24 @@ class DumlTransport {
                     }
 
                     cmdSet == 0x03 && cmdId == 0x34 -> {
-                        val payloadStart = if (frame[11].toInt() == 0) 12 else 11
-                        if (payloadStart < payloadEnd) {
-                            val end = (payloadStart until payloadEnd)
-                                .firstOrNull { frame[it].toInt() == 0 }
-                                ?: payloadEnd
-                            val candidate = String(
-                                frame,
-                                payloadStart,
-                                end - payloadStart,
-                                Charsets.US_ASCII
-                            ).trim()
-                            if (
-                                candidate.length in 2..32 &&
-                                candidate.all { it.code in 0x20..0x7E }
-                            ) {
-                                modelName = candidate
+                        if (payloadEnd > 11) {
+                            val payloadStart = if (frame[11].toInt() == 0) 12 else 11
+                            if (payloadStart < payloadEnd) {
+                                val end = (payloadStart until payloadEnd)
+                                    .firstOrNull { frame[it].toInt() == 0 }
+                                    ?: payloadEnd
+                                val candidate = String(
+                                    frame,
+                                    payloadStart,
+                                    end - payloadStart,
+                                    Charsets.US_ASCII
+                                ).trim()
+                                if (
+                                    candidate.length in 2..32 &&
+                                    candidate.all { it.code in 0x20..0x7E }
+                                ) {
+                                    modelName = candidate
+                                }
                             }
                         }
                     }
@@ -1196,7 +1203,4 @@ class DumlTransport {
             }
         }
     }
-
-    /** Reused read buffer for ACK reads — avoids a per-frame allocation. */
-    private val ackBuffer = ByteArray(2048)
 }

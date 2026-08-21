@@ -373,7 +373,18 @@ class FloatingButtonService : Service() {
         scope.launch {
             val transport = DumlTransport()
             val port = transport.getDetectedPort().takeIf { it > 0 } ?: DumlTransport.PORT
-            val result = FccCountryRegion.ensure(transport, port, targetCountry = country)
+            val hardwareLease = HardwareLock.tryBegin() ?: return@launch
+            val sessionLease = DumlPortSessionLock.tryBegin(port)
+            if (sessionLease == null) {
+                hardwareLease.close()
+                return@launch
+            }
+            val result = try {
+                FccCountryRegion.ensure(transport, port, targetCountry = country)
+            } finally {
+                sessionLease.close()
+                hardwareLease.close()
+            }
             withContext(Dispatchers.Main) {
                 if (result.observedCountry == "AU" && lastVibratedCountry != "AU") {
                     lastVibratedCountry = "AU"
@@ -390,7 +401,18 @@ class FloatingButtonService : Service() {
         scope.launch {
             val transport = DumlTransport()
             val port = transport.getDetectedPort().takeIf { it > 0 } ?: DumlTransport.PORT
-            val result = FccCountryRegion.ensure(transport, port)
+            val hardwareLease = HardwareLock.tryBegin() ?: return@launch
+            val sessionLease = DumlPortSessionLock.tryBegin(port)
+            if (sessionLease == null) {
+                hardwareLease.close()
+                return@launch
+            }
+            val result = try {
+                FccCountryRegion.ensure(transport, port)
+            } finally {
+                sessionLease.close()
+                hardwareLease.close()
+            }
             withContext(Dispatchers.Main) {
                 if (result.observedCountry == "AU") {
                     if (lastVibratedCountry != "AU") {

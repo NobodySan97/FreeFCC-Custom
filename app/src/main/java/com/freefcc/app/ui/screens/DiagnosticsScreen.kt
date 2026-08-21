@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -459,18 +461,23 @@ fun DiagnosticsScreenContent(
                 Surface(
                     color = Color(0xFF0C0E11),
                     shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().height(280.dp)
                 ) {
-                    Column(modifier = Modifier.padding(8.dp)) {
-                        displayedLogs.forEachIndexed { index, entry ->
-                            val color = when {
-                                entry.contains("enabled", true) || entry.contains("connected", true) ||
-                                entry.contains("restored", true) || entry.contains("received", true) -> StatusGreen
-                                entry.contains("fail", true) || entry.contains("error", true) -> StatusRed
-                                entry.contains("Enabling", true) || entry.contains("Disabling", true) ||
-                                entry.contains("Probing", true) || entry.contains("Querying", true) ||
-                                entry.contains("Loaded", true) -> Amber
-                                else -> BrandCyan.copy(0.7f)
+                    LazyColumn(modifier = Modifier.padding(8.dp).fillMaxSize()) {
+                        itemsIndexed(
+                            items = displayedLogs,
+                            key = { index, _ -> index }
+                        ) { index, entry ->
+                            val color = remember(entry) {
+                                when {
+                                    entry.contains("enabled", true) || entry.contains("connected", true) ||
+                                    entry.contains("restored", true) || entry.contains("received", true) -> StatusGreen
+                                    entry.contains("fail", true) || entry.contains("error", true) -> StatusRed
+                                    entry.contains("Enabling", true) || entry.contains("Disabling", true) ||
+                                    entry.contains("Probing", true) || entry.contains("Querying", true) ||
+                                    entry.contains("Loaded", true) -> Amber
+                                    else -> BrandCyan.copy(0.7f)
+                                }
                             }
                             if (index > 0) {
                                 HorizontalDivider(color = DarkBorder.copy(0.2f), thickness = 0.5.dp)
