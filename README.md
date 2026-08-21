@@ -11,14 +11,26 @@
 A free, hardened, and open-source Android app that unlocks FCC mode (5.8 GHz & 2.4 GHz), sends experimental 4G activation frames, and queries device telemetry on DJI smart controllers with a screen (DJI RC, RC 2, RC Pro, RC Plus).
 
 > ℹ️ **Fork & Upstream Attribution**:  
-> This repository is an advanced, hardened fork of [doesthings/FreeFCC](https://github.com/doesthings/FreeFCC). It has been extensively re-engineered with the following exclusive enhancements:
-> * **Complete *CleanDesigner* UI Rework:** Modern Jetpack Compose interface with Glassmorphism, Material You theming, and a **Side Navigation Rail** designed specifically for landscape DJI controller screens (DJI RC, RC 2, RC Pro, RC Plus).
-> * **5.8 GHz & 2.4 GHz Dual-Band Switching:** Complete DUML sequence with isolated country write sessions (`07:30`) ensuring reliable 5.8 GHz FCC engagement.
-> * **Ultra-Low-Overhead 10s Periodic Auto FCC:** Streamlined send-only keepalive eliminating continuous polling, drastically reducing CPU, network, and battery overhead during flight.
-> * **Multi-Tier Concurrency & Thread-Safety:** Atomic `HardwareLock` and `DumlPortSessionLock` architecture across the UI, floating button, background services, and LAN diagnostic server.
+> This repository is a custom fork derived from and combining the discoveries of [doesthings/FreeFCC](https://github.com/doesthings/FreeFCC) and [danusha2345/SkylabFCCfree](https://github.com/danusha2345/SkylabFCCfree), deeply re-engineered for stability and performance.
+>
+> 🔹 **Foundation from `doesthings/FreeFCC`:**
+> * Core DUML framing (`0x55` with CRC-8/CRC-16) and localhost TCP socket routing (`40009`/`40007`).
+> * Event-driven Auto FCC via Android Accessibility on DJI Fly Home Point announcements.
+> * Auxiliary LED (`03:F8`) and GPS master enable (`0xC5429582`) parameter controls.
+> * Local Wi-Fi LAN diagnostic HTTP bridge.
+>
+> 🔹 **Integration from `danusha2345/SkylabFCCfree`:**
+> * Radio region commit (`06:72`) and Wi-Fi channel group mappings (`07:30`, `07:18`, `07:19`) required for 5.8 GHz band-switching.
+> * Targeted 4G service mode switch frame (`0x51:0x1A`) over Unix domain socket (`/duss/mb/0x205`).
+> * Low-overhead 10-second send-only periodic keepalive approach.
+>
+> 🚀 **Exclusive Hardening & Enhancements in `NobodySan97/FreeFCC-Custom`:**
+> * **Complete *CleanDesigner* UI Rework:** Modern Jetpack Compose interface with Glassmorphism, Material You theming, and a **Side Navigation Rail** designed specifically for landscape DJI controller screens (DJI RC, RC 2, RC Pro, RC Plus) with 52dp thumb/glove-friendly touch targets.
+> * **Isolated Country Code Execution:** Pushes `07:30` in a dedicated socket session, ensuring the 5.8 GHz FCC profile engages immediately without command collisions.
+> * **Multi-Tier Concurrency & Thread-Safety:** Atomic `HardwareLock` and `DumlPortSessionLock` architecture across the UI, floating button widget, and background services, eliminating socket interleaving and CRC errors.
 > * **Optimized Quad-Core Performance:** Throttled accessibility scans with native memory handle recycling (`node.recycle()`) for seamless, lag-free operation alongside DJI Fly (<2% CPU load).
 > * **Hardened Dual-CRC Telemetry & Serial Parsing:** Full CRC-8 and CRC-16 validation before packet extraction to eliminate false-framing sync hazards.
-> * **100% Telemetry-Free Architecture:** Clean, zero-tracking, zero analytics, and streamlined release binaries.
+> * **100% Telemetry-Free Architecture:** Clean, zero-tracking, zero analytics, R8-optimized binaries, and automated SHA-256 release checksum generation.
 
 </div>
 
@@ -125,5 +137,5 @@ In the **DJI Fly app**, open **Settings $\rightarrow$ Transmission** and check t
 ## 📜 License & Credits
 
 - **License:** AGPL-3.0 (See [LICENSE](LICENSE)).
-- **Upstream Project:** [doesthings/FreeFCC](https://github.com/doesthings/FreeFCC).
+- **Upstream Repositories:** [doesthings/FreeFCC](https://github.com/doesthings/FreeFCC) & [danusha2345/SkylabFCCfree](https://github.com/danusha2345/SkylabFCCfree).
 - **DUML Protocol Reference:** [dji-firmware-tools](https://github.com/o-gs/dji-firmware-tools).
