@@ -250,7 +250,7 @@ class FloatingButtonService : Service() {
 
         // Subtitle / Status Display
         autoFccStatusTextView = TextView(this).apply {
-            text = "Auto FCC: DISATTIVATO"
+            text = "Auto FCC: OFF"
             setTextColor(Color.parseColor("#9EADB8"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setPadding(0, dpToPx(6), 0, dpToPx(2))
@@ -258,7 +258,7 @@ class FloatingButtonService : Service() {
         container.addView(autoFccStatusTextView)
 
         radioStatusTextView = TextView(this).apply {
-            text = "Stato Radio: Rilevamento in corso..."
+            text = "Radio Status: Checking..."
             setTextColor(Color.parseColor("#7E8E9F"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
             setPadding(0, 0, 0, dpToPx(10))
@@ -267,7 +267,7 @@ class FloatingButtonService : Service() {
 
         // Toggle Auto FCC Home Point Button
         toggleAutoButton = Button(this).apply {
-            text = "⚡ Attiva Home Point Auto FCC"
+            text = "⚡ Enable Home Point Auto FCC"
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             typeface = Typeface.DEFAULT_BOLD
@@ -282,7 +282,7 @@ class FloatingButtonService : Service() {
 
         // Restore CE Mode Button
         val ceRestoreBtn = Button(this).apply {
-            text = "🇪🇺 Ripristina CE Mode (Standard)"
+            text = "🇪🇺 Restore CE Mode (Standard)"
             setTextColor(Color.parseColor("#FFFF9D4D"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             background = createButtonDrawable("#30241A")
@@ -296,7 +296,7 @@ class FloatingButtonService : Service() {
 
         // Open Full App Button
         val openAppBtn = Button(this).apply {
-            text = "🚀 Apri App Completa"
+            text = "🚀 Open Full App"
             setTextColor(Color.parseColor("#D0DDF0"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             background = createButtonDrawable("#25303D")
@@ -419,18 +419,18 @@ class FloatingButtonService : Service() {
                         lastVibratedCountry = "AU"
                         FccHaptics.vibrateSuccess(this@FloatingButtonService)
                     }
-                    radioStatusTextView?.text = "Stato Radio: 🟢 AU (FCC ⚡)"
+                    radioStatusTextView?.text = "Radio Status: 🟢 AU (FCC ⚡)"
                     radioStatusTextView?.setTextColor(Color.parseColor("#4CAF50"))
                     floatingBgDrawable?.setStroke(dpToPx(2), Color.parseColor("#4CAF50"))
                     floatingTextView?.setTextColor(Color.parseColor("#4CAF50"))
                 } else if (observedCountry != null) {
                     lastVibratedCountry = observedCountry
-                    radioStatusTextView?.text = "Stato Radio: 🟠 $observedCountry (Standard)"
+                    radioStatusTextView?.text = "Radio Status: 🟠 $observedCountry (Standard)"
                     radioStatusTextView?.setTextColor(Color.parseColor("#FFFF9D4D"))
                     floatingBgDrawable?.setStroke(dpToPx(2), Color.parseColor("#FFFF9D4D"))
                     floatingTextView?.setTextColor(Color.parseColor("#FFFF9D4D"))
                 } else {
-                    radioStatusTextView?.text = "Stato Radio: ⚪ Inattivo / Non rilevato"
+                    radioStatusTextView?.text = "Radio Status: ⚪ Inactive / Not detected"
                     radioStatusTextView?.setTextColor(Color.parseColor("#7E8E9F"))
                     floatingBgDrawable?.setStroke(dpToPx(2), Color.parseColor("#7E8E9F"))
                     floatingTextView?.setTextColor(Color.parseColor("#7E8E9F"))
@@ -478,20 +478,20 @@ class FloatingButtonService : Service() {
             floatingTextView?.setTextColor(Color.parseColor("#4CAF50"))
             floatingBgDrawable?.setStroke(dpToPx(2), Color.parseColor("#4CAF50"))
 
-            autoFccStatusTextView?.text = "Auto FCC: 🟢 ATTIVO (Home Point)"
+            autoFccStatusTextView?.text = "Auto FCC: 🟢 ON (Home Point)"
             autoFccStatusTextView?.setTextColor(Color.parseColor("#4CAF50"))
 
-            toggleAutoButton?.text = "⏹️ Disattiva Auto FCC"
+            toggleAutoButton?.text = "⏹️ Disable Auto FCC"
             toggleAutoButton?.background = createButtonDrawable("#991F26")
         } else {
             floatingTextView?.text = "FCC"
             floatingTextView?.setTextColor(Color.parseColor("#FFFF9D4D"))
             floatingBgDrawable?.setStroke(dpToPx(2), Color.parseColor("#FFFF9D4D"))
 
-            autoFccStatusTextView?.text = "Auto FCC: 🔴 DISATTIVATO"
+            autoFccStatusTextView?.text = "Auto FCC: 🔴 OFF"
             autoFccStatusTextView?.setTextColor(Color.parseColor("#9EADB8"))
 
-            toggleAutoButton?.text = "⚡ Attiva Home Point Auto FCC"
+            toggleAutoButton?.text = "⚡ Enable Home Point Auto FCC"
             toggleAutoButton?.background = createButtonDrawable("#FF4CAF50")
         }
     }

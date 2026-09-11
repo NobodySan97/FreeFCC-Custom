@@ -247,7 +247,7 @@ private fun FourGEndpointProbeCard(
         Spacer(Modifier.height(6.dp))
 
         Text(
-            text = "Verifica la raggiungibilità del socket locale /duss/mb/0x205 prima dell'invio dei frame di attivazione.",
+            text = "Verify local socket /duss/mb/0x205 reachability before sending activation frames.",
             color = TextSecondary,
             fontSize = 11.sp,
             lineHeight = 15.sp
@@ -295,20 +295,20 @@ private fun FourGActivationCard(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "ATTIVAZIONE 4G (MODALITÀ HYBRID)",
+                    text = "4G ACTIVATION (HYBRID MODE)",
                     color = TextPrimary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.5.sp
                 )
             }
-            StatusBadge(text = "SERVIZIO 0x51:0x1A", color = Amber)
+            StatusBadge(text = "SERVICE 0x51:0x1A", color = Amber)
         }
 
         Spacer(Modifier.height(6.dp))
 
         Text(
-            text = "Invio pacchetti mirati con S/N per l'attivazione della mod 4G LTE. Assicurarsi che il dongle sia accoppiato e attivo.",
+            text = "Send targeted S/N frames to activate 4G LTE mod. Ensure cellular dongle is paired and active.",
             color = TextSecondary,
             fontSize = 11.sp,
             lineHeight = 15.sp
@@ -319,13 +319,13 @@ private fun FourGActivationCard(
         if (state.is4gBusy) {
             ProgressDisplay(
                 progress = state.busyProgress,
-                label = "Invio frame 4G in corso...",
+                label = "Sending 4G frames in progress...",
                 startColor = Amber,
                 endColor = BrandCyan
             )
         } else {
             GlowButton(
-                text = "INVIA FRAME ATTIVAZIONE 4G",
+                text = "SEND 4G ACTIVATION FRAMES",
                 color = Amber,
                 filled = true,
                 size = GlowButtonSize.LARGE,
@@ -344,14 +344,14 @@ private fun FourGMessageDisplayCard(
     modifier: Modifier = Modifier
 ) {
     val (statusLabel, statusColor) = when {
-        fourGMessage.contains("0,0,0") || fourGMessage.contains("ACCEPTED") -> "ACCETTATO" to StatusGreen
-        fourGMessage.contains("3,3,3") || fourGMessage.contains("REFUSED") -> "NON DISPONIBILE" to StatusRed
-        fourGMessage.contains("9,9,9") || fourGMessage.contains("invalid") -> "NON VALIDO" to StatusRed
-        fourGMessage.contains("unknown") || fourGMessage.contains("timeout") -> "SCONOSCIUTO" to TextMuted
-        fourGMessage.contains("No full aircraft serial") -> "REQUISITO MANCANTE" to StatusRed
-        fourGMessage.contains("not reachable") -> "NON RAGGIUNGIBILE" to Amber
-        fourGMessage.isNotEmpty() -> "RISPOSTA RICEVUTA" to BrandCyan
-        else -> "PRONTO" to TextMuted
+        fourGMessage.contains("0,0,0") || fourGMessage.contains("ACCEPTED") -> "ACCEPTED" to StatusGreen
+        fourGMessage.contains("3,3,3") || fourGMessage.contains("REFUSED") -> "UNAVAILABLE" to StatusRed
+        fourGMessage.contains("9,9,9") || fourGMessage.contains("invalid") -> "INVALID" to StatusRed
+        fourGMessage.contains("unknown") || fourGMessage.contains("timeout") -> "UNKNOWN" to TextMuted
+        fourGMessage.contains("No full aircraft serial") -> "MISSING REQUIREMENT" to StatusRed
+        fourGMessage.contains("not reachable") -> "UNREACHABLE" to Amber
+        fourGMessage.isNotEmpty() -> "RESPONSE RECEIVED" to BrandCyan
+        else -> "READY" to TextMuted
     }
 
     GlowCard(
@@ -372,7 +372,7 @@ private fun FourGMessageDisplayCard(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "STATO & MESSAGGI 4G",
+                    text = "4G STATUS & MESSAGES",
                     color = TextPrimary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
@@ -387,7 +387,7 @@ private fun FourGMessageDisplayCard(
         Spacer(Modifier.height(8.dp))
 
         val displayText = fourGMessage.ifEmpty {
-            "Richiesta 4G mirata sperimentale (modalità HYBRID). La raggiungibilità dell'endpoint e la scrittura coronata da successo non garantiscono l'attivazione effettiva del modem 4G se il dongle non è attivo."
+            "Targeted experimental 4G request (HYBRID mode). Endpoint reachability and successful write do not guarantee active 4G modem link if the cellular dongle is not armed."
         }
 
         Surface(

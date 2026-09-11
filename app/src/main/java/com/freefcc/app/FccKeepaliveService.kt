@@ -386,7 +386,7 @@ class FccKeepaliveService : Service() {
                             android.os.Handler(android.os.Looper.getMainLooper()).post {
                                 android.widget.Toast.makeText(
                                     this@FccKeepaliveService,
-                                    "⚡ FCC applicato con successo al Punto Home!",
+                                    "⚡ FCC applied successfully at Home Point!",
                                     android.widget.Toast.LENGTH_SHORT
                                 ).show()
                             }

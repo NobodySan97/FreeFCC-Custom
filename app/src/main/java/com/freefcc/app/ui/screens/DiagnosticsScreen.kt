@@ -122,7 +122,7 @@ fun DiagnosticsScreenContent(
             Icon(Icons.Outlined.Info, null, tint = BrandCyan, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(8.dp))
             Text(
-                "DIAGNOSTICA & LOG",
+                "DIAGNOSTICS & LOGS",
                 color = BrandCyan,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Black,
@@ -136,18 +136,18 @@ fun DiagnosticsScreenContent(
 
         // 2. Technical Metadata Card
         GlowCard(borderColor = DarkBorder) {
-            Text("Dettagli Tecnici Sistema", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text("System Technical Details", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
 
-            InfoRow("Versione App", FccViewModel.APP_VERSION)
+            InfoRow("App Version", FccViewModel.APP_VERSION)
             HorizontalDivider(Modifier.padding(vertical = 4.dp), color = DarkBorder.copy(0.4f))
-            InfoRow("Codice Radiocomando", state.controllerModel.ifEmpty { "Non rilevato" })
+            InfoRow("Remote Controller Code", state.controllerModel.ifEmpty { "Not detected" })
             HorizontalDivider(Modifier.padding(vertical = 4.dp), color = DarkBorder.copy(0.4f))
-            InfoRow("Modello Drone", state.aircraftModelName.ifEmpty { state.aircraftModelCode.ifEmpty { "Non rilevato" } })
+            InfoRow("Drone Model", state.aircraftModelName.ifEmpty { state.aircraftModelCode.ifEmpty { "Not detected" } })
             HorizontalDivider(Modifier.padding(vertical = 4.dp), color = DarkBorder.copy(0.4f))
-            InfoRow("Codice Drone", state.aircraftModelCode.ifEmpty { "Non rilevato" })
+            InfoRow("Drone Code", state.aircraftModelCode.ifEmpty { "Not detected" })
             HorizontalDivider(Modifier.padding(vertical = 4.dp), color = DarkBorder.copy(0.4f))
-            InfoRow("S/N Drone", state.aircraftSerial.ifEmpty { "Non rilevato" })
+            InfoRow("Drone S/N", state.aircraftSerial.ifEmpty { "Not detected" })
 
             if (state.lanLogUrl.isNotEmpty()) {
                 HorizontalDivider(Modifier.padding(vertical = 4.dp), color = DarkBorder.copy(0.4f))
@@ -165,7 +165,7 @@ fun DiagnosticsScreenContent(
             ) {
                 Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Aggiorna Identità Drone", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Refresh Drone Identity", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -181,7 +181,7 @@ fun DiagnosticsScreenContent(
                 Spacer(Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text("LAN Control Bridge", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    Text("Stato live e comandi via Wi-Fi privato", color = TextSecondary, fontSize = 11.sp)
+                    Text("Live status and commands via private Wi-Fi", color = TextSecondary, fontSize = 11.sp)
                 }
                 if (state.isLanLogStarting) {
                     CircularProgressIndicator(color = BrandCyan, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
@@ -226,7 +226,7 @@ fun DiagnosticsScreenContent(
                         onClick = { clipboardManager.setText(AnnotatedString(state.lanLogUrl)) },
                         modifier = Modifier.size(32.dp)
                     ) {
-                        Icon(Icons.Default.ContentCopy, "Copia URL", tint = BrandCyan, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.ContentCopy, "Copy URL", tint = BrandCyan, modifier = Modifier.size(16.dp))
                     }
                 }
             }
@@ -244,13 +244,13 @@ fun DiagnosticsScreenContent(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.GpsFixed, null, tint = BrandCyan, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Diagnostica GPS Drone", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("Drone GPS Diagnostics", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
                 val gpsBadgeText = when (state.gpsState) {
-                    GpsState.ON -> "GPS ATTIVO"
-                    GpsState.OFF -> "GPS DISATTIVATO"
-                    GpsState.UNEXPECTED -> "STATO INATTESO"
-                    GpsState.UNKNOWN -> "NON VERIFICATO"
+                    GpsState.ON -> "GPS ACTIVE"
+                    GpsState.OFF -> "GPS DISABLED"
+                    GpsState.UNEXPECTED -> "UNEXPECTED STATE"
+                    GpsState.UNKNOWN -> "UNVERIFIED"
                 }
                 val gpsBadgeColor = when (state.gpsState) {
                     GpsState.ON -> StatusGreen
@@ -263,7 +263,7 @@ fun DiagnosticsScreenContent(
 
             Spacer(Modifier.height(6.dp))
             Text(
-                state.gpsStatus.ifEmpty { "Stato GPS non ancora verificato." },
+                state.gpsStatus.ifEmpty { "GPS state not verified yet." },
                 color = TextSecondary,
                 fontSize = 11.5.sp
             )
@@ -277,7 +277,7 @@ fun DiagnosticsScreenContent(
                 ) {
                     CircularProgressIndicator(color = BrandCyan, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Comando GPS in corso...", color = BrandCyan, fontSize = 12.sp)
+                    Text("GPS command in progress...", color = BrandCyan, fontSize = 12.sp)
                 }
             } else {
                 Row(
@@ -291,7 +291,7 @@ fun DiagnosticsScreenContent(
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Attiva GPS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Enable GPS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                     Button(
                         onClick = { onSetGps(false) },
@@ -300,7 +300,7 @@ fun DiagnosticsScreenContent(
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Disattiva GPS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Disable GPS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                     OutlinedButton(
                         onClick = onRefreshGpsState,
@@ -310,7 +310,7 @@ fun DiagnosticsScreenContent(
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Verifica", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Verify", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -328,13 +328,13 @@ fun DiagnosticsScreenContent(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Lightbulb, null, tint = BrandCyan, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Diagnostica LED Drone", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("Drone LED Diagnostics", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
                 val ledBadgeText = when (state.ledState) {
-                    LedState.ON -> "LED ACCESI"
-                    LedState.OFF -> "LED SPENTI"
-                    LedState.PARTIAL -> "PARZIALE"
-                    LedState.UNKNOWN -> "NON VERIFICATO"
+                    LedState.ON -> "LED ON"
+                    LedState.OFF -> "LED OFF"
+                    LedState.PARTIAL -> "PARTIAL"
+                    LedState.UNKNOWN -> "UNVERIFIED"
                 }
                 val ledBadgeColor = when (state.ledState) {
                     LedState.ON -> StatusGreen
@@ -347,7 +347,7 @@ fun DiagnosticsScreenContent(
 
             Spacer(Modifier.height(6.dp))
             Text(
-                state.ledStatus.ifEmpty { "Stato LED non ancora verificato." },
+                state.ledStatus.ifEmpty { "LED state not verified yet." },
                 color = TextSecondary,
                 fontSize = 11.5.sp
             )
@@ -361,7 +361,7 @@ fun DiagnosticsScreenContent(
                 ) {
                     CircularProgressIndicator(color = BrandCyan, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Comando LED in corso...", color = BrandCyan, fontSize = 12.sp)
+                    Text("LED command in progress...", color = BrandCyan, fontSize = 12.sp)
                 }
             } else {
                 Row(
@@ -375,7 +375,7 @@ fun DiagnosticsScreenContent(
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Accendi LED", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Turn ON LED", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                     Button(
                         onClick = { onSetLed(false) },
@@ -384,7 +384,7 @@ fun DiagnosticsScreenContent(
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Spegni LED", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Turn OFF LED", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                     OutlinedButton(
                         onClick = onRefreshLedState,
@@ -394,7 +394,7 @@ fun DiagnosticsScreenContent(
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Verifica", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Verify", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -410,10 +410,10 @@ fun DiagnosticsScreenContent(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Log di Processo", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("Process Logs", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(8.dp))
                     StatusBadge(
-                        text = if (isLogsCleared) "0 voci" else "${state.logMessages.size} voci",
+                        text = if (isLogsCleared) "0 entries" else "${state.logMessages.size} entries",
                         color = TextMuted
                     )
                 }
@@ -428,7 +428,7 @@ fun DiagnosticsScreenContent(
                         enabled = state.logMessages.isNotEmpty() && !isLogsCleared,
                         modifier = Modifier.size(32.dp)
                     ) {
-                        Icon(Icons.Default.ContentCopy, "Copia Log", tint = BrandCyan, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.ContentCopy, "Copy Logs", tint = BrandCyan, modifier = Modifier.size(18.dp))
                     }
 
                     // Clear Logs Button
@@ -438,7 +438,7 @@ fun DiagnosticsScreenContent(
                     ) {
                         Icon(
                             Icons.Default.DeleteSweep,
-                            "Pulisci Log",
+                            "Clear Logs",
                             tint = if (isLogsCleared) StatusGreen else BrandOrange,
                             modifier = Modifier.size(20.dp)
                         )
@@ -452,7 +452,7 @@ fun DiagnosticsScreenContent(
 
             if (displayedLogs.isEmpty()) {
                 Text(
-                    if (isLogsCleared) "Log puliti nella vista UI. Tocca il cestino per ripristinare." else "Nessun messaggio di log disponibile.",
+                    if (isLogsCleared) "Logs cleared in UI view. Tap trash to restore." else "No log messages available.",
                     color = TextMuted,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(vertical = 12.dp)

@@ -102,7 +102,7 @@ fun UpdateScreenContent(
             Icon(Icons.Outlined.SystemUpdate, null, tint = BrandCyan, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(8.dp))
             Text(
-                "AGGIORNAMENTI APP",
+                "APP UPDATES",
                 color = BrandCyan,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Black,
@@ -110,7 +110,7 @@ fun UpdateScreenContent(
             )
             Spacer(Modifier.weight(1f))
             StatusBadge(
-                text = if (state.updateAvailable) "🔴 NUOVA VERSIONE" else "🟢 AGGIORNATO",
+                text = if (state.updateAvailable) "🔴 UPDATE AVAILABLE" else "🟢 UP TO DATE",
                 color = if (state.updateAvailable) StatusGreen else TextMuted
             )
         }
@@ -126,7 +126,7 @@ fun UpdateScreenContent(
                 ) {
                     CircularProgressIndicator(strokeWidth = 2.5.dp, color = BrandCyan, modifier = Modifier.size(36.dp))
                     Spacer(Modifier.height(10.dp))
-                    Text("Verifica aggiornamenti su GitHub in corso...", color = BrandCyan, fontSize = 12.sp)
+                    Text("Checking for updates on GitHub...", color = BrandCyan, fontSize = 12.sp)
                 }
             }
             return
@@ -141,12 +141,12 @@ fun UpdateScreenContent(
                 ) {
                     Icon(Icons.Outlined.CloudOff, null, tint = TextMuted, modifier = Modifier.size(40.dp))
                     Spacer(Modifier.height(8.dp))
-                    Text("Impossibile verificare gli aggiornamenti", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("Unable to check for updates", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(4.dp))
-                    Text("Assicurati di essere connesso al Wi-Fi e riprova.", color = TextSecondary, fontSize = 12.sp)
+                    Text("Make sure you are connected to Wi-Fi and try again.", color = TextSecondary, fontSize = 12.sp)
                     Spacer(Modifier.height(12.dp))
                     GlowButton(
-                        text = "RIPROVA ORA",
+                        text = "RETRY NOW",
                         color = BrandCyan,
                         onClick = onCheckForUpdates,
                         modifier = Modifier.fillMaxWidth()
@@ -167,13 +167,13 @@ fun UpdateScreenContent(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        if (state.updateAvailable) "Aggiornamento Disponibile" else "App Aggiornata",
+                        if (state.updateAvailable) "Update Available" else "App Up to Date",
                         color = if (state.updateAvailable) StatusGreen else TextPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(Modifier.height(2.dp))
-                    Text("Versione Attuale: v${FccViewModel.APP_VERSION}", color = TextSecondary, fontSize = 12.sp)
+                    Text("Current Version: v${FccViewModel.APP_VERSION}", color = TextSecondary, fontSize = 12.sp)
                 }
                 Icon(
                     if (state.updateAvailable) Icons.Filled.NewReleases else Icons.Filled.CheckCircle,
@@ -188,7 +188,7 @@ fun UpdateScreenContent(
             Spacer(Modifier.height(10.dp))
 
             // Channel Selector
-            Text("Canale di Aggiornamento", color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("Update Channel", color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
 
             Row(
@@ -208,7 +208,7 @@ fun UpdateScreenContent(
                         horizontalArrangement = Arrangement.Center,
                         modifier = Modifier.padding(vertical = 8.dp)
                     ) {
-                        Text("🟢 Stabile", color = if (isStable) StatusGreen else TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("🟢 Stable", color = if (isStable) StatusGreen else TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -236,12 +236,12 @@ fun UpdateScreenContent(
                 Spacer(Modifier.height(10.dp))
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Ultima Versione:", color = TextSecondary, fontSize = 12.sp)
+                    Text("Latest Version:", color = TextSecondary, fontSize = 12.sp)
                     Text("v${info.version}", color = StatusGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(4.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Data Rilascio:", color = TextSecondary, fontSize = 12.sp)
+                    Text("Release Date:", color = TextSecondary, fontSize = 12.sp)
                     Text(
                         info.publishedAt.split("T").firstOrNull() ?: "",
                         color = TextPrimary, fontSize = 12.sp
@@ -250,7 +250,7 @@ fun UpdateScreenContent(
                 if (info.apkSize > 0) {
                     Spacer(Modifier.height(4.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Dimensione APK:", color = TextSecondary, fontSize = 12.sp)
+                        Text("APK Size:", color = TextSecondary, fontSize = 12.sp)
                         Text(
                             "%.1f MB".format(java.util.Locale.US, info.apkSize / 1048576.0),
                             color = TextPrimary, fontSize = 12.sp
@@ -264,7 +264,7 @@ fun UpdateScreenContent(
             HorizontalDivider(color = DarkBorder.copy(0.5f), thickness = 1.dp)
             Spacer(Modifier.height(10.dp))
 
-            Text("Note di Rilascio (Changelog)", color = BrandCyan, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text("Release Notes (Changelog)", color = BrandCyan, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
 
             Surface(
@@ -273,7 +273,7 @@ fun UpdateScreenContent(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    info.changelog.ifEmpty { "Nessuna nota di rilascio fornita." },
+                    info.changelog.ifEmpty { "No release notes provided." },
                     color = TextSecondary,
                     fontSize = 11.5.sp,
                     lineHeight = 16.sp,
@@ -289,14 +289,14 @@ fun UpdateScreenContent(
                     state.isDownloadingUpdate -> {
                         ProgressDisplay(
                             progress = state.updateDownloadProgress,
-                            label = if (state.updateDownloadProgress <= 0f) "Connessione a GitHub..." else "Download in corso... (${(state.updateDownloadProgress * 100).toInt()}%)",
+                            label = if (state.updateDownloadProgress <= 0f) "Connecting to GitHub..." else "Downloading... (${(state.updateDownloadProgress * 100).toInt()}%)",
                             startColor = StatusGreen,
                             endColor = BrandCyan
                         )
                     }
                     state.isUpdateDownloaded -> {
                         GlowButton(
-                            text = "INSTALLA AGGIORNAMENTO",
+                            text = "INSTALL UPDATE",
                             color = StatusGreen,
                             filled = true,
                             size = GlowButtonSize.LARGE,
@@ -305,7 +305,7 @@ fun UpdateScreenContent(
                         )
                         Spacer(Modifier.height(6.dp))
                         GlowButton(
-                            text = "SCARICA DI NUOVO",
+                            text = "DOWNLOAD AGAIN",
                             color = BrandCyan,
                             filled = false,
                             onClick = onReDownloadUpdate,
@@ -314,7 +314,7 @@ fun UpdateScreenContent(
                     }
                     else -> {
                         GlowButton(
-                            text = "SCARICA AGGIORNAMENTO v${info.version}",
+                            text = "DOWNLOAD UPDATE v${info.version}",
                             color = StatusGreen,
                             filled = true,
                             size = GlowButtonSize.LARGE,
@@ -327,7 +327,7 @@ fun UpdateScreenContent(
             }
 
             GlowButton(
-                text = "VERIFICA NUOVAMENTE",
+                text = "CHECK AGAIN",
                 color = BrandCyan,
                 filled = false,
                 onClick = onCheckForUpdates,
@@ -351,13 +351,13 @@ fun UpdateScreenContent(
                 ) {
                     Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                         Text(
-                            text = "Supporta lo Sviluppo",
+                            text = "Support Development",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = TextPrimary
                         )
                         Text(
-                            text = "Offri un caffè per supportare FreeFCC Custom",
+                            text = "Buy a coffee to support FreeFCC Custom",
                             fontSize = 11.sp,
                             color = TextSecondary
                         )

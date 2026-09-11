@@ -61,7 +61,7 @@ import com.freefcc.app.ui.theme.TextSecondary
 /**
  * Milestone M2: Active Drone Serial Card component.
  * Displays the active drone serial number (`manualSerial.ifEmpty { aircraftSerial }`),
- * provides a status badge ("OVERRIDE MANUALE" vs "AUTOMATICO" vs "NON RILEVATO"),
+ * provides a status badge ("MANUAL OVERRIDE" vs "AUTO" vs "NOT DETECTED"),
  * manual SN input/override controls, probe refresh button, and clipboard copy.
  */
 @Composable
@@ -108,7 +108,7 @@ fun DroneSerialCard(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "SERIE DRONE (S/N)",
+                    text = "DRONE SERIAL (S/N)",
                     color = TextPrimary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
@@ -117,9 +117,9 @@ fun DroneSerialCard(
             }
 
             when {
-                isManual -> StatusBadge(text = "OVERRIDE MANUALE", color = Amber)
-                hasSerial -> StatusBadge(text = "AUTOMATICO", color = StatusGreen)
-                else -> StatusBadge(text = "NON RILEVATO", color = TextMuted)
+                isManual -> StatusBadge(text = "MANUAL OVERRIDE", color = Amber)
+                hasSerial -> StatusBadge(text = "AUTO", color = StatusGreen)
+                else -> StatusBadge(text = "NOT DETECTED", color = TextMuted)
             }
         }
 
@@ -142,14 +142,14 @@ fun DroneSerialCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isManual) "S/N Manuale Impostato" else "S/N Rilevato",
+                        text = if (isManual) "Manual S/N Set" else "Detected S/N",
                         color = TextMuted,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = activeSerial.ifEmpty { "Nessun S/N disponibile" },
+                        text = activeSerial.ifEmpty { "No S/N available" },
                         color = if (hasSerial) TextPrimary else TextMuted,
                         fontSize = 15.sp,
                         fontFamily = FontFamily.Monospace,
@@ -174,7 +174,7 @@ fun DroneSerialCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.ContentCopy,
-                                contentDescription = "Copia S/N",
+                                contentDescription = "Copy S/N",
                                 tint = TextSecondary,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -187,7 +187,7 @@ fun DroneSerialCard(
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Edit,
-                            contentDescription = "Modifica S/N Manuale",
+                            contentDescription = "Edit Manual S/N",
                             tint = if (isManual) Amber else BrandCyan,
                             modifier = Modifier.size(16.dp)
                         )
@@ -210,7 +210,7 @@ fun DroneSerialCard(
                     .padding(10.dp)
             ) {
                 Text(
-                    text = "Imposta Serial Number Manuale (Override)",
+                    text = "Set Manual Serial Number (Override)",
                     color = Amber,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
@@ -225,7 +225,7 @@ fun DroneSerialCard(
                         onValueChange = { inputText = it.uppercase() },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        placeholder = { Text("es. 1581F4...", color = TextMuted, fontSize = 12.sp) },
+                        placeholder = { Text("e.g. 1581F4...", color = TextMuted, fontSize = 12.sp) },
                         textStyle = androidx.compose.ui.text.TextStyle(
                             color = TextPrimary,
                             fontSize = 13.sp,
@@ -256,7 +256,7 @@ fun DroneSerialCard(
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Check,
-                            contentDescription = "Salva S/N",
+                            contentDescription = "Save S/N",
                             tint = DarkBackgroundMid
                         )
                     }
@@ -265,7 +265,7 @@ fun DroneSerialCard(
                 if (isManual) {
                     Spacer(Modifier.height(6.dp))
                     GlowButton(
-                        text = "CANCELLA OVERRIDE (TORNA AD AUTO)",
+                        text = "CLEAR OVERRIDE (RETURN TO AUTO)",
                         color = Amber,
                         size = GlowButtonSize.COMPACT,
                         filled = false,
@@ -288,7 +288,7 @@ fun DroneSerialCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             GlowButton(
-                text = "RILEVA S/N",
+                text = "PROBE S/N",
                 color = BrandCyan,
                 size = GlowButtonSize.COMPACT,
                 filled = false,

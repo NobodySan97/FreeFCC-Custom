@@ -108,7 +108,7 @@ fun FccScreen(
         } else {
             Toast.makeText(
                 context,
-                "Abilita il servizio di accessibilità FreeFCC per l'Auto FCC Home Point",
+                "Enable FreeFCC accessibility service for Auto FCC Home Point",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -120,7 +120,7 @@ fun FccScreen(
         } else {
             Toast.makeText(
                 context,
-                "Attiva il servizio Accessibilità, poi torna in FreeFCC",
+                "Enable Accessibility service, then return to FreeFCC",
                 Toast.LENGTH_LONG
             ).show()
             try {
@@ -128,7 +128,7 @@ fun FccScreen(
             } catch (_: ActivityNotFoundException) {
                 Toast.makeText(
                     context,
-                    "Impostazioni di accessibilità non disponibili su questo radiocomando",
+                    "Accessibility settings are unavailable on this controller",
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -144,7 +144,7 @@ fun FccScreen(
         } else {
             Toast.makeText(
                 context,
-                "Permesso 'Visualizzazione sopra altre app' richiesto per il Bottone Flottante",
+                "Overlay permission ('Display over other apps') required for Floating Button",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -158,7 +158,7 @@ fun FccScreen(
         } else {
             Toast.makeText(
                 context,
-                "Concedi il permesso overlay per FreeFCC",
+                "Grant overlay permission for FreeFCC",
                 Toast.LENGTH_LONG
             ).show()
             try {
@@ -171,7 +171,7 @@ fun FccScreen(
             } catch (_: ActivityNotFoundException) {
                 Toast.makeText(
                     context,
-                    "Impostazioni overlay non disponibili su questo dispositivo",
+                    "Overlay settings are unavailable on this device",
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -399,16 +399,16 @@ private fun FccUpdateAlertCard(
                 Spacer(Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = "Aggiornamento v${updateInfo.version}",
+                        text = "Update v${updateInfo.version}",
                         color = StatusGreen,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = when {
-                            isDownloaded -> "Pronto per l'installazione"
-                            isDownloading -> "Download: ${(downloadProgress * 100).toInt()}%"
-                            else -> "Nuova versione disponibile"
+                            isDownloaded -> "Ready to install"
+                            isDownloading -> "Downloading: ${(downloadProgress * 100).toInt()}%"
+                            else -> "New version available"
                         },
                         color = TextSecondary,
                         fontSize = 11.sp
@@ -424,7 +424,7 @@ private fun FccUpdateAlertCard(
                 )
             } else {
                 GlowButton(
-                    text = if (isDownloaded) "INSTALLA" else "SCARICA",
+                    text = if (isDownloaded) "INSTALL" else "DOWNLOAD",
                     color = StatusGreen,
                     onClick = if (isDownloaded) onInstallUpdate else onDownloadUpdate,
                     size = GlowButtonSize.COMPACT,
@@ -458,7 +458,7 @@ private fun FccPowerControlCard(
         modifier = modifier
     ) {
         Text(
-            text = "STATO TRASMISSIONE RF & POTENZA",
+            text = "RF TRANSMISSION & POWER STATUS",
             color = TextMuted,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
@@ -474,15 +474,15 @@ private fun FccPowerControlCard(
         // Mode Status Badge ("FCC UNLOCKED" / "CE STANDARD")
         ModeBadge(
             isFccEnabled = state.isFccEnabled,
-            badgeTitle = if (state.isFccEnabled) "FCC UNLOCKED" else "STANDARD CE",
-            detail = if (state.isFccEnabled) "Potenza massima sbloccata (27-30 dBm)" else "Potenza limitata normativa CE (20 dBm)"
+            badgeTitle = if (state.isFccEnabled) "FCC UNLOCKED" else "CE STANDARD",
+            detail = if (state.isFccEnabled) "Maximum power unlocked (27-30 dBm)" else "CE regulatory limited power (20 dBm)"
         )
 
         Spacer(Modifier.height(10.dp))
 
         // Progress display or status message
         if (state.isBusy) {
-            ProgressDisplay(progress = state.busyProgress, label = state.message.ifEmpty { "Invio pacchetti FCC in corso..." })
+            ProgressDisplay(progress = state.busyProgress, label = state.message.ifEmpty { "Sending FCC frames in progress..." })
         } else if (state.message.isNotEmpty()) {
             Surface(
                 color = DarkBorder.copy(alpha = 0.3f),
@@ -499,7 +499,7 @@ private fun FccPowerControlCard(
             }
         } else {
             Text(
-                text = "Premi il pulsante per inviare i comandi di sblocco FCC al radiocomando.",
+                text = "Press the button to send FCC unlock commands to the remote controller.",
                 color = TextMuted,
                 fontSize = 11.sp
             )
@@ -509,7 +509,7 @@ private fun FccPowerControlCard(
 
         // Prominent FCC Enable Action Button
         GlowButton(
-            text = if (state.isFccEnabled) "REINVIA RICHIESTA FCC" else "ABILITA MODALITÀ FCC",
+            text = if (state.isFccEnabled) "RESEND FCC REQUEST" else "ENABLE FCC MODE",
             color = BrandOrange,
             filled = true,
             size = GlowButtonSize.LARGE,
@@ -547,7 +547,7 @@ private fun AutoFccModesCard(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = "MODALITÀ AUTOMATICHE & OVERLAY",
+                text = "AUTOMATIC MODES & OVERLAY",
                 color = TextPrimary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
@@ -560,7 +560,7 @@ private fun AutoFccModesCard(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // Auto FCC Home Point
             AutoModeToggle(
-                text = "Auto FCC — Punto Home (Testo DJI Fly)",
+                text = "Auto FCC — Home Point (DJI Fly Text)",
                 checked = selectedAutoMode == AutoFccMode.HOME_POINT_TEXT,
                 onCheckedChange = { checked ->
                     if (checked) {
@@ -573,7 +573,7 @@ private fun AutoFccModesCard(
 
             // Auto FCC 10s periodic
             AutoModeToggle(
-                text = "Auto FCC — Ricorrente ogni 10 secondi",
+                text = "Auto FCC — Periodic every 10 seconds",
                 checked = selectedAutoMode == AutoFccMode.PERIODIC_10S,
                 onCheckedChange = { checked ->
                     onSetAutoFccMode(AutoFccMode.PERIODIC_10S, checked)
@@ -582,7 +582,7 @@ private fun AutoFccModesCard(
 
             // Floating Overlay Button
             AutoModeToggle(
-                text = "Pulsante Flottante a Schermo (Overlay)",
+                text = "On-screen Floating Button (Overlay)",
                 checked = isFloatingButtonEnabled,
                 onCheckedChange = { checked ->
                     onRequestOverlay(checked)
@@ -619,7 +619,7 @@ private fun DjiFlyQuickLaunchCard(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "AVVIO RAPIDO DJI FLY",
+                        text = "DJI FLY QUICK LAUNCH",
                         color = TextPrimary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
@@ -627,7 +627,7 @@ private fun DjiFlyQuickLaunchCard(
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = if (isFccEnabled) "FCC applicato — pronto per il volo" else "Avvia DJI Fly per verificare la modalità",
+                    text = if (isFccEnabled) "FCC applied — ready for flight" else "Launch DJI Fly to verify mode",
                     color = TextSecondary,
                     fontSize = 11.sp
                 )
@@ -636,7 +636,7 @@ private fun DjiFlyQuickLaunchCard(
             Spacer(Modifier.width(8.dp))
 
             GlowButton(
-                text = "APRI DJI FLY",
+                text = "OPEN DJI FLY",
                 color = StatusGreen,
                 filled = true,
                 size = GlowButtonSize.DEFAULT,
@@ -678,7 +678,7 @@ private fun SystemPermissionsCard(
         modifier = modifier
     ) {
         Text(
-            text = "STATO SISTEMA & PERMESSI DI SISTEMA",
+            text = "SYSTEM STATUS & PERMISSIONS",
             color = TextMuted,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
@@ -688,7 +688,7 @@ private fun SystemPermissionsCard(
 
         // Accessibility Permission Item
         PermissionStatusRow(
-            title = "Accessibilità (Testo Home Point)",
+            title = "Accessibility (Home Point Text)",
             isGranted = isAccessEnabled,
             onGrantClick = onRequestAccessibility
         )
@@ -699,7 +699,7 @@ private fun SystemPermissionsCard(
 
         // Overlay Permission Item
         PermissionStatusRow(
-            title = "Permesso Overlay (Bottone Flottante)",
+            title = "Overlay Permission (Floating Button)",
             isGranted = isOverlayEnabled,
             onGrantClick = onRequestOverlay
         )
@@ -744,7 +744,7 @@ private fun PermissionStatusRow(
             modifier = Modifier.clickable(enabled = !isGranted, onClick = onGrantClick)
         ) {
             Text(
-                text = if (isGranted) "ATTIVO 🟢" else "ABILITA ↗",
+                text = if (isGranted) "ACTIVE 🟢" else "ENABLE ↗",
                 color = if (isGranted) StatusGreen else BrandCyan,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
@@ -794,7 +794,7 @@ fun FccScreenPreviewDisconnected() {
                 controllerModel = "RM510",
                 aircraftSerial = "",
                 isFccEnabled = false,
-                message = "Controller non trovato. Assicurati che il drone sia acceso e collegato."
+                message = "Controller not found. Ensure drone is powered on and connected."
             ),
             onConnectClick = {},
             onProbeSerial = {},
@@ -824,7 +824,7 @@ fun FccScreenPreviewBusyApplying() {
                 isBusy = true,
                 isHardwareBusy = true,
                 busyProgress = 0.65f,
-                message = "Invio pacchetti DUML FCC in corso (65%)..."
+                message = "Sending DUML FCC frames in progress (65%)..."
             ),
             onConnectClick = {},
             onProbeSerial = {},
@@ -851,7 +851,7 @@ fun FccScreenPreviewDisabledCE() {
                 aircraftModelCode = "WM162",
                 aircraftSerial = "1581F4X987654321",
                 isFccEnabled = false,
-                message = "Stato di fabbrica CE (20 dBm)"
+                message = "Factory CE state (20 dBm)"
             ),
             onConnectClick = {},
             onProbeSerial = {},
@@ -880,7 +880,7 @@ fun FccScreenPreviewAutoFccActive() {
                 isFccEnabled = true,
                 selectedAutoMode = AutoFccMode.PERIODIC_10S,
                 isFloatingButtonEnabled = true,
-                message = "Auto-FCC attivo (invio periodico ogni 10s)"
+                message = "Auto-FCC active (periodic resend every 10s)"
             ),
             onConnectClick = {},
             onProbeSerial = {},

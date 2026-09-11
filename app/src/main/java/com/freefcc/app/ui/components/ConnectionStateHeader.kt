@@ -36,7 +36,7 @@ import com.freefcc.app.ui.theme.TextSecondary
 
 /**
  * Milestone M2: Prominent Connection State Header component.
- * Displays controller connection status ("CONNESSO" / "DISCONNESSO") with an animated
+ * Displays controller connection status ("CONNECTED" / "DISCONNECTED") with an animated
  * [PulsingStatusDot], remote controller model, and aircraft model name/code.
  */
 @Composable
@@ -52,16 +52,16 @@ fun ConnectionStateHeader(
 ) {
     val borderColor = if (isConnected) StatusGreen.copy(alpha = 0.4f) else StatusRed.copy(alpha = 0.35f)
     val statusColor = if (isConnected) StatusGreen else StatusRed
-    val statusLabel = if (isConnected) "CONNESSO" else "DISCONNESSO"
+    val statusLabel = if (isConnected) "CONNECTED" else "DISCONNECTED"
 
     val formattedAircraftModel = when {
         aircraftModelName.isNotEmpty() && aircraftModelCode.isNotEmpty() -> "$aircraftModelName ($aircraftModelCode)"
         aircraftModelName.isNotEmpty() -> aircraftModelName
         aircraftModelCode.isNotEmpty() -> aircraftModelCode
-        else -> "Non rilevato"
+        else -> "Not detected"
     }
 
-    val formattedControllerModel = controllerModel.ifEmpty { "Non rilevato" }
+    val formattedControllerModel = controllerModel.ifEmpty { "Not detected" }
 
     GlowCard(
         borderColor = borderColor,
@@ -84,7 +84,7 @@ fun ConnectionStateHeader(
                 Spacer(Modifier.width(8.dp))
                 Column {
                     Text(
-                        text = "STATO CONTROLLER",
+                        text = "CONTROLLER STATUS",
                         color = TextMuted,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
@@ -102,7 +102,7 @@ fun ConnectionStateHeader(
 
             if (onConnectClick != null) {
                 GlowButton(
-                    text = if (isConnected) "RICONNETTI" else "CONNETTI",
+                    text = if (isConnected) "RECONNECT" else "CONNECT",
                     color = BrandCyan,
                     onClick = onConnectClick,
                     filled = false,
@@ -121,14 +121,14 @@ fun ConnectionStateHeader(
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             HeaderDetailRow(
                 icon = Icons.Outlined.VideogameAsset,
-                label = "Radiocomando",
+                label = "Remote Controller",
                 value = formattedControllerModel,
                 isHighlight = controllerModel.isNotEmpty()
             )
 
             HeaderDetailRow(
                 icon = Icons.Outlined.FlightTakeoff,
-                label = "Modello Drone",
+                label = "Drone Model",
                 value = formattedAircraftModel,
                 isHighlight = aircraftModelName.isNotEmpty() || aircraftModelCode.isNotEmpty()
             )
@@ -228,7 +228,7 @@ fun ConnectionStateHeaderConnectedPreview() {
             controllerModel = "RM510",
             aircraftModelName = "DJI Air 3",
             aircraftModelCode = "WM161",
-            statusMessage = "Connessione DUML attiva su porta 40007",
+            statusMessage = "DUML connection active on port 40007",
             onConnectClick = {}
         )
     }
