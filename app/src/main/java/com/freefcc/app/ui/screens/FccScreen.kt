@@ -560,7 +560,7 @@ private fun AutoFccModesCard(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // Auto FCC Home Point
             AutoModeToggle(
-                text = "Auto FCC — Home Point (DJI Fly Text)",
+                text = "Auto FCC - Home Point (DJI Fly Text)",
                 checked = selectedAutoMode == AutoFccMode.HOME_POINT_TEXT,
                 onCheckedChange = { checked ->
                     if (checked) {
@@ -573,7 +573,7 @@ private fun AutoFccModesCard(
 
             // Auto FCC 10s periodic
             AutoModeToggle(
-                text = "Auto FCC — Periodic every 10 seconds",
+                text = "Auto FCC - Periodic every 10 seconds",
                 checked = selectedAutoMode == AutoFccMode.PERIODIC_10S,
                 onCheckedChange = { checked ->
                     onSetAutoFccMode(AutoFccMode.PERIODIC_10S, checked)

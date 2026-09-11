@@ -31,6 +31,24 @@ class AutoFccPackagePolicyTest {
     }
 
     @Test
+    fun freshStockFlyLaunchDoesNotRogueResume() {
+        assertEquals(
+            AutoFccPackageAction.NONE,
+            AutoFccPackagePolicy.action(
+                null,
+                AutoFccPackagePolicy.STOCK_FLY_PACKAGE
+            )
+        )
+        assertEquals(
+            AutoFccPackageAction.NONE,
+            AutoFccPackagePolicy.action(
+                "com.android.launcher",
+                AutoFccPackagePolicy.STOCK_FLY_PACKAGE
+            )
+        )
+    }
+
+    @Test
     fun unrelatedPackagesDoNotChangeAutoFcc() {
         assertEquals(
             AutoFccPackageAction.NONE,

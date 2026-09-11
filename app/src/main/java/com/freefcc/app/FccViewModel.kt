@@ -1137,22 +1137,23 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    private fun readGpsState(
+    private suspend fun readGpsState(
         gpsTransport: DumlTransport,
-        attempts: Int = 3
+        attempts: Int = if (GpsControlProtocol.address.isConfirmed) 3 else 2
     ): GpsReadback? {
+        val windowMs = if (GpsControlProtocol.address.isConfirmed) 1_500 else 800
         repeat(attempts) { attempt ->
             val readback = ParameterAddress.read(
                 transport = gpsTransport,
                 address = GpsControlProtocol.address,
-                readWindowMs = 2_500,
+                readWindowMs = windowMs,
                 buildRequest = { hash -> GpsControlProtocol.buildReadRequest(hash) },
                 parse = GpsControlProtocol::parse
             )
             if (readback != null) return readback
             if (attempt < attempts - 1) {
                 log("GPS readback missing; retrying")
-                Thread.sleep(150)
+                delay(150)
             }
         }
         return null
@@ -1351,22 +1352,23 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    private fun readLedState(
+    private suspend fun readLedState(
         ledTransport: DumlTransport,
-        attempts: Int = 3
+        attempts: Int = if (LedReadbackProtocol.address.isConfirmed) 3 else 2
     ): LedReadback? {
+        val windowMs = if (LedReadbackProtocol.address.isConfirmed) 1_500 else 800
         repeat(attempts) { attempt ->
             val readback = ParameterAddress.read(
                 transport = ledTransport,
                 address = LedReadbackProtocol.address,
-                readWindowMs = 2_500,
+                readWindowMs = windowMs,
                 buildRequest = { hash -> LedReadbackProtocol.buildRequest(hash) },
                 parse = LedReadbackProtocol::parse
             )
             if (readback != null) return readback
             if (attempt < attempts - 1) {
                 log("LED readback missing; retrying")
-                Thread.sleep(150)
+                delay(150)
             }
         }
         return null
@@ -2514,9 +2516,17 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         val normalized = raw.trim().uppercase(Locale.US)
         val modelCode = MODEL_CODE_PATTERN.find(normalized)?.value
         if (modelCode != null) {
+            val previousModel = _state.value.aircraftModelCode
+            if (previousModel.isNotBlank() && previousModel != modelCode) {
+                ParameterAddress.forgetAllConfirmed()
+            }
             update { copy(aircraftModelCode = modelCode) }
             prefs.edit().putString(PREF_AIRCRAFT_MODEL_CODE, modelCode).apply()
         } else {
+            val previousSerial = _state.value.aircraftSerial
+            if (previousSerial.isNotBlank() && previousSerial != normalized) {
+                ParameterAddress.forgetAllConfirmed()
+            }
             update { copy(aircraftSerial = normalized) }
             prefs.edit().putString("aircraft_serial", normalized).apply()
         }

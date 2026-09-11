@@ -67,7 +67,6 @@ class AppForegroundService : Service() {
             if (currentMode != null && currentMode != selectedMode) {
                 FccKeepaliveService.stop(this, clearSelection = false)
             }
-            AutoFccSelection.save(this, selectedMode)
             if (
                 selectedMode == AutoFccMode.HOME_POINT_TEXT &&
                 !FccKeepaliveService.isDjiFlyTextAccessEnabled(this)
@@ -77,6 +76,7 @@ class AppForegroundService : Service() {
                 )
                 return
             }
+            AutoFccSelection.save(this, selectedMode)
             runCatching { FccKeepaliveService.start(this, selectedMode) }
                 .onFailure {
                     FccViewModel.logServiceEvent(

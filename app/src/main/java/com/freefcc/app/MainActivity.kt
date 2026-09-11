@@ -90,9 +90,9 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        AutoFccSelection.save(this, AutoFccMode.HOME_POINT_TEXT)
-        viewModel.refreshAutoFccSelection()
-        AppForegroundService.refresh(this)
+        // Do not persist Home Point mode before Accessibility is granted.
+        // Once the user grants accessibility and returns or enables the toggle,
+        // it will be properly set and persisted.
         try {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         } catch (_: ActivityNotFoundException) {

@@ -9,10 +9,11 @@ internal data class FccCountryRegionResult(
     val writeAckMatched: Boolean,
     val readCompleted: Boolean,
     val readAckMatched: Boolean,
-    val observedCountry: String?
+    val observedCountry: String?,
+    val targetCountry: String = FccCountryRegion.TARGET_COUNTRY
 ) {
     val verified: Boolean
-        get() = observedCountry == FccCountryRegion.TARGET_COUNTRY
+        get() = observedCountry == targetCountry
 
     /** True when the controller already reported the target country. */
     val skippedWrite: Boolean
@@ -76,7 +77,8 @@ internal object FccCountryRegion {
                 writeAckMatched = false,
                 readCompleted = firstRead.writeCompleted,
                 readAckMatched = firstRead.matchedFrame != null,
-                observedCountry = initialCountry
+                observedCountry = initialCountry,
+                targetCountry = targetCountry
             )
         }
         var result = writeThenRead(exchange, initialCountry, targetCountry, attempt = 1)
@@ -113,7 +115,8 @@ internal object FccCountryRegion {
             writeAckMatched = writeExchange.matchedFrame != null,
             readCompleted = readExchange.writeCompleted,
             readAckMatched = readExchange.matchedFrame != null,
-            observedCountry = parseReadback(readExchange.validatedPayload)
+            observedCountry = parseReadback(readExchange.validatedPayload),
+            targetCountry = targetCountry
         )
     }
 

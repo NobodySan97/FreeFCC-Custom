@@ -103,7 +103,7 @@ class DjiFlyAccessibilityService : AccessibilityService() {
         )
     }
 
-    private var homePointPhrases: Set<String> = emptySet()
+    @Volatile private var homePointPhrases: Set<String> = emptySet()
     private var lastLoggedSignature = ""
     private var lastLoggedAtMs = 0L
     private var lastUiSnapshot = ""
@@ -116,13 +116,15 @@ class DjiFlyAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        val catalog = loadPhraseCatalog()
-        homePointPhrases = catalog.phrases
-        FccViewModel.logServiceEvent(
-            "DJI FLY ACCESSIBILITY TEST: connected; " +
-                "phrases=${catalog.phrases.size} locales=${catalog.localeCount}; " +
-                "model read from the DJI app screen; ports stay closed until it names an aircraft"
-        )
+        scope.launch {
+            val catalog = loadPhraseCatalog()
+            homePointPhrases = catalog.phrases
+            FccViewModel.logServiceEvent(
+                "DJI FLY ACCESSIBILITY TEST: connected; " +
+                    "phrases=${catalog.phrases.size} locales=${catalog.localeCount}; " +
+                    "model read from the DJI app screen; ports stay closed until it names an aircraft"
+            )
+        }
         rootInActiveWindow?.packageName?.toString()?.let(::syncAutoFccOwner)
         AppForegroundService.refresh(this)
     }

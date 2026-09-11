@@ -13,9 +13,10 @@ internal object AutoFccPackagePolicy {
 
     fun action(previousPackage: String?, currentPackage: String): AutoFccPackageAction {
         if (previousPackage == currentPackage) return AutoFccPackageAction.NONE
-        return when (currentPackage) {
-            VITYA_PACKAGE -> AutoFccPackageAction.PAUSE_FOR_VITYA
-            STOCK_FLY_PACKAGE -> AutoFccPackageAction.RESUME_FOR_STOCK_FLY
+        return when {
+            currentPackage == VITYA_PACKAGE -> AutoFccPackageAction.PAUSE_FOR_VITYA
+            currentPackage == STOCK_FLY_PACKAGE && previousPackage == VITYA_PACKAGE ->
+                AutoFccPackageAction.RESUME_FOR_STOCK_FLY
             else -> AutoFccPackageAction.NONE
         }
     }

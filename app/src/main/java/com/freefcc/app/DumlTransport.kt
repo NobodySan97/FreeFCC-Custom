@@ -301,6 +301,7 @@ class DumlTransport {
      * Finds which port the DUML proxy is listening on by trying each one.
      * Caches the result so subsequent calls don't need to scan.
      */
+    @Volatile
     private var discoveredPort: Int = -1
 
     /** Returns the port that was detected, or -1 if none found yet. */
@@ -710,10 +711,12 @@ class DumlTransport {
         val out = ByteArrayOutputStream()
         var i = indexOf(data, CHUNK_MAGIC, 0)
         while (i in 0..(data.size - 8)) {
-            val len = (data[i + 4].toInt() and 0xFF) or ((data[i + 5].toInt() and 0xFF) shl 8) or
-                      ((data[i + 6].toInt() and 0xFF) shl 16) or ((data[i + 7].toInt() and 0xFF) shl 24)
+            val len = (data[i + 4].toLong() and 0xFFL) or
+                      ((data[i + 5].toLong() and 0xFFL) shl 8) or
+                      ((data[i + 6].toLong() and 0xFFL) shl 16) or
+                      ((data[i + 7].toLong() and 0xFFL) shl 24)
             val start = i + 8
-            val end = if (len in 1..data.size && start + len <= data.size) start + len else start
+            val end = if (len in 1L..(data.size - start).toLong()) (start + len).toInt() else start
             if (end > start) out.write(data, start, end - start)
             i = indexOf(data, CHUNK_MAGIC, maxOf(end, i + 9))
         }

@@ -186,7 +186,7 @@ class FccKeepaliveService : Service() {
             val intent = Intent(context, FccKeepaliveService::class.java).apply {
                 action = ACTION_STOP
             }
-            context.startService(intent)
+            runCatching { context.startService(intent) }
         }
 
         /** Clears an obsolete in-flight marker without starting the service. */

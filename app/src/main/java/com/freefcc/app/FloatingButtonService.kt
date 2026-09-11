@@ -372,7 +372,9 @@ class FloatingButtonService : Service() {
     private fun applyRegion(country: String) {
         scope.launch {
             val transport = DumlTransport()
-            val port = transport.getDetectedPort().takeIf { it > 0 } ?: DumlTransport.PORT
+            val port = FccRuntime.tracker.state.value.controllerPort
+                ?: transport.getDetectedPort().takeIf { it > 0 }
+                ?: DumlTransport.PORT
             val hardwareLease = HardwareLock.tryBegin() ?: return@launch
             val sessionLease = DumlPortSessionLock.tryBegin(port)
             if (sessionLease == null) {
@@ -400,7 +402,9 @@ class FloatingButtonService : Service() {
     private fun queryRadioState() {
         scope.launch {
             val transport = DumlTransport()
-            val port = transport.getDetectedPort().takeIf { it > 0 } ?: DumlTransport.PORT
+            val port = FccRuntime.tracker.state.value.controllerPort
+                ?: transport.getDetectedPort().takeIf { it > 0 }
+                ?: DumlTransport.PORT
             val hardwareLease = HardwareLock.tryBegin() ?: return@launch
             val sessionLease = DumlPortSessionLock.tryBegin(port)
             if (sessionLease == null) {
