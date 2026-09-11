@@ -14,6 +14,13 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Avoid duplicate builds: skip building on 'main' branch push if the commit is a release
+    # (starts with 'release:' or contains [skip ci]), since the accompanying tag push ('v*')
+    # will compile, test, sign, and publish the release APK.
+    if: |
+      !contains(github.event.head_commit.message, '[skip ci]') &&
+      !contains(github.event.head_commit.message, '[ci skip]') &&
+      !(github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'release:'))
 
     env:
       SIGNING_STORE_FILE: ${{ github.workspace }}/release.jks
