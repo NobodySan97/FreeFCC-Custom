@@ -1142,15 +1142,14 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         attempts: Int = 3
     ): GpsReadback? {
         repeat(attempts) { attempt ->
-            val request = GpsControlProtocol.buildReadRequest()
-            val exchange = gpsTransport.sendAndReceiveRaw(
-                frame = request,
-                wireFrame = Profiles.wrapFrame(request),
+            val readback = ParameterAddress.read(
+                transport = gpsTransport,
+                address = GpsControlProtocol.address,
                 readWindowMs = 2_500,
-                port = DumlTransport.PORT_LED,
-                autoDetectPort = false
+                buildRequest = { hash -> GpsControlProtocol.buildReadRequest(hash) },
+                parse = GpsControlProtocol::parse
             )
-            GpsControlProtocol.parse(exchange.validatedPayload)?.let { return it }
+            if (readback != null) return readback
             if (attempt < attempts - 1) {
                 log("GPS readback missing; retrying")
                 Thread.sleep(150)
@@ -1214,6 +1213,17 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                     update { copy(gpsStatus = "GPS port busy") }
                     log("GPS command failed to acquire port 40007")
                     return@runOnIO
+                }
+
+                // Find out what this aircraft calls the parameter before writing to it.
+                if (!GpsControlProtocol.address.isConfirmed) {
+                    ParameterAddress.read(
+                        transport = DumlTransport(),
+                        address = GpsControlProtocol.address,
+                        readWindowMs = 2_500,
+                        buildRequest = { hash -> GpsControlProtocol.buildReadRequest(hash) },
+                        parse = GpsControlProtocol::parse
+                    )
                 }
 
                 var anyWriteSucceeded = false
@@ -1346,15 +1356,14 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
         attempts: Int = 3
     ): LedReadback? {
         repeat(attempts) { attempt ->
-            val request = LedReadbackProtocol.buildRequest()
-            val exchange = ledTransport.sendAndReceiveRaw(
-                frame = request,
-                wireFrame = Profiles.wrapFrame(request),
+            val readback = ParameterAddress.read(
+                transport = ledTransport,
+                address = LedReadbackProtocol.address,
                 readWindowMs = 2_500,
-                port = DumlTransport.PORT_LED,
-                autoDetectPort = false
+                buildRequest = { hash -> LedReadbackProtocol.buildRequest(hash) },
+                parse = LedReadbackProtocol::parse
             )
-            LedReadbackProtocol.parse(exchange.validatedPayload)?.let { return it }
+            if (readback != null) return readback
             if (attempt < attempts - 1) {
                 log("LED readback missing; retrying")
                 Thread.sleep(150)
@@ -1430,8 +1439,8 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                     return@runOnIO
                 }
                 val fileName = if (on) "led_on.json" else "led_off.json"
-                val profile = Profiles.load(app, fileName)
-                log("Loaded LED profile: ${profile.frames.size} frames (port ${profile.port})")
+                val loadedProfile = Profiles.load(app, fileName)
+                log("Loaded LED profile: ${loadedProfile.frames.size} frames (port ${loadedProfile.port})")
 
                 // Separate transport instance — the LED command on port 40007
                 // must not share state with the FCC transport on port 40009.
@@ -1448,6 +1457,11 @@ class FccViewModel(private val app: Application) : AndroidViewModel(app) {
                 for (commandAttempt in 1..2) {
                     update { copy(ledStatus = "LED $requestedLabel attempt $commandAttempt/2...") }
                     log("LED $requestedLabel attempt $commandAttempt/2")
+
+                    val profile = LedProfileHash.retargeted(
+                        loadedProfile,
+                        LedReadbackProtocol.address
+                    )
 
                     // 2 connection bursts × 5 writes each = 10 total sends.
                     for (burst in 0 until 2) {

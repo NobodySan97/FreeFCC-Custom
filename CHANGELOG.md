@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.86 — 2026-09-11
+
+- **Compatibilità Mod Vitya (`dji.go.v6`):** Aggiunta la policy di mutua esclusione `AutoFccPackagePolicy` che rileva l'esecuzione di DJI Fly moddata (Vitya, `dji.go.v6`) e mette automaticamente in pausa l'Auto FCC per prevenire conflitti seriali sul radiocomando, riattivandosi all'apertura di DJI Fly stock (`dji.go.v5`).
+- **Risoluzione Dinamica Parametri (GPS & LED):** Introdotti `ParameterAddress` e `ParameterHash` per risolvere dinamicamente i nomi dei parametri firmware (inclusi i nomi abbreviati `forearm_led_ctrl` e `gps_enable` delle serie più recenti come Lito X1) con ricalcolo e riscrittura CRC del profilo LED tramite `LedProfileHash`.
+- **Reset Immediato al Cambio Modello:** Reset immediato della cache parametri e dello stato verificato appena viene rilevato il cambio di modello drone sullo schermo (`confirmedModelSwap`), prevenendo l'invio di indirizzi obsoleti al nuovo velivolo.
+- **Validazione Rigorosa 4G Fail-Closed:** Aggiunti controlli di integrità strict in `Profiles.kt` per garantire l'invio esclusivo del frame mirato `0x51:0x1A`, bloccando categoricamente qualsiasi vecchio sweep a 128 frame.
+
 ## 1.5.71-beta — 2026-08-10
 
 - **Aircraft Catalog & Identification Upgrades:** Added support for product code WA151 (DJI Lito X1), passive DUML model code resolution, serial length normalization, and HardwareLock socket contention protection.
