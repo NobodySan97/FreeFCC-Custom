@@ -407,14 +407,14 @@ class FloatingButtonService : Service() {
                 hardwareLease.close()
                 return@launch
             }
-            val result = try {
-                FccCountryRegion.ensure(transport, port)
+            val observedCountry = try {
+                FccCountryRegion.queryCurrentCountry(transport, port)
             } finally {
                 sessionLease.close()
                 hardwareLease.close()
             }
             withContext(Dispatchers.Main) {
-                if (result.observedCountry == "AU") {
+                if (observedCountry == "AU") {
                     if (lastVibratedCountry != "AU") {
                         lastVibratedCountry = "AU"
                         FccHaptics.vibrateSuccess(this@FloatingButtonService)
@@ -423,9 +423,9 @@ class FloatingButtonService : Service() {
                     radioStatusTextView?.setTextColor(Color.parseColor("#4CAF50"))
                     floatingBgDrawable?.setStroke(dpToPx(2), Color.parseColor("#4CAF50"))
                     floatingTextView?.setTextColor(Color.parseColor("#4CAF50"))
-                } else if (result.observedCountry != null) {
-                    lastVibratedCountry = result.observedCountry
-                    radioStatusTextView?.text = "Stato Radio: 🟠 ${result.observedCountry} (Standard)"
+                } else if (observedCountry != null) {
+                    lastVibratedCountry = observedCountry
+                    radioStatusTextView?.text = "Stato Radio: 🟠 $observedCountry (Standard)"
                     radioStatusTextView?.setTextColor(Color.parseColor("#FFFF9D4D"))
                     floatingBgDrawable?.setStroke(dpToPx(2), Color.parseColor("#FFFF9D4D"))
                     floatingTextView?.setTextColor(Color.parseColor("#FFFF9D4D"))

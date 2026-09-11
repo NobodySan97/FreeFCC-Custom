@@ -137,9 +137,7 @@ internal object FccCountryRegion {
         )
     }
 
-    private fun readCountry(
-        exchange: (frame: ByteArray, readWindowMs: Int) -> DumlRawExchange
-    ): DumlRawExchange = exchange(
+    fun buildReadFrame(): ByteArray =
         DumlBuilder().buildFrame(
             DumlFrame(
                 sender = SENDER,
@@ -149,9 +147,28 @@ internal object FccCountryRegion {
                 dst = DESTINATION,
                 payload = byteArrayOf()
             )
-        ),
-        READ_WINDOW_MS
-    )
+        )
+
+    /**
+     * Strictly read-only query of the active radio country code.
+     * Does NOT write or alter any state.
+     */
+    fun queryCurrentCountry(
+        transport: DumlTransport,
+        port: Int
+    ): String? {
+        val exchange = transport.sendAndReceiveRaw(
+            frame = buildReadFrame(),
+            readWindowMs = READ_WINDOW_MS,
+            port = port,
+            autoDetectPort = port == DumlTransport.PORT
+        )
+        return parseReadback(exchange.validatedPayload)
+    }
+
+    private fun readCountry(
+        exchange: (frame: ByteArray, readWindowMs: Int) -> DumlRawExchange
+    ): DumlRawExchange = exchange(buildReadFrame(), READ_WINDOW_MS)
 
     internal fun parseReadback(payload: ByteArray?): String? {
         if (payload == null) return null
